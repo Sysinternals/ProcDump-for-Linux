@@ -88,7 +88,7 @@ struct coordinator {
     pthread_mutex_t mutexEventTriggered;
     struct thread_result *results;
     int numberTriggered; // behind mutex
-    int nWaiters; // when 0, nuke the struct
+    int nWaiters; // when 0, delete the struct
     int stopIssued; // when != 0, proceed to cleanup
     struct Handle evtCanCleanUp; // trigger when we leave main wait thread
     struct Handle evtStartWaiting;
