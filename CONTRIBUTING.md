@@ -17,8 +17,8 @@ To enable us to quickly review and accept your pull requests, always create one 
 * Run `make` from the project root
 * The procdump executable will be placed into the `bin` directory
 ```sh
-git clone http://github.com/microsoft/<our repo name>
-cd procdump
+git clone https://github.com/microsoft/ProcDump-for-Linux
+cd ProcDump-for-Linux
 make
 ```
 
