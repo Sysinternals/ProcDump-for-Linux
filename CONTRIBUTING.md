@@ -28,16 +28,16 @@ make
 * Make sure that the tests are all passing, including your new tests.
 
 ## Creating integration tests
-The integration tests run using the procdump inside bin folder, generated during the build. They are written in bash language and need to be inside `/tests/integration/scenarios/` folder in order to be called automatically by `run.sh`.
+The integration tests run using the local procdump built from source. Individual test cases are written as bash scripts and need to be inside `/tests/integration/scenarios/` in order to be called automatically by `run.sh`.
 
-Each test must return `0` in case of success and `1` in case of error.
+Test scripts will return `0` when they succeed and `1` when they fail.
 
-Most of the tests are written using [stress-ng](http://kernel.ubuntu.com/~cking/stress-ng/stress-ng.pdf "stress-ng manual"), but you can write your own code to simulate the scenario you require.
+Most of the tests are written using [stress-ng](https://wiki.ubuntu.com/Kernel/References/stress-ng "stress-ng manual"), but you can write your own code to simulate the scenario you require.
 
-After writing a new test, run the `run.sh` script and verify if no tests are report as failed in the end of the output text.
+After writing a new test, run the `run.sh` script and verify that no tests fail.
 
 ## Pull Requests
-* Always tag a work item or issue with a pull request
+* Always tag a work item or issue with a pull request.
 * Limit pull requests to as few issues as possible, preferably 1 per PR
 
 ## Coding Guidelines
