@@ -14,6 +14,7 @@ OUT=$(BINDIR)/procdump
 
 # installation directory
 INSTALLDIR=/usr/bin
+MANDIR=/usr/share/man/man1
 
 # package creation directories
 RELEASEDIR=release
@@ -32,6 +33,7 @@ build: $(OBJDIR) $(BINDIR) $(OUT)
 
 install:
 	cp $(BINDIR)/procdump $(INSTALLDIR)
+	cp procdump.1 $(MANDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c -g -o $@ $< $(CFLAGS)
@@ -65,5 +67,5 @@ deb: build
 
 tarball:
 	mkdir -p $(RELEASEDIR)
-	tar -czf $(RELEASEDIR)/procdump_$(PKG_VERSION).tar.gz .gitignore Makefile README.md CODE_OF_CONDUCT.md CONTRIBUTING.md DEBIAN_PACKAGE.control ./tests ./include ./src
+	tar -czf $(RELEASEDIR)/procdump_$(PKG_VERSION).tar.gz Makefile README.md CODE_OF_CONDUCT.md CONTRIBUTING.md DEBIAN_PACKAGE.control procdump.1 ./tests ./include ./src
 
