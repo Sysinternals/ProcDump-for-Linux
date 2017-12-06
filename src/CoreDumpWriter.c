@@ -183,7 +183,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         Log(error, "An error occured while generating the core dump");
                 
         // log gcore message and free up memory
-        for(int j = 0; j < i; j++){
+        int j;
+        for(j = 0; j < i; j++){
             if(outputBuffer[j] != NULL){
                 Log(error, "GCORE - %s", outputBuffer[j]);
                 free(outputBuffer[j]);
