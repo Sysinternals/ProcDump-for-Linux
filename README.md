@@ -92,7 +92,7 @@ The following will create a core dump each time the process has CPU usage >= 65%
 ```
 sudo procdump -C 65 -n 3 -p 1234
 ```
-The following with create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 5 seconds between each dump.
+The following will create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 5 seconds between each dump.
 ```
 sudo procdump -C 65 -n 3 -s 5 -p 1234
 ```
