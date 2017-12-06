@@ -458,7 +458,8 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
-    for (int i = 0; i < self->nThreads; i++) {
+    int i;
+    for (i = 0; i < self->nThreads; i++) {
         if (rc = pthread_join(self->Threads[i], NULL) != 0) {
             Log(error, "An error occured while joining threads\n");
             exit(-1);
@@ -584,8 +585,9 @@ bool BeginMonitoring(struct ProcDumpConfiguration *self)
 bool IsValidNumberArg(const char *arg)
 {
     int strLen = strlen(arg);
+    int i;
 
-    for (int i = 0; i < strLen; i++) {
+    for (i = 0; i < strLen; i++) {
         if (!isdigit(arg[i]) && !isspace(arg[i])) {
             return false;
         }
