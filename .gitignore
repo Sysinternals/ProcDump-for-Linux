@@ -31,18 +31,6 @@
 *.lo
 *.o
 
-# Project specific binary files
-procdump
-
-# Test binary files
-tests/memoryEater/memoryEater
-tests/memoryFree/memoryFree
-
 # Project directories
 bin/
 release/
-
-# Test core dumps generated
-memoryEater_*
-memoryFree_*
-cat_*
