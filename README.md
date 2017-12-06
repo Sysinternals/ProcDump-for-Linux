@@ -12,25 +12,51 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 
 ## Install ProcDump
 ### Via Package Manager [prefered method]
-#### Linux (Ubuntu 14.04+)
-```sh
 
-sudo sh -c 'echo "deb [arch=amd64] <URI of distribution endpoint> external main" > /etc/apt/sources.list.d/oss-sysinternals.list'
+#### 1. Add the Microsoft Product feed
+```sh
+curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+```
+##### Register the Microsoft Product feed
+##### Ubuntu 16.04
+```sh
+sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > etc/apt/sources.list.d/microsoft.list'
+
+```
+##### Ubuntu 14.04
+```sh
+sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod trusty main" > /etc/apt/sources.list.d/microsoft.list'
+```
+
+#### 2. Install Procdump
+```sh
 sudo apt-get update
 sudo apt-get install procdump
 ```
-### Via `.deb` Package
-#### Linux (Ubuntu 14.04+)
 
+### Via `.deb` Package
 > Pre-Depends: `dpkg`(>=1.17.5) 
 
+#### 1. Download `.deb` Package
+#### Ubuntu 16.04
 ```sh
-wget <URI of distribution endpoint>
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+```
+
+#### Ubuntu 14.04
+
+```sh
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+```
+
+#### 2. Install Procdump
+```sh
 sudo dpkg -i procdump_1.0_amd64.deb
 sudo apt-get -f install
 ```
 ### Uninstall
-#### Linux (Ubuntu 14.04+)
+#### Ubuntu 14.04+
 ```sh
 sudo apt-get purge procdump
 ```

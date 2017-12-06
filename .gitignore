@@ -1,3 +1,11 @@
+# IDE folders & Files
+.vs/
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
 # Prerequisites
 *.d
 
@@ -21,35 +29,20 @@
 *.a
 *.la
 *.lo
+*.o
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# Project Specific Binaries
+# Project specific binary files
 procdump
+
+# Test binary files
+tests/memoryEater/memoryEater
+tests/memoryFree/memoryFree
+
+# Project directories
+bin/
+release/
+
+# Test core dumps generated
+memoryEater_*
+memoryFree_*
+cat_*
