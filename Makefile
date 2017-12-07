@@ -1,6 +1,6 @@
 ROOT=.
 CC=gcc
-CFLAGS=-I ./include -pthread
+CFLAGS=-I ./include -pthread -lrt -std=c99 -D_POSIX_SOURCE -D_POSIX_C_SOURCE=199309L
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
