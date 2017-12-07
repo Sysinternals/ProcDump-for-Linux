@@ -21,7 +21,7 @@ sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
 ##### Register the Microsoft Product feed
 ##### Ubuntu 16.04
 ```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > etc/apt/sources.list.d/microsoft.list'
+sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > /etc/apt/sources.list.d/microsoft.list'
 
 ```
 ##### Ubuntu 14.04
