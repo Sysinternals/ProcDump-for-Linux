@@ -1,6 +1,12 @@
 ROOT=.
 CC=gcc
-CFLAGS=-I ./include -pthread
+# If we are CentOS, then append -std=gnu99
+CENTOS := $(shell grep -ic CentOS /etc/redhat-release)
+ifeq ($(CENTOS),1)
+        CFLAGS=-I ./include -pthread -std=gnu99
+else
+        CFLAGS=-I ./include -pthread 
+endif
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
