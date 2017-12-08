@@ -9,63 +9,70 @@
 
 #include "Process.h"
 
+char * sanitize(char * processName);
+
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
-    char pidStatFilePath[32];
+    char procFilePath[32];
     char fileBuffer[1024];
-    char *token, *savePtr = NULL;
+    char processNameBuffer[256];
+    char *fileBufferItr, *token, *savePtr = NULL;
     int tokenLength;
 
-    FILE *pidStatFile = NULL;
+    FILE *procFile = NULL;
 
     // Read /proc/[pid]/stat
-    if(sprintf(pidStatFilePath, "/proc/%d/stat", pid) < 0){
+    if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
         return false;
     }
-    pidStatFile = fopen(pidStatFilePath, "r");
+    procFile = fopen(procFilePath, "r");
     
-    if(pidStatFile != NULL){
-        if(fgets(fileBuffer, sizeof(fileBuffer), pidStatFile) == NULL) {
-            Log(error, "Failed to read from %s. Exiting...\n", pidStatFilePath);
-            fclose(pidStatFile);
+    if(procFile != NULL){
+        if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
+            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+            fclose(procFile);
             return false;
         }
         
         // close file after reading this iteration of stats
-        fclose(pidStatFile);
+        fclose(procFile);
     }
     else{
-        Log(error, "Failed to open %s.\n", pidStatFilePath);
+        Log(error, "Failed to open %s.\n", procFilePath);
+        return false;
+    }
+    
+    // (1) process ID
+    proc->pid = (pid_t)atoi(fileBuffer);
+
+    // (2) comm (process name)
+    // Read /proc/[pid]/cmdline to get full application name
+    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+        return false;
+    }
+    procFile = fopen(procFilePath, "r");
+
+    if(procFile != NULL){
+        if(fgets(processNameBuffer, sizeof(processNameBuffer), procFile) == NULL) {
+            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+            fclose(procFile);
+            return false;
+        }
+        
+        // close file
+        fclose(procFile);
+    }
+    else{
+        Log(error, "Failed to open %s.\n", procFilePath);
         return false;
     }
 
-    // Now we have /proc/[pid]/stat (which is one long line)
-    if((token = strtok_r(fileBuffer, " ", &savePtr)) == NULL){
-        Trace("GetProcessStat: failed to get token from proc/[pid]/stat - PID.");
-        return false; 
-    }
-
-
-    // (1) process ID
-    proc->pid = (pid_t)atoi(token);
-
-    // (2) comm (process name)
-    if((token = strtok_r(NULL, " ", &savePtr)) == NULL){
-        Trace("GetProcessStat: failed to get token from proc/[pid]/stat - Process name.");        
-        return false; 
-    }
-    if (proc->comm == NULL) {
-        tokenLength = (int)strlen(token);
-        proc->comm = (char *)(malloc(sizeof(char) * (tokenLength - 1)));
-        if(proc->comm == NULL){
-            Trace("GetProcessStat: failed to allocate memory.");
-            return false;
-        }
-        strncpy(proc->comm, token+1, (size_t)tokenLength-2); // copy everything but leading and trailing '(' & ')""'
-        proc->comm[tokenLength-2] = '\0'; // null terminate
-    }
+    proc->comm = strdup(sanitize(processNameBuffer));
 
     // (3) process state
-    proc->state = strtok_r(NULL, " ", &savePtr)[0];
+    if((savePtr = strrchr(fileBuffer, ')')) != NULL){
+        savePtr += 2;     // iterate past ')' and ' ' in /proc/[pid]/stat
+        proc->state = strtok_r(savePtr, " ", &savePtr)[0];
+    }
 
     // (4) parent process ID
     token = strtok_r(NULL, " ", &savePtr);
@@ -509,4 +516,14 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     proc->exit_code = (int)strtol(token, NULL, 10);
 
     return true;
+}
+
+// remove all non alphanumeric characters from process name and replace with '_'
+char * sanitize(char * processName){
+    for(int i = 0; i < strlen(processName); i++){
+        if(!isalnum(processName[i])){
+            processName[i] = '_';
+        }
+    }
+    return processName;
 }
