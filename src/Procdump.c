@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     
     // print privelege warning
     if(geteuid() != 0){
-        Log(warn, "Procdump not running with elevated credentails. If your uid does not match the uid of the target process procdump will not be able to capture memory dumps");
+        Log(warn, "Procdump not running with elevated credentials. If your uid does not match the uid of the target process procdump will not be able to capture memory dumps");
     }
 
     // start monitoring process
