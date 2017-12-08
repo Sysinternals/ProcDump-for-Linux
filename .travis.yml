@@ -3,7 +3,7 @@ language: c
 
 os:
   - linux
-
+install: true
 dist: trusty
 compiler: gcc
 addons:
