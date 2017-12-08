@@ -1,4 +1,4 @@
-# ProcDump
+# ProcDump [![Build Status](https://travis-ci.org/Microsoft/ProcDump-for-Linux.svg?branch=master)](https://travis-ci.org/Microsoft/ProcDump-for-Linux)
 ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
 
 ![ProcDump in use](procdump.gif "Procdump in use")
