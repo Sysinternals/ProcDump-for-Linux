@@ -10,7 +10,7 @@ addons:
   apt:
     packages:
       - stress-ng
-      - gcore
+      - gdb
 script:
   - make
   - sudo ./tests/integration/run.sh
