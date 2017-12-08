@@ -1,0 +1,7 @@
+language: c
+dist: xenial
+sudo: required
+install: true
+script:
+  - make
+  - sudo ./integration/tests/run.sh

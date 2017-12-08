@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <ctype.h>
 #include "Logging.h"
 
 // -----------------------------------------------------------

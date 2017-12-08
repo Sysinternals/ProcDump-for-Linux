@@ -9,8 +9,6 @@
 
 #include "Process.h"
 
-char * sanitize(char * processName);
-
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     char procFilePath[32];
     char fileBuffer[1024];
@@ -66,7 +64,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
 
-    proc->comm = strdup(sanitize(processNameBuffer));
+    proc->comm = strdup(processNameBuffer);
 
     // (3) process state
     if((savePtr = strrchr(fileBuffer, ')')) != NULL){
@@ -516,14 +514,4 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     proc->exit_code = (int)strtol(token, NULL, 10);
 
     return true;
-}
-
-// remove all non alphanumeric characters from process name and replace with '_'
-char * sanitize(char * processName){
-    for(int i = 0; i < strlen(processName); i++){
-        if(!isalnum(processName[i])){
-            processName[i] = '_';
-        }
-    }
-    return processName;
 }
