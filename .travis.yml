@@ -12,4 +12,4 @@ addons:
       - stress-ng
 script:
   - make
-  - sudo ./integration/tests/run.sh
+  - sudo ./tests/integration/run.sh
