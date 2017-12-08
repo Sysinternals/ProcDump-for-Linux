@@ -1,7 +1,15 @@
-language: c
-dist: xenial
 sudo: required
-install: true
+language: c
+
+os:
+  - linux
+
+dist: trusty
+compiler: gcc
+addons:
+  apt:
+    packages:
+      - stress-ng
 script:
   - make
   - sudo ./integration/tests/run.sh
