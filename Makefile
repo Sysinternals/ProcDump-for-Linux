@@ -1,6 +1,6 @@
 ROOT=.
 CC=gcc
-CFLAGS=-I ./include -pthread
+CFLAGS=-I ./include -pthread -std=gnu99
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
