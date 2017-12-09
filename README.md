@@ -9,6 +9,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * Minimum OS: Ubuntu 14.04 LTS (Desktop or Server)
   * We are actively testing against other Linux distributions.  If you have requests for specific distros, please let us know (or create a pull request with the necessary changes).
 * `gdb` (>=7.7.1)
+* `zlib` (build-time only)
 
 ## Install ProcDump
 ### Via Package Manager [prefered method]
