@@ -6,9 +6,13 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 # Installation & Usage 
 
 ## Requirements
-* Minimum OS: Ubuntu 14.04 LTS (Desktop or Server)
+* Minimum OS:
+  * Red Hat Enterprise Linux / CentOS 7
+  * Fedora 26
+  * Mageia 6
+  * Ubuntu 14.04 LTS
   * We are actively testing against other Linux distributions.  If you have requests for specific distros, please let us know (or create a pull request with the necessary changes).
-* `gdb` (>=7.7.1)
+* `gdb` >= 7.6.1
 * `zlib` (build-time only)
 
 ## Install ProcDump
@@ -106,7 +110,6 @@ The following will create a core dump when CPU usage is >= 65% or memory usage i
 sudo procdump -C 65 -M 100 -p 1234
 ```
 ## Current Limitations
-* Has only been tested on Ubuntu 14.04+
 * Currently will only run on Linux Kernels version 3.5+
 * Does not have full feature parity with Windows version of ProcDump, specifically, stay alive functionality, and custom performance counters
 
