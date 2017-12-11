@@ -1,6 +1,7 @@
 ROOT=.
 CC=gcc
-CFLAGS=-I ./include -pthread -std=gnu99
+CFLAGS ?= -Wall
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
@@ -39,10 +40,10 @@ install:
 	cp procdump.1 $(DESTDIR)$(MANDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c -g -o $@ $< $(CFLAGS)
+	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
 $(OUT): $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CCFLAGS)
 
 $(OBJDIR):
 	-@mkdir -p $(OBJDIR)
