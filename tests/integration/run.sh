@@ -18,7 +18,12 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-dpkg -l | grep -qw stress-ng || apt-get install stress-ng -qq
+
+if [ ! -e /usr/bin/stress-ng ]; then
+   echo "Please install stress-ng before running this script!"
+   exit 1
+fi
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 
 function runTest {

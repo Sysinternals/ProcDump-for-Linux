@@ -1,6 +1,7 @@
 ROOT=.
 CC=gcc
-CFLAGS=-I ./include -pthread
+CFLAGS ?= -Wall
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
@@ -13,6 +14,7 @@ OUT=$(BINDIR)/procdump
 
 
 # installation directory
+DESTDIR ?= /
 INSTALLDIR=/usr/bin
 MANDIR=/usr/share/man/man1
 
@@ -32,14 +34,16 @@ all: clean build
 build: $(OBJDIR) $(BINDIR) $(OUT)
 
 install:
-	cp $(BINDIR)/procdump $(INSTALLDIR)
-	cp procdump.1 $(MANDIR)
+	mkdir -p $(DESTDIR)$(INSTALLDIR)
+	cp $(BINDIR)/procdump $(DESTDIR)$(INSTALLDIR)
+	mkdir -p $(DESTDIR)$(MANDIR)
+	cp procdump.1 $(DESTDIR)$(MANDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) -c -g -o $@ $< $(CFLAGS)
+	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
 $(OUT): $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CCFLAGS)
 
 $(OBJDIR):
 	-@mkdir -p $(OBJDIR)
