@@ -44,27 +44,29 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 
     // (2) comm (process name)
     // Read /proc/[pid]/cmdline to get full application name
-    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
-        return false;
-    }
-    procFile = fopen(procFilePath, "r");
-
-    if(procFile != NULL){
-        if(fgets(processNameBuffer, sizeof(processNameBuffer), procFile) == NULL) {
-            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
-            fclose(procFile);
+    if(proc->comm == NULL){
+        if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
             return false;
         }
-        
-        // close file
-        fclose(procFile);
-    }
-    else{
-        Log(error, "Failed to open %s.\n", procFilePath);
-        return false;
-    }
+        procFile = fopen(procFilePath, "r");
 
-    proc->comm = strdup(processNameBuffer);
+        if(procFile != NULL){
+            if(fgets(processNameBuffer, sizeof(processNameBuffer), procFile) == NULL) {
+                Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+                fclose(procFile);
+                return false;
+            }
+        
+            // close file
+            fclose(procFile);
+        }
+        else{
+            Log(error, "Failed to open %s.\n", procFilePath);
+            return false;
+        }
+
+        proc->comm = strdup(processNameBuffer);
+    }
 
     // (3) process state
     if((savePtr = strrchr(fileBuffer, ')')) != NULL){
