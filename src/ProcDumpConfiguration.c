@@ -603,7 +603,7 @@ bool IsValidNumberArg(const char *arg)
 void PrintBanner()
 {
     printf("\nProcDump v1.0 - Sysinternals process dump utility\n");
-    printf("Copyright (C) 2017 Microsoft Corporation. All rights reserved. Licensed under ther MIT license.\n");
+    printf("Copyright (C) 2017 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
 
     printf("Monitors a process and writes a dump file when the process exceeds the\n");
