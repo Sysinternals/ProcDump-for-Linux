@@ -679,12 +679,11 @@ void PrintBanner()
 //--------------------------------------------------------------------
 int PrintUsage(struct ProcDumpConfiguration *self)
 {
-    int nCpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
     printf("\nUsage: procdump [OPTIONS...] TARGET\n");
     printf("   OPTIONS\n");
     printf("      -h          Prints this help screen\n");
-    printf("      -C          CPU threshold at which to create a dump of the process from 0 to %d\n", 100*nCpu);
-    printf("      -c          CPU threshold below which to create a dump of the process from 0 to %d\n", 100*nCpu);
+    printf("      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU\n");
+    printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
     printf("      -M          Memory commit threshold in MB at which to create a dump\n");
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
     printf("      -n          Number of dumps to write before exiting\n");
