@@ -268,6 +268,7 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         }
 
         execl("/bin/bash", "bash", "-c", command, (char *)NULL); // won't return
+        return NULL; // will never be hit; just for static analyzers
     } else {
         // parent
         setpgid(childPid, childPid); // give the child and descendants their own pgid so we can terminate gcore separately

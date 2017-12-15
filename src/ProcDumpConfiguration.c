@@ -524,6 +524,7 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
             exit(-1);
         }
     }
+    return rc;
 }
 
 //--------------------------------------------------------------------
