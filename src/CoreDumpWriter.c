@@ -10,6 +10,8 @@
 
 #include "CoreDumpWriter.h"
 
+char * sanitize(char * processName);
+
 static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "time", "manual" };
 
 int WriteCoreDumpInternal(struct CoreDumpWriter *self);
@@ -114,7 +116,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     FILE *commandPipe = NULL;
 
     const char *desc = CoreDumpTypeStrings[self->Type];
-    char *name = self->Config->ProcessName;
+    char *name = sanitize(self->Config->ProcessName);
     pid_t pid = self->Config->ProcessId;
 
     // allocate output buffer
@@ -280,4 +282,21 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         }
 
     }
+}
+
+//--------------------------------------------------------------------
+//
+// sanitize - Helper function for removing all non-alphanumeric characters from process name
+//
+// Returns: char *
+//
+//--------------------------------------------------------------------
+// remove all non alphanumeric characters from process name and replace with '_'
+char * sanitize(char * processName){
+    for(int i = 0; i < strlen(processName); i++){
+        if(!isalnum(processName[i])){
+            processName[i] = '_';
+        }
+    }
+    return processName;
 }

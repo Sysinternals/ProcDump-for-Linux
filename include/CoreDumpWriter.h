@@ -10,6 +10,7 @@
 #ifndef CORE_DUMP_WRITER_H
 #define CORE_DUMP_WRITER_H
 
+#include <ctype.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>

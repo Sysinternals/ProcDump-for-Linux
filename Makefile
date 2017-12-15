@@ -55,6 +55,9 @@ clean:
 	-rm -rf $(OBJDIR)
 	-rm -rf $(BINDIR)
 	-rm -rf $(RELEASEDIR)
+	
+test: build
+	./tests/integration/run.sh
 
 release: deb tarball
 

@@ -1,0 +1,16 @@
+sudo: required
+language: c
+
+os:
+  - linux
+install: true
+dist: trusty
+compiler: gcc
+addons:
+  apt:
+    packages:
+      - stress-ng
+      - gdb
+script:
+  - make
+  - sudo ./tests/integration/run.sh
