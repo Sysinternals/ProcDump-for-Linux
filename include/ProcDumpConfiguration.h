@@ -30,6 +30,7 @@
 
 #define MAX_TRIGGERS 3
 #define NO_PID INT_MAX
+#define MAX_CMDLINE_LEN 4096+1
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 
@@ -90,6 +91,7 @@ struct ProcDumpConfiguration {
 };
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
+char * GetProcessName(pid_t pid);
 bool LookupProcessByPid(struct ProcDumpConfiguration *self);
 int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration *self);
 int CreateTriggerThreads(struct ProcDumpConfiguration *self);

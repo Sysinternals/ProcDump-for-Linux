@@ -42,32 +42,6 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     // (1) process ID
     proc->pid = (pid_t)atoi(fileBuffer);
 
-    // (2) comm (process name)
-    // Read /proc/[pid]/cmdline to get full application name
-    if(proc->comm == NULL){
-        if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
-            return false;
-        }
-        procFile = fopen(procFilePath, "r");
-
-        if(procFile != NULL){
-            if(fgets(processNameBuffer, sizeof(processNameBuffer), procFile) == NULL) {
-                Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
-                fclose(procFile);
-                return false;
-            }
-        
-            // close file
-            fclose(procFile);
-        }
-        else{
-            Log(error, "Failed to open %s.\n", procFilePath);
-            return false;
-        }
-
-        proc->comm = strdup(processNameBuffer);
-    }
-
     // (3) process state
     if((savePtr = strrchr(fileBuffer, ')')) != NULL){
         savePtr += 2;     // iterate past ')' and ' ' in /proc/[pid]/stat

@@ -294,7 +294,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return -1;
     }
 
-    self->ProcessName = proc.comm;
+    self->ProcessName = GetProcessName(self->ProcessId);
     Trace("GetOpts and initial Configuration finished");
 
     return 0;
@@ -322,6 +322,66 @@ bool LookupProcessByPid(struct ProcDumpConfiguration *self)
     // close file pointer this is a valid process
     fclose(fd);
     return true;
+}
+
+//--------------------------------------------------------------------
+//
+// GetProcessName - Get process name using PID provided  
+//
+//--------------------------------------------------------------------
+char * GetProcessName(pid_t pid){
+	char procFilePath[32];
+	char fileBuffer[MAX_CMDLINE_LEN];		// maximum command line length on Linux
+	int charactersRead = 0;
+	int	itr = 0;
+	char * stringItr;
+	char * processName;
+	FILE * procFile;
+	
+	if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+		return NULL;
+	}
+	procFile = fopen(procFilePath, "r");
+
+	if(procFile != NULL){
+		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
+			Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+			fclose(procFile);
+			return NULL;
+		}
+	
+		// close file
+		fclose(procFile);
+	}
+	else{
+		Log(error, "Failed to open %s.\n", procFilePath);
+		return NULL;
+	}
+	
+	// Extract process name
+	stringItr = fileBuffer;
+	for(int i = 0; i < charactersRead; i++){
+		if(fileBuffer[i] == '\0'){
+			itr = i - itr;
+			
+			if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
+				processName = strrchr(stringItr, '/');	// does this process include a filepath?
+				
+				if(processName != NULL){
+					return strdup(processName + 1);	// +1 to not include '/' character
+				}
+				else{
+					return strdup(stringItr);
+				}
+			}
+			else{
+				stringItr += (itr+1); 	// +1 to move past '\0'
+			}
+		}
+	}
+
+	Log(error, "Failed to extract process name from /proc/PID/cmdline");
+	return NULL;
 }
 
 //--------------------------------------------------------------------
