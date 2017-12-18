@@ -128,7 +128,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("TimerThread: Starting Trigger Thread");
 
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(COMMIT, config);
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(TIME, config);
 
     int rc = 0;
 
