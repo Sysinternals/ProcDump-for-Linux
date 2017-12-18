@@ -10,7 +10,7 @@
 
 #include "CoreDumpWriter.h"
 
-char * sanitize(char * processName);
+char *sanitize(char *processName);
 
 static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "time", "manual" };
 
@@ -149,6 +149,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         Trace("WriteCoreDumpInternal: failed sprintf core file name");        
         exit(-1);
     }
+
+    free(name);
 
     // generate core dump for given process
     commandPipe = popen2(command, "r", &gcorePid);
@@ -293,11 +295,15 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
 //
 //--------------------------------------------------------------------
 // remove all non alphanumeric characters from process name and replace with '_'
-char * sanitize(char * processName){
-    for(int i = 0; i < strlen(processName); i++){
-        if(!isalnum(processName[i])){
-            processName[i] = '_';
+char *sanitize(char * processName)
+{
+    char *sanitizedProcessName = strdup(processName);
+    for (int i = 0; i < strlen(sanitizedProcessName); i++)
+    {
+        if (!isalnum(sanitizedProcessName[i]))
+        {
+            sanitizedProcessName[i] = '_';
         }
     }
-    return processName;
+    return sanitizedProcessName;
 }
