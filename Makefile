@@ -25,7 +25,7 @@ RELEASECONTROLDIR=$(RELEASEDIR)/procdump/DEBIAN
 RELEASEMANDIR=$(RELEASEDIR)/procdump/usr/share/man/man1
 
 # package details
-PKG_VERSION=1.0
+PKG_VERSION=1.0.1
 PKG_ARCH=amd64
 PKG_DEB=procdump_$(PKG_VERSION)_$(PKG_ARCH).deb
 

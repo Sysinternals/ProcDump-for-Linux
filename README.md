@@ -46,18 +46,18 @@ sudo apt-get install procdump
 #### 1. Download `.deb` Package
 #### Ubuntu 16.04
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
 ```
 
 #### Ubuntu 14.04
 
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
 ```
 
 #### 2. Install Procdump
 ```sh
-sudo dpkg -i procdump_1.0_amd64.deb
+sudo dpkg -i procdump_1.0.1_amd64.deb
 sudo apt-get -f install
 ```
 ### Uninstall
