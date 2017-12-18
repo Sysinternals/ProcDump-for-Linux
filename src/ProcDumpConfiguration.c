@@ -287,13 +287,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage(self);
     }
 
-    struct ProcessStat proc = { 0 };
-    if(GetProcessStat(self->ProcessId, &proc) == false)
-    {
-        Log(error, "Failed to get process statistics");
-        return -1;
-    }
-
     self->ProcessName = GetProcessName(self->ProcessId);
     Trace("GetOpts and initial Configuration finished");
 
