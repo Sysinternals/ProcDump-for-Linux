@@ -70,7 +70,7 @@ sudo apt-get purge procdump
 Usage: procdump [OPTIONS...] TARGET
    OPTIONS
       -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU
-      -c          CPU threshold below which to create a dump of the process from 0 to nCPU
+      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU
       -M          Memory commit threshold in MB at which to create a dump
       -m          Trigger when memory commit drops below specified MB value.
       -n          Number of dumps to write before exiting
