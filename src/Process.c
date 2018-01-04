@@ -12,9 +12,8 @@
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     char procFilePath[32];
     char fileBuffer[1024];
-    char processNameBuffer[256];
-    char *fileBufferItr, *token, *savePtr = NULL;
-    int tokenLength;
+    char *token;
+    char *savePtr = NULL;
 
     FILE *procFile = NULL;
 

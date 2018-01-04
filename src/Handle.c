@@ -182,7 +182,6 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
 
     int t;
     int rc;
-    int whichThread;
     int retVal;
 
     threads = (pthread_t *)malloc(sizeof(pthread_t) * Count);

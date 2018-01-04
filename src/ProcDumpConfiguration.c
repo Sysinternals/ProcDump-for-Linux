@@ -287,13 +287,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage(self);
     }
 
-    struct ProcessStat proc = { 0 };
-    if(GetProcessStat(self->ProcessId, &proc) == false)
-    {
-        Log(error, "Failed to get process statistics");
-        return -1;
-    }
-
     self->ProcessName = GetProcessName(self->ProcessId);
     Trace("GetOpts and initial Configuration finished");
 
@@ -524,6 +517,7 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
             exit(-1);
         }
     }
+    return rc;
 }
 
 //--------------------------------------------------------------------
@@ -662,7 +656,7 @@ bool IsValidNumberArg(const char *arg)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v1.0 - Sysinternals process dump utility\n");
+    printf("\nProcDump v1.0.1 - Sysinternals process dump utility\n");
     printf("Copyright (C) 2017 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
 
@@ -678,12 +672,11 @@ void PrintBanner()
 //--------------------------------------------------------------------
 int PrintUsage(struct ProcDumpConfiguration *self)
 {
-    int nCpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
     printf("\nUsage: procdump [OPTIONS...] TARGET\n");
     printf("   OPTIONS\n");
     printf("      -h          Prints this help screen\n");
-    printf("      -C          CPU threshold at which to create a dump of the process from 0 to %d\n", 100*nCpu);
-    printf("      -c          CPU threshold below which to create a dump of the process from 0 to %d\n", 100*nCpu);
+    printf("      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU\n");
+    printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
     printf("      -M          Memory commit threshold in MB at which to create a dump\n");
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
     printf("      -n          Number of dumps to write before exiting\n");
