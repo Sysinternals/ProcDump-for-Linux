@@ -287,14 +287,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage(self);
     }
 
-    struct ProcessStat proc = { 0 };
-    if(GetProcessStat(self->ProcessId, &proc) == false)
-    {
-        Log(error, "Failed to get process statistics");
-        return -1;
-    }
-
-    self->ProcessName = proc.comm;
+    self->ProcessName = GetProcessName(self->ProcessId);
     Trace("GetOpts and initial Configuration finished");
 
     return 0;
@@ -326,6 +319,66 @@ bool LookupProcessByPid(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
+// GetProcessName - Get process name using PID provided  
+//
+//--------------------------------------------------------------------
+char * GetProcessName(pid_t pid){
+	char procFilePath[32];
+	char fileBuffer[MAX_CMDLINE_LEN];		// maximum command line length on Linux
+	int charactersRead = 0;
+	int	itr = 0;
+	char * stringItr;
+	char * processName;
+	FILE * procFile;
+	
+	if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+		return NULL;
+	}
+	procFile = fopen(procFilePath, "r");
+
+	if(procFile != NULL){
+		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
+			Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+			fclose(procFile);
+			return NULL;
+		}
+	
+		// close file
+		fclose(procFile);
+	}
+	else{
+		Log(error, "Failed to open %s.\n", procFilePath);
+		return NULL;
+	}
+	
+	// Extract process name
+	stringItr = fileBuffer;
+	for(int i = 0; i < charactersRead; i++){
+		if(fileBuffer[i] == '\0'){
+			itr = i - itr;
+			
+			if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
+				processName = strrchr(stringItr, '/');	// does this process include a filepath?
+				
+				if(processName != NULL){
+					return strdup(processName + 1);	// +1 to not include '/' character
+				}
+				else{
+					return strdup(stringItr);
+				}
+			}
+			else{
+				stringItr += (itr+1); 	// +1 to move past '\0'
+			}
+		}
+	}
+
+	Log(error, "Failed to extract process name from /proc/PID/cmdline");
+	return NULL;
+}
+
+//--------------------------------------------------------------------
+//
 // CreateTriggerThreads - Create each of the threads that will be running as a trigger 
 //
 //--------------------------------------------------------------------
@@ -334,23 +387,23 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     int rc = 0;
     self->nThreads = 0;
 
-    if(rc=sigemptyset (&sigset) < 0)
+    if((rc=sigemptyset (&sigset)) < 0)
     {
         Trace("CreateTriggerThreads: sigemptyset failed.");
         return rc;
     }
-    if(rc=sigaddset (&sigset, SIGINT) < 0)
+    if((rc=sigaddset (&sigset, SIGINT)) < 0)
     {
         Trace("CreateTriggerThreads: sigaddset failed.");
         return rc;
     }
-    if(rc=sigaddset (&sigset, SIGTERM) < 0)
+    if((rc=sigaddset (&sigset, SIGTERM)) < 0)
     {
         Trace("CreateTriggerThreads: sigaddset failed.");
         return rc;
     }
 
-    if(rc = pthread_sigmask (SIG_BLOCK, &sigset, NULL) != 0)
+    if((rc = pthread_sigmask (SIG_BLOCK, &sigset, NULL)) != 0)
     {
         Trace("CreateTriggerThreads: pthread_sigmask failed.");
         return rc;
@@ -459,11 +512,12 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
     for (int i = 0; i < self->nThreads; i++) {
-        if (rc = pthread_join(self->Threads[i], NULL) != 0) {
+        if ((rc = pthread_join(self->Threads[i], NULL)) != 0) {
             Log(error, "An error occured while joining threads\n");
             exit(-1);
         }
     }
+    return rc;
 }
 
 //--------------------------------------------------------------------
@@ -602,8 +656,8 @@ bool IsValidNumberArg(const char *arg)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v1.0 - Sysinternals process dump utility\n");
-    printf("Copyright (C) 2017 Microsoft Corporation. All rights reserved. Licensed under ther MIT license.\n");
+    printf("\nProcDump v1.0.1 - Sysinternals process dump utility\n");
+    printf("Copyright (C) 2017 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
 
     printf("Monitors a process and writes a dump file when the process exceeds the\n");
@@ -618,12 +672,11 @@ void PrintBanner()
 //--------------------------------------------------------------------
 int PrintUsage(struct ProcDumpConfiguration *self)
 {
-    int nCpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
     printf("\nUsage: procdump [OPTIONS...] TARGET\n");
     printf("   OPTIONS\n");
     printf("      -h          Prints this help screen\n");
-    printf("      -C          CPU threshold at which to create a dump of the process from 0 to %d\n", 100*nCpu);
-    printf("      -c          CPU threshold below which to create a dump of the process from 0 to %d\n", 100*nCpu);
+    printf("      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU\n");
+    printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
     printf("      -M          Memory commit threshold in MB at which to create a dump\n");
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
     printf("      -n          Number of dumps to write before exiting\n");

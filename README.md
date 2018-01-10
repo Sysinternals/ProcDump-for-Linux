@@ -1,4 +1,4 @@
-# ProcDump
+# ProcDump [![Build Status](https://travis-ci.org/Microsoft/ProcDump-for-Linux.svg?branch=master)](https://travis-ci.org/Microsoft/ProcDump-for-Linux)
 ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
 
 ![ProcDump in use](procdump.gif "Procdump in use")
@@ -6,9 +6,14 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 # Installation & Usage 
 
 ## Requirements
-* Minimum OS: Ubuntu 14.04 LTS (Desktop or Server)
+* Minimum OS:
+  * Red Hat Enterprise Linux / CentOS 7
+  * Fedora 26
+  * Mageia 6
+  * Ubuntu 14.04 LTS
   * We are actively testing against other Linux distributions.  If you have requests for specific distros, please let us know (or create a pull request with the necessary changes).
-* `gdb` (>=7.7.1)
+* `gdb` >= 7.6.1
+* `zlib` (build-time only)
 
 ## Install ProcDump
 ### Via Package Manager [prefered method]
@@ -21,7 +26,7 @@ sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
 ##### Register the Microsoft Product feed
 ##### Ubuntu 16.04
 ```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > etc/apt/sources.list.d/microsoft.list'
+sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > /etc/apt/sources.list.d/microsoft.list'
 
 ```
 ##### Ubuntu 14.04
@@ -41,18 +46,18 @@ sudo apt-get install procdump
 #### 1. Download `.deb` Package
 #### Ubuntu 16.04
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
 ```
 
 #### Ubuntu 14.04
 
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0_amd64.deb
+wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
 ```
 
 #### 2. Install Procdump
 ```sh
-sudo dpkg -i procdump_1.0_amd64.deb
+sudo dpkg -i procdump_1.0.1_amd64.deb
 sudo apt-get -f install
 ```
 ### Uninstall
@@ -64,8 +69,8 @@ sudo apt-get purge procdump
 ```
 Usage: procdump [OPTIONS...] TARGET
    OPTIONS
-      -C          CPU threshold at which to create a dump of the process from 0 to 200
-      -c          CPU threshold below which to create a dump of the process from 0 to 200
+      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU
+      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU
       -M          Memory commit threshold in MB at which to create a dump
       -m          Trigger when memory commit drops below specified MB value.
       -n          Number of dumps to write before exiting
@@ -86,13 +91,13 @@ sudo procdump -n 3 -p 1234
 ```
 The following will create 3 core dumps 5 seconds apart.
 ```
-sudo procdump -n -s 5 -p 1234
+sudo procdump -n 3 -s 5 -p 1234
 ```
 The following will create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 10 seconds between each dump.
 ```
 sudo procdump -C 65 -n 3 -p 1234
 ```
-The following with create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 5 seconds between each dump.
+The following will create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 5 seconds between each dump.
 ```
 sudo procdump -C 65 -n 3 -s 5 -p 1234
 ```
@@ -105,7 +110,6 @@ The following will create a core dump when CPU usage is >= 65% or memory usage i
 sudo procdump -C 65 -M 100 -p 1234
 ```
 ## Current Limitations
-* Has only been tested on Ubuntu 14.04+
 * Currently will only run on Linux Kernels version 3.5+
 * Does not have full feature parity with Windows version of ProcDump, specifically, stay alive functionality, and custom performance counters
 

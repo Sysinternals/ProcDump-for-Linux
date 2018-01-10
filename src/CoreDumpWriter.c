@@ -10,6 +10,8 @@
 
 #include "CoreDumpWriter.h"
 
+char *sanitize(char *processName);
+
 static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "time", "manual" };
 
 int WriteCoreDumpInternal(struct CoreDumpWriter *self);
@@ -114,7 +116,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     FILE *commandPipe = NULL;
 
     const char *desc = CoreDumpTypeStrings[self->Type];
-    char *name = self->Config->ProcessName;
+    char *name = sanitize(self->Config->ProcessName);
     pid_t pid = self->Config->ProcessId;
 
     // allocate output buffer
@@ -147,6 +149,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         Trace("WriteCoreDumpInternal: failed sprintf core file name");        
         exit(-1);
     }
+
+    free(name);
 
     // generate core dump for given process
     commandPipe = popen2(command, "r", &gcorePid);
@@ -266,6 +270,7 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         }
 
         execl("/bin/bash", "bash", "-c", command, (char *)NULL); // won't return
+        return NULL; // will never be hit; just for static analyzers
     } else {
         // parent
         setpgid(childPid, childPid); // give the child and descendants their own pgid so we can terminate gcore separately
@@ -280,4 +285,25 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         }
 
     }
+}
+
+//--------------------------------------------------------------------
+//
+// sanitize - Helper function for removing all non-alphanumeric characters from process name
+//
+// Returns: char *
+//
+//--------------------------------------------------------------------
+// remove all non alphanumeric characters from process name and replace with '_'
+char *sanitize(char * processName)
+{
+    char *sanitizedProcessName = strdup(processName);
+    for (int i = 0; i < strlen(sanitizedProcessName); i++)
+    {
+        if (!isalnum(sanitizedProcessName[i]))
+        {
+            sanitizedProcessName[i] = '_';
+        }
+    }
+    return sanitizedProcessName;
 }

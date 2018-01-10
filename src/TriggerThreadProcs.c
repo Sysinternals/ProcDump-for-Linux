@@ -14,7 +14,6 @@ void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("CommitThread: Starting Trigger Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
-    struct sysinfo sysInfo;
     long pageSize_kb;
     unsigned long memUsage = 0;
     struct ProcessStat proc = {0};
@@ -129,7 +128,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("TimerThread: Starting Trigger Thread");
 
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(COMMIT, config);
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(TIME, config);
 
     int rc = 0;
 
