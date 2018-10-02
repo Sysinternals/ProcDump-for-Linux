@@ -31,6 +31,13 @@ int main(int argc, char *argv[])
         Log(warn, "Procdump not running with elevated credentials. If your uid does not match the uid of the target process procdump will not be able to capture memory dumps");
     }
 
+    // actively wait for the specified process name to start
+    if (g_config.WaitingForProcessName) {
+	if (WaitForProcessName(&g_config) == false) {
+            ExitProcDump();
+	}
+    }
+
     // start monitoring process
     if(CreateTriggerThreads(&g_config) != 0) {
         Log(error, INTERNAL_ERROR);

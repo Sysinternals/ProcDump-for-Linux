@@ -137,6 +137,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
     self->bTimerThreshold =             false;
+    self->WaitingForProcessName =       false;
     self->DiagnosticsLoggingEnabled =   false;
     self->gcorePid = NO_PID;
 
@@ -184,7 +185,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -193,6 +194,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     	{ "lower-mem",                 required_argument,  NULL,           'm' },
         { "number-of-dumps",           required_argument,  NULL,           'n' },
         { "time-between-dumps",        required_argument,  NULL,           's' },
+        { "wait",                      required_argument,  NULL,           'w' },
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' }
     };
@@ -260,6 +262,11 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 }
                 break;
 
+            case 'w':
+                self->WaitingForProcessName = true;
+                self->ProcessName = strdup(optarg);
+                break;
+
             case 'd':
                 self->DiagnosticsLoggingEnabled = true;
                 break;
@@ -282,12 +289,23 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             self->bTimerThreshold = true;
         }
 
-    if(self->ProcessId == NO_PID){
-        Log(error, "A valid PID must be specified");
+    if(self->ProcessId == NO_PID && !self->WaitingForProcessName){
+        Log(error, "A valid PID or process name must be specified");
         return PrintUsage(self);
     }
 
-    self->ProcessName = GetProcessName(self->ProcessId);
+    if(self->ProcessId != NO_PID && self->WaitingForProcessName){
+	Log(error, "Please only specify one of -p or -w");
+	return PrintUsage(self);
+    }
+
+    if(!self->WaitingForProcessName) {
+        self->ProcessName = GetProcessName(self->ProcessId);
+        if (self->ProcessName == NULL) {
+            Log(error, "Error getting process name.");
+	    }
+    }
+
     Trace("GetOpts and initial Configuration finished");
 
     return 0;
@@ -317,6 +335,66 @@ bool LookupProcessByPid(struct ProcDumpConfiguration *self)
     return true;
 }
 
+
+//--------------------------------------------------------------------
+//
+// FilterForPid - Helper function for scandir to only return PIDs.
+//
+//--------------------------------------------------------------------
+static int FilterForPid(const struct dirent *entry)
+{
+    return IsValidNumberArg(entry->d_name);
+}
+
+//--------------------------------------------------------------------
+//
+// WaitForProcessName - Actively wait until a process with the configured name is launched.
+//
+//--------------------------------------------------------------------
+bool WaitForProcessName(struct ProcDumpConfiguration *self)
+{
+    Log(info, "Waiting for process '%s' to launch...", self->ProcessName);
+    while (true) {
+        struct dirent ** nameList;
+        bool moreThanOne = false;
+        pid_t matchingPid = NO_PID;
+        int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+        for (int i = 0; i < numEntries; i++) {
+            pid_t procPid = atoi(nameList[i]->d_name);
+            char *nameForPid = GetProcessName(procPid);
+            if (nameForPid == NULL) {
+                continue;
+            }
+            if (strcmp(nameForPid, self->ProcessName) == 0) {
+                if (matchingPid == NO_PID) {
+                    matchingPid = procPid;
+                } else {
+                    Log(error, "More than one matching process found, exiting...");
+                    moreThanOne = true;
+                    free(nameForPid);
+                    break;
+                }
+            }
+            free(nameForPid);
+        }
+        // Cleanup
+        for (int i = 0; i < numEntries; i++) {
+            free(nameList[i]);
+        }
+        free(nameList);
+
+        // Check for exactly one match
+        if (moreThanOne) {
+            self->bTerminated = true;
+            return false;
+        } else if (matchingPid != NO_PID) {
+            self->ProcessId = matchingPid;
+            Log(info, "Found process with PID %d", matchingPid);
+            return true;
+        }
+    }
+}
+
 //--------------------------------------------------------------------
 //
 // GetProcessName - Get process name using PID provided  
@@ -338,7 +416,7 @@ char * GetProcessName(pid_t pid){
 
 	if(procFile != NULL){
 		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
-			Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+			Log(debug, "Failed to read from %s.\n", procFilePath);
 			fclose(procFile);
 			return NULL;
 		}
@@ -347,7 +425,7 @@ char * GetProcessName(pid_t pid){
 		fclose(procFile);
 	}
 	else{
-		Log(error, "Failed to open %s.\n", procFilePath);
+		Log(debug, "Failed to open %s.\n", procFilePath);
 		return NULL;
 	}
 	
@@ -373,7 +451,7 @@ char * GetProcessName(pid_t pid){
 		}
 	}
 
-	Log(error, "Failed to extract process name from /proc/PID/cmdline");
+	Log(debug, "Failed to extract process name from /proc/PID/cmdline");
 	return NULL;
 }
 
@@ -553,7 +631,13 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 bool PrintConfiguration(struct ProcDumpConfiguration *self)
 {
     if (WaitForSingleObject(&self->evtConfigurationPrinted,0) == WAIT_TIMEOUT) {
-        printf("Process:\t\t%s (%d)\n", self->ProcessName, self->ProcessId);
+        printf("Process:\t\t%s", self->ProcessName);
+        if (!self->WaitingForProcessName) {
+            printf(" (%d)", self->ProcessId);
+        } else {
+            printf(" (pending)");
+        }
+        printf("\n");
 
         // CPU
         if (self->CpuThreshold != -1) {
@@ -683,7 +767,8 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -s          Consecutive seconds before dump is written (default is 10)\n");
     printf("      -d          Writes diagnostic logs to syslog\n");    
     printf("   TARGET must be exactly one of these:\n");
-    printf("      -p          pid of the process\n\n");
+    printf("      -p          pid of the process\n");
+    printf("      -w          Name of the process executable\n\n");
 
     return -1;
 }
