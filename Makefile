@@ -7,10 +7,14 @@ OBJDIR=obj
 SRCDIR=src
 INCDIR=include
 BINDIR=bin
+TESTDIR=tests/integration
 DEPS=$(wildcard $(INCDIR)/*.h)
 SRC=$(wildcard $(SRCDIR)/*.c)
+TESTSRC=$(wildcard $(TESTDIR)/*.c)
 OBJS=$(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC))
+TESTOBJS=$(patsubst $(TESTDIR)/%.c, $(OBJDIR)/%.o, $(TESTSRC))
 OUT=$(BINDIR)/procdump
+TESTOUT=$(BINDIR)/ProcDumpTestApplication
 
 
 # installation directory
@@ -31,7 +35,7 @@ PKG_DEB=procdump_$(PKG_VERSION)_$(PKG_ARCH).deb
 
 all: clean build
 
-build: $(OBJDIR) $(BINDIR) $(OUT)
+build: $(OBJDIR) $(BINDIR) $(OUT) $(TESTOUT)
 
 install:
 	mkdir -p $(DESTDIR)$(INSTALLDIR)
@@ -42,7 +46,13 @@ install:
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
+$(OBJDIR)/%.o: $(TESTDIR)/%.c
+	$(CC) -c -g -o $@ $< $(CCFLAGS)
+
 $(OUT): $(OBJS)
+	$(CC) -o $@ $^ $(CCFLAGS)
+
+$(TESTOUT): $(TESTOBJS)
 	$(CC) -o $@ $^ $(CCFLAGS)
 
 $(OBJDIR):
@@ -55,7 +65,7 @@ clean:
 	-rm -rf $(OBJDIR)
 	-rm -rf $(BINDIR)
 	-rm -rf $(RELEASEDIR)
-	
+
 test: build
 	./tests/integration/run.sh
 
