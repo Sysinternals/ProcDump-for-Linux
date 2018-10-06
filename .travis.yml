@@ -11,6 +11,7 @@ addons:
     packages:
       - stress-ng
       - gdb
+      - python-docutils
 script:
   - make
   - sudo ./tests/integration/run.sh

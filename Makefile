@@ -12,6 +12,7 @@ SRC=$(wildcard $(SRCDIR)/*.c)
 OBJS=$(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SRC))
 OUT=$(BINDIR)/procdump
 
+RST2MAN=rst2man
 
 # installation directory
 DESTDIR ?= /
@@ -31,9 +32,9 @@ PKG_DEB=procdump_$(PKG_VERSION)_$(PKG_ARCH).deb
 
 all: clean build
 
-build: $(OBJDIR) $(BINDIR) $(OUT)
+build: $(OBJDIR) $(BINDIR) $(OUT) procdump.1
 
-install:
+install: build
 	mkdir -p $(DESTDIR)$(INSTALLDIR)
 	cp $(BINDIR)/procdump $(DESTDIR)$(INSTALLDIR)
 	mkdir -p $(DESTDIR)$(MANDIR)
@@ -51,11 +52,15 @@ $(OBJDIR):
 $(BINDIR):
 	-@mkdir -p $(BINDIR)
 
+procdump.1: procdump.rst
+	$(RST2MAN) $< $@
+
 clean:
 	-rm -rf $(OBJDIR)
 	-rm -rf $(BINDIR)
 	-rm -rf $(RELEASEDIR)
-	
+	-rm -f procdump.1
+
 test: build
 	./tests/integration/run.sh
 
@@ -74,5 +79,6 @@ deb: build
 
 tarball:
 	mkdir -p $(RELEASEDIR)
-	tar -czf $(RELEASEDIR)/procdump_$(PKG_VERSION).tar.gz Makefile README.md CODE_OF_CONDUCT.md CONTRIBUTING.md DEBIAN_PACKAGE.control procdump.1 ./tests ./include ./src
+	tar -czf $(RELEASEDIR)/procdump_$(PKG_VERSION).tar.gz Makefile README.md CODE_OF_CONDUCT.md CONTRIBUTING.md DEBIAN_PACKAGE.control procdump.rst ./tests ./include ./src
 
+.PHONY: all build install clean test release deb tarball
