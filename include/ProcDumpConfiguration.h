@@ -71,6 +71,7 @@ struct ProcDumpConfiguration {
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n
     bool DiagnosticsLoggingEnabled; // -d
+    const char *gcoreCmd;           // -g
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

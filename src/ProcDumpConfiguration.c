@@ -7,6 +7,7 @@
 //
 //--------------------------------------------------------------------
 
+#include "Procdump.h"
 #include "ProcDumpConfiguration.h"
 
 struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALIZER("ConfigurationInitialized");
@@ -139,6 +140,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bTimerThreshold =             false;
     self->DiagnosticsLoggingEnabled =   false;
     self->gcorePid = NO_PID;
+    self->gcoreCmd = DEFAULT_GCORE_CMD;
 
     SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
 }
@@ -165,6 +167,76 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
+// IsValidExecutableArg - check if command points to an executable
+//
+//--------------------------------------------------------------------
+static bool IsValidExecutableArg(const char *cmd)
+{
+    const char *path;
+    char *buf;
+    int rc;
+
+    if (strchr(cmd, '/')) {
+        // if cmd includes a slash, no path search must be performed,
+        // go straight to checking if it's executable
+        rc = access(cmd, X_OK);
+	if (rc < 0) {
+	    Trace("IsValidExecutableArg: executable %s: %s", cmd, strerror(errno));
+	}
+	return rc == 0;
+    }
+
+    // otherwise, walk PATH
+    path = getenv("PATH");
+    if (path == NULL) {
+        Log(error, INTERNAL_ERROR);
+        Trace("IsValidExecutableArg: no PATH env var");
+        return false;
+    }
+
+    buf = malloc(strlen(path)+strlen(cmd)+3);
+    if (buf == NULL) {
+        Log(error, INTERNAL_ERROR);
+        Trace("IsValidExecutableArg: malloc failed");
+        return false;
+    }
+
+    // loop as long as we have stuff to examine in path
+    for(; *path; ++path) {
+        // start from the beginning of the buffer
+        char *p = buf;
+
+        // copy in buf the current path element
+        for(; *path && *path!=':'; ++path,++p) {
+            *p = *path;
+        }
+
+        // empty path entries are treated like "."
+        if (p == buf)
+            *p++ = '.';
+
+        // slash and command name
+        if(p[-1] != '/')
+            *p++ = '/';
+        strcpy(p, cmd);
+
+        // check if we can execute it
+        if (access(buf, X_OK) == 0) {
+            free(buf);
+            return true;
+        }
+
+        // quit at last cycle
+        if (!*path)
+            break;
+    }
+    // not found
+    free(buf);
+    return false;
+}
+
+//--------------------------------------------------------------------
+//
 // GetOptions - Unpack command line inputs
 //
 //--------------------------------------------------------------------
@@ -182,9 +254,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     }
 
     // parse arguments
-	int next_option;
+    int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:g:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -193,6 +265,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     	{ "lower-mem",                 required_argument,  NULL,           'm' },
         { "number-of-dumps",           required_argument,  NULL,           'n' },
         { "time-between-dumps",        required_argument,  NULL,           's' },
+        { "gcore",                     required_argument,  NULL,           'g' },
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' }
     };
@@ -259,6 +332,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     return PrintUsage(self);
                 }
                 break;
+
+	    case 'g':
+		if (!IsValidExecutableArg(optarg)) {
+		    Log(error, "Invalid gcore command specified.");
+		    return PrintUsage(self);
+		}
+		self->gcoreCmd = optarg;
+		break;
 
             case 'd':
                 self->DiagnosticsLoggingEnabled = true;
@@ -583,6 +664,9 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         // number of dumps and others
         printf("Number of Dumps:\t%d\n", self->NumberOfDumpsToCollect);
 
+        // gcore command
+        printf("gcore Command:\t%s\n", self->gcoreCmd);
+
         SetEvent(&self->evtConfigurationPrinted.event);
         return true;
     }
@@ -681,7 +765,8 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
     printf("      -n          Number of dumps to write before exiting\n");
     printf("      -s          Consecutive seconds before dump is written (default is 10)\n");
-    printf("      -d          Writes diagnostic logs to syslog\n");    
+    printf("      -g          gcore command (default is " DEFAULT_GCORE_CMD ")\n");
+    printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");
     printf("      -p          pid of the process\n\n");
 

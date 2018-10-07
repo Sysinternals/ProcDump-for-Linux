@@ -102,7 +102,9 @@ int WriteCoreDump(struct CoreDumpWriter *self)
 int WriteCoreDumpInternal(struct CoreDumpWriter *self)
 {
     char date[DATE_LENGTH];
-    char command[BUFFER_LENGTH];
+    char *command = NULL;
+    const char *commandFormat = "%s -o %s_%s_%s %d 2>&1";
+    int commandSize;
     char ** outputBuffer;
     char lineBuffer[BUFFER_LENGTH];
     char coreDumpFileName[BUFFER_LENGTH];
@@ -136,8 +138,24 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
 
+    // calc command buffer size
+    commandSize = snprintf(NULL, 0, commandFormat, self->Config->gcoreCmd, name, desc, date, pid);
+    if (commandSize < 0) {
+        Log(error, INTERNAL_ERROR);
+        Trace("WriteCoreDumpInternal: failed gcore command buffer size calc");
+        exit(-1);
+    }
+
+    // allocate command buffer
+    command = malloc(commandSize+1);
+    if (command == NULL) {
+	Log(error, INTERNAL_ERROR);
+	Trace("WriteCoreDumpInternal: failed gcore command buffer allocation");
+	exit(-1);
+    }
+
     // assemble the command
-    if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
+    if(sprintf(command, commandFormat, self->Config->gcoreCmd, name, desc, date, pid) < 0){
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
         exit(-1);
