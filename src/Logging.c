@@ -43,7 +43,7 @@ void LogFormatter(enum LogLevel logLevel, const char *message, va_list args)
     // If you want an entry to only go to the syslog, use 'debug' 
     if(logLevel != debug)
     {
-        printf("%s\n", trace);
+        puts(trace);
     }
 
     // All log entries also go to the syslog
