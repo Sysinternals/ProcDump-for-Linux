@@ -7,6 +7,7 @@
 //
 //--------------------------------------------------------------------
 
+#include "Procdump.h"
 #include "ProcDumpConfiguration.h"
 
 struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALIZER("ConfigurationInitialized");
@@ -130,10 +131,10 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     // Additional initialization
     self->ProcessId =                   NO_PID;
     self->NumberOfDumpsCollected =      0;
-    self->NumberOfDumpsToCollect =      1;
+    self->NumberOfDumpsToCollect =      DEFAULT_NUMBER_OF_DUMPS;
     self->CpuThreshold =                -1;
     self->MemoryThreshold =             -1;
-    self->ThresholdSeconds =            10;
+    self->ThresholdSeconds =            DEFAULT_DELTA_TIME;
     self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
     self->bTimerThreshold =             false;
@@ -763,9 +764,9 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
     printf("      -M          Memory commit threshold in MB at which to create a dump\n");
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
-    printf("      -n          Number of dumps to write before exiting\n");
-    printf("      -s          Consecutive seconds before dump is written (default is 10)\n");
-    printf("      -d          Writes diagnostic logs to syslog\n");    
+    printf("      -n          Number of dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
+    printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
+    printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");
     printf("      -p          pid of the process\n");
     printf("      -w          Name of the process executable\n\n");
