@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <limits.h>
+#include <dirent.h>
 
 #include "Handle.h"
 #include "TriggerThreadProcs.h"
@@ -70,6 +71,7 @@ struct ProcDumpConfiguration {
     int ThresholdSeconds;           // -s
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n
+    bool WaitingForProcessName;     // -w
     bool DiagnosticsLoggingEnabled; // -d
 
     // multithreading
@@ -93,6 +95,7 @@ struct ProcDumpConfiguration {
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 char * GetProcessName(pid_t pid);
 bool LookupProcessByPid(struct ProcDumpConfiguration *self);
+bool WaitForProcessName(struct ProcDumpConfiguration *self);
 int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration *self);
 int CreateTriggerThreads(struct ProcDumpConfiguration *self);
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
