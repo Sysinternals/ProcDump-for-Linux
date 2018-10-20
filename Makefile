@@ -23,15 +23,17 @@ INSTALLDIR=/usr/bin
 MANDIR=/usr/share/man/man1
 
 # package creation directories
-RELEASEDIR=release
-RELEASEBINDIR=$(RELEASEDIR)/procdump/usr/bin
-RELEASECONTROLDIR=$(RELEASEDIR)/procdump/DEBIAN
-RELEASEMANDIR=$(RELEASEDIR)/procdump/usr/share/man/man1
+BUILDDIR := $(CURDIR)/pkgbuild
+
+# Flags to pass to debbuild/rpmbuild
+PKGBUILDFLAGS := --define "_topdir $(BUILDDIR)" -bb
+
+# Command to create the build directory structure
+PKGBUILDROOT_CREATE_CMD = mkdir -p $(BUILDDIR)/DEBS $(BUILDDIR)/SDEBS $(BUILDDIR)/RPMS $(BUILDDIR)/SRPMS \
+			$(BUILDDIR)/SOURCES $(BUILDDIR)/SPECS $(BUILDDIR)/BUILD $(BUILDDIR)/BUILDROOT
 
 # package details
 PKG_VERSION=1.0.1
-PKG_ARCH=amd64
-PKG_DEB=procdump_$(PKG_VERSION)_$(PKG_ARCH).deb
 
 all: clean build
 
@@ -61,28 +63,27 @@ $(OBJDIR):
 $(BINDIR):
 	-@mkdir -p $(BINDIR)
 
+.PHONY: clean
 clean:
 	-rm -rf $(OBJDIR)
 	-rm -rf $(BINDIR)
-	-rm -rf $(RELEASEDIR)
+	-rm -rf $(BUILDDIR)
 
 test: build
 	./tests/integration/run.sh
 
-release: deb tarball
+release: clean tarball
 
-deb: build
-	mkdir -p $(RELEASEBINDIR)
-	mkdir -p $(RELEASECONTROLDIR)
-	mkdir -p $(RELEASEMANDIR)
-	md5sum $(OUT) > $(RELEASECONTROLDIR)/md5sums
-	cp $(OUT) $(RELEASEBINDIR)
-	cp DEBIAN_PACKAGE.control $(RELEASECONTROLDIR)/control
-	cp procdump.1 $(RELEASEMANDIR)
-	dpkg-deb -b $(RELEASEDIR)/procdump $(RELEASEDIR)/$(PKG_DEB)
-	rm -rf $(RELEASEDIR)/procdump
-
+.PHONY: tarball
 tarball:
-	mkdir -p $(RELEASEDIR)
-	tar -czf $(RELEASEDIR)/procdump_$(PKG_VERSION).tar.gz Makefile README.md CODE_OF_CONDUCT.md CONTRIBUTING.md DEBIAN_PACKAGE.control procdump.1 ./tests ./include ./src
+	$(PKGBUILDROOT_CREATE_CMD)
+	tar --exclude=./pkgbuild --exclude=./.git --transform 's,^\.,procdump-$(PKG_VERSION),' -czf $(BUILDDIR)/SOURCES/procdump-$(PKG_VERSION).tar.gz .
+	sed -e "s/@PKG_VERSION@/$(PKG_VERSION)/g" dist/procdump.spec.in > $(BUILDDIR)/SPECS/procdump.spec
 
+.PHONY: deb
+deb: tarball
+	debbuild $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
+
+.PHONY: rpm
+rpm: tarball
+	rpmbuild $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
