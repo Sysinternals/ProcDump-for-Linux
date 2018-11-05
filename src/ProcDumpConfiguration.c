@@ -71,6 +71,7 @@ void ExitProcDump()
 {
     pthread_mutex_destroy(&LoggerLock);
     closelog();
+    FreeProcDumpConfiguration(&g_config);
 }
 
 //--------------------------------------------------------------------
@@ -143,8 +144,6 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     DestroyEvent(&(self->evtStartMonitoring.event));
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
-
-    free(self);
 }
 
 //--------------------------------------------------------------------
