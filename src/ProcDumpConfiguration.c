@@ -579,6 +579,14 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
             exit(-1);
         }
     }
+    if ((rc = pthread_cancel(sig_thread_id)) != 0) {
+        Log(error, "An error occured while canceling SignalThread.\n");
+        exit(-1);
+    }
+    if ((rc = pthread_join(sig_thread_id, NULL)) != 0) {
+        Log(error, "An error occured while joining SignalThread.\n");
+        exit(-1);
+    }
     return rc;
 }
 
