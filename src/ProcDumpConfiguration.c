@@ -52,24 +52,6 @@ void *SignalThread(void *input)
 
 //--------------------------------------------------------------------
 //
-// NewProcDumpConfiguration - Convenience function for newing a config
-//
-//--------------------------------------------------------------------
-struct ProcDumpConfiguration *NewProcDumpConfiguration()
-{
-    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)malloc(sizeof(struct ProcDumpConfiguration));
-
-    if (!config) {
-        return NULL;
-    }
-
-    InitProcDumpConfiguration(config);
-
-    return config;
-}
-
-//--------------------------------------------------------------------
-//
 // InitProcDump - initalize procdump
 //
 //--------------------------------------------------------------------

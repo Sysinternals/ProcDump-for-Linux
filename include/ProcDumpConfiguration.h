@@ -111,7 +111,6 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self);
 void InitProcDumpConfiguration(struct ProcDumpConfiguration *self);
 void InitProcDump();
 void ExitProcDump();
-struct ProcDumpConfiguration *NewProcDumpConfiguration();
 
 void PrintBanner();
 int PrintUsage(struct ProcDumpConfiguration *self);
