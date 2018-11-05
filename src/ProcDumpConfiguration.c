@@ -144,6 +144,8 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     DestroyEvent(&(self->evtStartMonitoring.event));
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
+
+    free(self->ProcessName);
 }
 
 //--------------------------------------------------------------------
