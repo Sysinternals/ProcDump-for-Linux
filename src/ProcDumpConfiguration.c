@@ -12,7 +12,7 @@
 
 struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALIZER("ConfigurationInitialized");
 
-static sigset_t sigset;
+static sigset_t sig_set;
 static pthread_t sig_thread_id;
 
 //--------------------------------------------------------------------
@@ -25,7 +25,7 @@ void *SignalThread(void *input)
     struct ProcDumpConfiguration *self = (struct ProcDumpConfiguration *)input;
     int sig_caught, rc;
 
-    if ((rc = sigwait(&sigset, &sig_caught)) != 0) {
+    if ((rc = sigwait(&sig_set, &sig_caught)) != 0) {
         Log(error, "Failed to wait on signal");
         exit(-1);
     }
@@ -466,23 +466,23 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     int rc = 0;
     self->nThreads = 0;
 
-    if((rc=sigemptyset (&sigset)) < 0)
+    if((rc=sigemptyset (&sig_set)) < 0)
     {
         Trace("CreateTriggerThreads: sigemptyset failed.");
         return rc;
     }
-    if((rc=sigaddset (&sigset, SIGINT)) < 0)
+    if((rc=sigaddset (&sig_set, SIGINT)) < 0)
     {
         Trace("CreateTriggerThreads: sigaddset failed.");
         return rc;
     }
-    if((rc=sigaddset (&sigset, SIGTERM)) < 0)
+    if((rc=sigaddset (&sig_set, SIGTERM)) < 0)
     {
         Trace("CreateTriggerThreads: sigaddset failed.");
         return rc;
     }
 
-    if((rc = pthread_sigmask (SIG_BLOCK, &sigset, NULL)) != 0)
+    if((rc = pthread_sigmask (SIG_BLOCK, &sig_set, NULL)) != 0)
     {
         Trace("CreateTriggerThreads: pthread_sigmask failed.");
         return rc;
