@@ -224,6 +224,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         }
     }
 
+    free(outputBuffer);
     return rc;
 }
 
