@@ -33,6 +33,7 @@ void LogFormatter(enum LogLevel logLevel, const char *message, va_list args)
     if(!(trace = malloc(traceLen+argsLen+1)))
     {
         pthread_mutex_unlock(&LoggerLock);
+        va_end(copy);
         return;
     }
     

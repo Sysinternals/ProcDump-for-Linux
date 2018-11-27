@@ -52,24 +52,6 @@ void *SignalThread(void *input)
 
 //--------------------------------------------------------------------
 //
-// NewProcDumpConfiguration - Convenience function for newing a config
-//
-//--------------------------------------------------------------------
-struct ProcDumpConfiguration *NewProcDumpConfiguration()
-{
-    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)malloc(sizeof(struct ProcDumpConfiguration));
-
-    if (!config) {
-        return NULL;
-    }
-
-    InitProcDumpConfiguration(config);
-
-    return config;
-}
-
-//--------------------------------------------------------------------
-//
 // InitProcDump - initalize procdump
 //
 //--------------------------------------------------------------------
@@ -89,6 +71,7 @@ void ExitProcDump()
 {
     pthread_mutex_destroy(&LoggerLock);
     closelog();
+    FreeProcDumpConfiguration(&g_config);
 }
 
 //--------------------------------------------------------------------
@@ -162,7 +145,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    free(self);
+    free(self->ProcessName);
 }
 
 //--------------------------------------------------------------------
@@ -595,6 +578,14 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
             Log(error, "An error occured while joining threads\n");
             exit(-1);
         }
+    }
+    if ((rc = pthread_cancel(sig_thread_id)) != 0) {
+        Log(error, "An error occured while canceling SignalThread.\n");
+        exit(-1);
+    }
+    if ((rc = pthread_join(sig_thread_id, NULL)) != 0) {
+        Log(error, "An error occured while joining SignalThread.\n");
+        exit(-1);
     }
     return rc;
 }

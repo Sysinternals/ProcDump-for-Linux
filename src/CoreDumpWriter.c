@@ -186,17 +186,20 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     if(strstr(outputBuffer[i-1], "gcore: failed") != NULL){
         Log(error, "An error occured while generating the core dump");
                 
-        // log gcore message and free up memory
+        // log gcore message
         for(int j = 0; j < i; j++){
             if(outputBuffer[j] != NULL){
                 Log(error, "GCORE - %s", outputBuffer[j]);
-                free(outputBuffer[j]);
             }
         }
 
-        free(outputBuffer);
         exit(1);
     }
+
+    for(int j = 0; j < i; j++) {
+        free(outputBuffer[j]);
+    }
+    free(outputBuffer);
 
     self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
     if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect) {
