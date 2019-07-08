@@ -16,7 +16,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * `zlib` (build-time only)
 
 ## Install ProcDump
-### Via Package Manager [prefered method]
+### Via Package Manager [preferred method]
 
 #### 1. Add the Microsoft Product feed
 ```sh
