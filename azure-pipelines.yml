@@ -1,0 +1,84 @@
+# Azure build pipelines for Procdump-for-Linux
+
+trigger:
+  branches:
+    include:
+      - release/*
+    exclude:
+      - dev/*
+      - test/*
+
+pr:
+  - master
+
+jobs:
+  - job: "Run_Unit_Tests"
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        sudo apt update
+        sudo apt install -y gdb stress-ng zlib1g-dev
+      displayName: 'Setup build environment'
+      
+    - script: |
+        make
+      displayName: 'Build test binary'
+
+    - script: |
+        sudo ./tests/integration/run.sh
+      displayName: 'Run unit tests'
+
+  - job: "DEB_Package_Build"
+    pool: "Ubuntu-Docker-Pool"
+    condition: not(eq(variables['Build.Reason'], 'PullRequest'))
+    dependsOn:
+      - Run_Unit_Tests
+    steps:
+    - script: |
+        make
+      displayName: 'Build procdump Ubuntu'
+
+    - script: |
+        make release
+        make deb
+      displayName: 'Building debian package & artifacts'
+
+    - task: CopyFiles@2
+      inputs:
+        SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
+      displayName: 'Copy build artifacts to staging'
+    
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+  
+  - job: 'RPM_Package_Build'
+    pool: 'Centos-Docker-Pool'
+    dependsOn:
+      - DEB_Package_Build
+    steps:
+      - script: |
+          make
+        displayName: "Build Procdump Centos"
+
+      - script: |
+          make release
+          make rpm
+        displayName: 'Building centos package & artifacts'
+
+      - task: CopyFiles@2
+        inputs:
+          SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
+          Contents: '**'
+          TargetFolder: '$(Build.ArtifactStagingDirectory)'
+        displayName: 'Copy build RPM artifacts to staging'
+      
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'drop'
+          publishLocation: 'Container'
