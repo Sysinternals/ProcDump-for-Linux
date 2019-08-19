@@ -136,21 +136,40 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
 
-    // assemble the command
-    if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
-        Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
-        exit(-1);
+    if(name == NULL){
+         // assemble the command
+        if(sprintf(command, "gcore -o %s_%s %d 2>&1", desc, date, pid) < 0){
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
+            exit(-1);
+        }
+
+
+        // assemble filename
+        if(sprintf(coreDumpFileName, "%s_%s.%d", desc, date, pid) < 0){
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf core file name");        
+            exit(-1);
+        }
+
+    }else{
+        // assemble the command
+        if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
+            exit(-1);
+        }
+
+        // assemble filename
+        if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf core file name");        
+            exit(-1);
+        }
+
+        free(name);
     }
 
-    // assemble filename
-    if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
-        Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf core file name");        
-        exit(-1);
-    }
-
-    free(name);
 
     // generate core dump for given process
     commandPipe = popen2(command, "r", &gcorePid);
@@ -300,6 +319,10 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
 // remove all non alphanumeric characters from process name and replace with '_'
 char *sanitize(char * processName)
 {
+    if(processName == NULL){
+        return NULL;
+    }
+
     char *sanitizedProcessName = strdup(processName);
     for (int i = 0; i < strlen(sanitizedProcessName); i++)
     {
