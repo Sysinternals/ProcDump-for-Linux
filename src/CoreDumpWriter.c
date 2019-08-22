@@ -123,7 +123,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     outputBuffer = (char**)malloc(sizeof(char*) * MAX_LINES);
     if(outputBuffer == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed gcore output buffer allocation");
+        Trace("WriteCoreDumpInternal: failed gcore output buffer allocation for the proc of ", name);
         exit(-1);
     }
 
@@ -131,53 +131,32 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     rawTime = time(NULL);
     if((timerInfo = localtime(&rawTime)) == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed localtime.");
+        Trace("WriteCoreDumpInternal: failed localtime for the proc of ", name);
         exit(-1);
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
 
-    if(name == NULL){
-         // assemble the command
-        if(sprintf(command, "gcore -o %s_%s %d 2>&1", desc, date, pid) < 0){
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
-            exit(-1);
-        }
-
-
-        // assemble filename
-        if(sprintf(coreDumpFileName, "%s_%s.%d", desc, date, pid) < 0){
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf core file name");        
-            exit(-1);
-        }
-
-    }else{
-        // assemble the command
-        if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
-            exit(-1);
-        }
-
-        // assemble filename
-        if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf core file name");        
-            exit(-1);
-        }
-
-        free(name);
+    // assemble the command
+    if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
+        Log(error, INTERNAL_ERROR);
+        Trace("WriteCoreDumpInternal: failed sprintf gcore command for proc of ", name);
+        exit(-1);
     }
 
+    // assemble filename
+    if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
+        Log(error, INTERNAL_ERROR);
+        Trace("WriteCoreDumpInternal: failed sprintf core file name for proc of ", name);
+        exit(-1);
+    }
 
     // generate core dump for given process
     commandPipe = popen2(command, "r", &gcorePid);
     self->Config->gcorePid = gcorePid;
     
     if(commandPipe == NULL){
-        Log(error, "An error occured while generating the core dump");
-        Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
+        Log(error, "An error occured while generating the core dump");      
+        Trace("WriteCoreDumpInternal: Failed to open pipe to gcore for the proc of ", name);
         exit(1);
     }
     
@@ -192,7 +171,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         }
         else {
             Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed to allocate gcore error message buffer");
+            Trace("WriteCoreDumpInternal: failed to allocate gcore error message buffer for the proc of ", name);
             exit(-1);
         }
     }
@@ -231,12 +210,12 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         if(self->Config->nQuit){
             // if we are in a quit state from interrupt delete partially generated core dump file
             if(sprintf(command, "rm -f %s", coreDumpFileName) < 0){
-                Trace("WriteCoreDumpInternal: Failed to print rm command");
+                Trace("WriteCoreDumpInternal: Failed to print rm command for the proc of ", name);
                 exit(-1);
             }
             
             if(system(command) < 0){
-                Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
+                Trace("WriteCoreDumpInternal: Failed to remove partial core dump for the proc of ", name);
                 exit(-1);
             }
         }
@@ -245,6 +224,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
             Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
         }
     }
+
+    free(name);
 
     return rc;
 }

@@ -285,7 +285,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
     if(!self->WaitingForProcessName) {
         self->ProcessName = GetProcessName(self->ProcessId);
-        if (self->ProcessName == NULL) {
+        if (strcmp(self->ProcessName, EMPTY_PROC_NAME) == 0) {
             Log(error, "Error getting process name.");
 	    }
     }
@@ -346,7 +346,7 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
             char *nameForPid = GetProcessName(procPid);
-            if (nameForPid == NULL) {
+            if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
                 continue;
             }
             if (strcmp(nameForPid, self->ProcessName) == 0) {
@@ -381,28 +381,31 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
-// GetProcessName - Get process name using PID provided  
+// GetProcessName - Get process name using PID provided.
+//                  Returns EMPTY_PROC_NAME for null process name.
 //
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid){
 	char procFilePath[32];
-	char fileBuffer[MAX_CMDLINE_LEN];		// maximum command line length on Linux
+	char fileBuffer[MAX_CMDLINE_LEN + 1] = {0};		// maximum command line length on Linux
 	int charactersRead = 0;
 	int	itr = 0;
 	char * stringItr;
 	char * processName;
 	FILE * procFile;
 	
-	if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
-		return NULL;
+	
+    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+		return EMPTY_PROC_NAME;
 	}
+
 	procFile = fopen(procFilePath, "r");
 
 	if(procFile != NULL){
 		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
 			Log(debug, "Failed to read from %s.\n", procFilePath);
 			fclose(procFile);
-			return NULL;
+			return EMPTY_PROC_NAME;
 		}
 	
 		// close file
@@ -410,12 +413,12 @@ char * GetProcessName(pid_t pid){
 	}
 	else{
 		Log(debug, "Failed to open %s.\n", procFilePath);
-		return NULL;
+		return EMPTY_PROC_NAME;
 	}
 	
 	// Extract process name
 	stringItr = fileBuffer;
-	for(int i = 0; i < charactersRead; i++){
+	for(int i = 0; i < charactersRead + 1; i++){
 		if(fileBuffer[i] == '\0'){
 			itr = i - itr;
 			
@@ -436,7 +439,7 @@ char * GetProcessName(pid_t pid){
 	}
 
 	Log(debug, "Failed to extract process name from /proc/PID/cmdline");
-	return NULL;
+	return EMPTY_PROC_NAME;
 }
 
 //--------------------------------------------------------------------
