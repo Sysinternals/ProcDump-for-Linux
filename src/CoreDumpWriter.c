@@ -85,9 +85,9 @@ int WriteCoreDump(struct CoreDumpWriter *self)
             Trace("WriteCoreDump: Error in default case");
             break;
     }
-    if(pthread_setcancelstate(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0){
+    if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDump: failed pthread_setcancelstate.");
+        Trace("WriteCoreDump: failed pthread_setcanceltype.");
         exit(-1);
     }
 
