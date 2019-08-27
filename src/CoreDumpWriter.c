@@ -123,7 +123,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     outputBuffer = (char**)malloc(sizeof(char*) * MAX_LINES);
     if(outputBuffer == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed gcore output buffer allocation for the proc of ", name);
+        Trace("WriteCoreDumpInternal: failed gcore output buffer allocation");
         exit(-1);
     }
 
@@ -131,7 +131,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     rawTime = time(NULL);
     if((timerInfo = localtime(&rawTime)) == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed localtime for the proc of ", name);
+        Trace("WriteCoreDumpInternal: failed localtime");
         exit(-1);
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
@@ -139,14 +139,14 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     // assemble the command
     if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf gcore command for proc of ", name);
+        Trace("WriteCoreDumpInternal: failed sprintf gcore command");
         exit(-1);
     }
 
     // assemble filename
     if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf core file name for proc of ", name);
+        Trace("WriteCoreDumpInternal: failed sprintf core file name");
         exit(-1);
     }
 
@@ -156,7 +156,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     
     if(commandPipe == NULL){
         Log(error, "An error occured while generating the core dump");      
-        Trace("WriteCoreDumpInternal: Failed to open pipe to gcore for the proc of ", name);
+        Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
         exit(1);
     }
     
@@ -171,7 +171,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
         }
         else {
             Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed to allocate gcore error message buffer for the proc of ", name);
+            Trace("WriteCoreDumpInternal: failed to allocate gcore error message buffer");
             exit(-1);
         }
     }

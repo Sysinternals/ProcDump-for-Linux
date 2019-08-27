@@ -145,7 +145,10 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    free(self->ProcessName);
+    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
+        // The string constant is not on the heap.
+        free(self->ProcessName);
+    }
 }
 
 //--------------------------------------------------------------------
@@ -285,9 +288,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
     if(!self->WaitingForProcessName) {
         self->ProcessName = GetProcessName(self->ProcessId);
-        if (strcmp(self->ProcessName, EMPTY_PROC_NAME) == 0) {
-            Log(error, "Error getting process name.");
-	    }
     }
 
     Trace("GetOpts and initial Configuration finished");
@@ -387,7 +387,7 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid){
 	char procFilePath[32];
-	char fileBuffer[MAX_CMDLINE_LEN + 1] = {0};		// maximum command line length on Linux
+	char fileBuffer[MAX_CMDLINE_LEN + 1];		// +1 for the situation that we got exact max bytes but w/o trailing '\0'.
 	int charactersRead = 0;
 	int	itr = 0;
 	char * stringItr;
@@ -416,9 +416,14 @@ char * GetProcessName(pid_t pid){
 		return EMPTY_PROC_NAME;
 	}
 	
+
 	// Extract process name
+    if(fileBuffer[charactersRead - 1] != '\0'){
+        charactersRead += 1;
+        fileBuffer[charactersRead] = '\0';
+    }
 	stringItr = fileBuffer;
-	for(int i = 0; i < charactersRead + 1; i++){
+	for(int i = 0; i < charactersRead; i++){
 		if(fileBuffer[i] == '\0'){
 			itr = i - itr;
 			
