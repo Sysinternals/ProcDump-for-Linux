@@ -387,7 +387,7 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid){
 	char procFilePath[32];
-	char fileBuffer[MAX_CMDLINE_LEN + 1];		// +1 for the situation that we got exact max bytes but w/o trailing '\0'.
+	char fileBuffer[MAX_CMDLINE_LEN];
 	int charactersRead = 0;
 	int	itr = 0;
 	char * stringItr;
@@ -395,7 +395,7 @@ char * GetProcessName(pid_t pid){
 	FILE * procFile;
 	
 	
-    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+        if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
 		return EMPTY_PROC_NAME;
 	}
 
