@@ -402,12 +402,15 @@ char * GetProcessName(pid_t pid){
 	procFile = fopen(procFilePath, "r");
 
 	if(procFile != NULL){
-		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
-			Log(debug, "Failed to read from %s.\n", procFilePath);
-			fclose(procFile);
+		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
+	    		fclose(procFile);
+			if(strlen(fileBuffer) == 0){
+                		Log(debug, "Empty cmdline.\n");
+            		}else{
+	        		Log(debug, "Failed to read from %s.\n", procFilePath);
+			}
 			return EMPTY_PROC_NAME;
 		}
-	
 		// close file
 		fclose(procFile);
 	}
@@ -418,12 +421,9 @@ char * GetProcessName(pid_t pid){
 	
 
 	// Extract process name
-    if(fileBuffer[charactersRead - 1] != '\0'){
-        charactersRead += 1;
-        fileBuffer[charactersRead] = '\0';
-    }
 	stringItr = fileBuffer;
-	for(int i = 0; i < charactersRead; i++){
+	charactersRead  = strlen(fileBuffer);
+	for(int i = 0; i <= charactersRead; i++){
 		if(fileBuffer[i] == '\0'){
 			itr = i - itr;
 			
