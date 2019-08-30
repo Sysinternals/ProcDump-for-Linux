@@ -301,7 +301,8 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
 char *sanitize(char * processName)
 {
     if(processName == NULL){
-        return NULL;
+        Log(error, "NULL process name.\n");
+        exit(-1);
     }
 
     char *sanitizedProcessName = strdup(processName);
