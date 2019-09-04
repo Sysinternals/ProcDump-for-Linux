@@ -32,6 +32,7 @@
 #define MAX_TRIGGERS 3
 #define NO_PID INT_MAX
 #define MAX_CMDLINE_LEN 4096+1
+#define EMPTY_PROC_NAME "null"
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 

@@ -131,7 +131,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     rawTime = time(NULL);
     if((timerInfo = localtime(&rawTime)) == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed localtime.");
+        Trace("WriteCoreDumpInternal: failed localtime");
         exit(-1);
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
@@ -139,25 +139,23 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     // assemble the command
     if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf gcore command");        
+        Trace("WriteCoreDumpInternal: failed sprintf gcore command");
         exit(-1);
     }
 
     // assemble filename
     if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
         Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf core file name");        
+        Trace("WriteCoreDumpInternal: failed sprintf core file name");
         exit(-1);
     }
-
-    free(name);
 
     // generate core dump for given process
     commandPipe = popen2(command, "r", &gcorePid);
     self->Config->gcorePid = gcorePid;
     
     if(commandPipe == NULL){
-        Log(error, "An error occured while generating the core dump");
+        Log(error, "An error occured while generating the core dump");      
         Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
         exit(1);
     }
@@ -226,6 +224,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
             Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
         }
     }
+
+    free(name);
 
     return rc;
 }
@@ -300,6 +300,11 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
 // remove all non alphanumeric characters from process name and replace with '_'
 char *sanitize(char * processName)
 {
+    if(processName == NULL){
+        Log(error, "NULL process name.\n");
+        exit(-1);
+    }
+
     char *sanitizedProcessName = strdup(processName);
     for (int i = 0; i < strlen(sanitizedProcessName); i++)
     {
