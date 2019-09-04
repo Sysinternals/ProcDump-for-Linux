@@ -57,6 +57,11 @@ void *SignalThread(void *input)
 //--------------------------------------------------------------------
 void InitProcDump()
 {
+    if(CheckKernelVersion() == -1)
+    {
+        Log(error, "Kernel version lower than 3.5+.");
+        exit(-1);
+    }
     InitProcDumpConfiguration(&g_config);
     openlog("ProcDump", LOG_PID, LOG_USER);
     pthread_mutex_init(&LoggerLock, NULL);
@@ -732,6 +737,40 @@ bool IsValidNumberArg(const char *arg)
     return true;
 }
 
+//--------------------------------------------------------------------
+//
+// CheckKernelVersion - Check to see if current kernel is 3.5+.
+// 
+// ProcDump won't proceed if current kernel is less than 3.5.
+// Returns 1 if >= 3.5+, returns -1 otherwise or error.
+//--------------------------------------------------------------------
+int CheckKernelVersion()
+{
+    struct utsname *kernelInfo = (struct utsname*)malloc(sizeof(struct utsname));
+    if(uname(kernelInfo) == 0)
+    {
+       char *token = NULL;
+	int version = 0;
+	int patch = 0;
+
+        if((token = strtok(kernelInfo->release, KERNEL_VERSION_SEPARATOR)) == NULL) return -1;
+
+        version = atoi(token);
+        if(MIN_KERNEL_VERSION > version) return -1;
+        if((token = strtok(NULL, KERNEL_VERSION_SEPARATOR)) == NULL) return MIN_KERNEL_VERSION == version? -1: 1;
+
+        patch = atoi(token);
+        if(MIN_KERNEL_PATCH > patch && MIN_KERNEL_VERSION == version) return -1;
+
+    }else
+    {
+        Log(error, strerror(errno));
+        free(kernelInfo);
+        return -1;
+    }
+    free(kernelInfo);
+    return 1;
+}
 
 //--------------------------------------------------------------------
 //
