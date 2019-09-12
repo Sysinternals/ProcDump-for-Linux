@@ -750,14 +750,16 @@ bool CheckKernelVersion()
     if(uname(&kernelInfo) == 0)
     {
         int version, patch = 0;
-        if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2){
+        if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2)
+	{
             Log(error, "sscanf didn't get 2 digits for kernel version");
         }
 
         if(MIN_KERNEL_VERSION > version) return false;
         if(MIN_KERNEL_PATCH > patch && MIN_KERNEL_VERSION == version) return false;
 
-    }else
+    }
+    else
     {
         Log(error, strerror(errno));
         return false;
