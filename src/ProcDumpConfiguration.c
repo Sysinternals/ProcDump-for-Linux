@@ -57,13 +57,13 @@ void *SignalThread(void *input)
 //--------------------------------------------------------------------
 void InitProcDump()
 {
-    if(CheckKernelVersion() == -1)
+    openlog("ProcDump", LOG_PID, LOG_USER);
+    if(CheckKernelVersion() == false)
     {
         Log(error, "Kernel version lower than 3.5+.");
         exit(-1);
     }
     InitProcDumpConfiguration(&g_config);
-    openlog("ProcDump", LOG_PID, LOG_USER);
     pthread_mutex_init(&LoggerLock, NULL);
 }
 
@@ -742,34 +742,27 @@ bool IsValidNumberArg(const char *arg)
 // CheckKernelVersion - Check to see if current kernel is 3.5+.
 // 
 // ProcDump won't proceed if current kernel is less than 3.5.
-// Returns 1 if >= 3.5+, returns -1 otherwise or error.
+// Returns true if >= 3.5+, returns false otherwise or error.
 //--------------------------------------------------------------------
-int CheckKernelVersion()
+bool CheckKernelVersion()
 {
-    struct utsname *kernelInfo = (struct utsname*)malloc(sizeof(struct utsname));
-    if(uname(kernelInfo) == 0)
+    struct utsname kernelInfo;
+    if(uname(&kernelInfo) == 0)
     {
-       char *token = NULL;
-	int version = 0;
-	int patch = 0;
+        int version, patch = 0;
+        if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2){
+            Log(error, "sscanf didn't get 2 digits for kernel version");
+        }
 
-        if((token = strtok(kernelInfo->release, KERNEL_VERSION_SEPARATOR)) == NULL) return -1;
-
-        version = atoi(token);
-        if(MIN_KERNEL_VERSION > version) return -1;
-        if((token = strtok(NULL, KERNEL_VERSION_SEPARATOR)) == NULL) return MIN_KERNEL_VERSION == version? -1: 1;
-
-        patch = atoi(token);
-        if(MIN_KERNEL_PATCH > patch && MIN_KERNEL_VERSION == version) return -1;
+        if(MIN_KERNEL_VERSION > version) return false;
+        if(MIN_KERNEL_PATCH > patch && MIN_KERNEL_VERSION == version) return false;
 
     }else
     {
         Log(error, strerror(errno));
-        free(kernelInfo);
-        return -1;
+        return false;
     }
-    free(kernelInfo);
-    return 1;
+    return true;
 }
 
 //--------------------------------------------------------------------

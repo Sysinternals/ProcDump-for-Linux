@@ -121,6 +121,6 @@ void ExitProcDump();
 void PrintBanner();
 int PrintUsage(struct ProcDumpConfiguration *self);
 bool IsValidNumberArg(const char *arg);
-int CheckKernelVersion();
+bool CheckKernelVersion();
 
 #endif // PROCDUMPCONFIGURATION_H
