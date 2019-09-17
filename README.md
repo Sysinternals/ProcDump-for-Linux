@@ -20,8 +20,8 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 
 #### 1. Add the Microsoft Product feed
 ```sh
-curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
-sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+wget -q https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
 ```
 ##### Register the Microsoft Product feed
 ##### Ubuntu 16.04
