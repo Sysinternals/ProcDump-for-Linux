@@ -751,7 +751,7 @@ bool CheckKernelVersion()
     {
         int version, patch = 0;
         if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2)
-	{
+        {
             Log(error, "Cannot validate kernel version");
             Trace("%s",strerror(errno));
             return false;

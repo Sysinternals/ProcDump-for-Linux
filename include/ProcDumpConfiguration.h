@@ -37,7 +37,6 @@
 #define EMPTY_PROC_NAME "null"
 #define MIN_KERNEL_VERSION 3
 #define MIN_KERNEL_PATCH 5
-#define KERNEL_VERSION_SEPARATOR "."
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 
