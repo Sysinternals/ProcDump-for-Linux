@@ -45,7 +45,7 @@ void DiagTrace(const char* message, ...);
 
 /*
 * Behavior: Trace() prints variable number of information appended with line number of its invocation. 
-* Params: 1. [Required] format.
+* Params: 1. [Conditionally Required] format. format is required if non-string-literal were passed in as the 2nd param.
 *         2. [Required] variable number of parameters.
 * Example:  Trace("%s", strerror(errno)).
 */
