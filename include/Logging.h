@@ -43,6 +43,12 @@ pthread_mutex_t LoggerLock;
 
 void DiagTrace(const char* message, ...);
 
+/*
+* Behavior: Trace() prints variable number of information appended with line number of its invocation. 
+* Params: 1. [Required] format.
+*         2. [Required] variable number of parameters.
+* Example:  Trace("%s", strerror(errno)).
+*/
 #define Trace(format, ...) \
     DiagTrace(format " %s", ##__VA_ARGS__, LOCATION);
 
