@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 #include <sys/sysinfo.h>
+#include <sys/utsname.h>
 #include <zconf.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@
 #include <syslog.h>
 #include <limits.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "Handle.h"
 #include "TriggerThreadProcs.h"
@@ -33,6 +35,8 @@
 #define NO_PID INT_MAX
 #define MAX_CMDLINE_LEN 4096+1
 #define EMPTY_PROC_NAME "null"
+#define MIN_KERNEL_VERSION 3
+#define MIN_KERNEL_PATCH 5
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 
@@ -116,5 +120,6 @@ void ExitProcDump();
 void PrintBanner();
 int PrintUsage(struct ProcDumpConfiguration *self);
 bool IsValidNumberArg(const char *arg);
+bool CheckKernelVersion();
 
 #endif // PROCDUMPCONFIGURATION_H
