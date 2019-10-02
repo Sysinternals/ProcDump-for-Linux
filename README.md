@@ -18,12 +18,9 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 ## Install ProcDump
 ### Via Package Manager [preferred method]
 
-#### 1. Add the Microsoft Product feed
+#### 1. Register Microsoft key and feed
 ```sh
 wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-```
-##### Register the Microsoft Product feed
-```sh
 sudo dpkg -i packages-microsoft-prod.deb
 ```
 #### 2. Install Procdump
