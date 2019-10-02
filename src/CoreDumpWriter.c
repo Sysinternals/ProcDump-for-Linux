@@ -209,12 +209,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self)
     if(access(coreDumpFileName, F_OK) != -1) {
         if(self->Config->nQuit){
             // if we are in a quit state from interrupt delete partially generated core dump file
-            if(sprintf(command, "rm -f %s", coreDumpFileName) < 0){
-                Trace("WriteCoreDumpInternal: Failed to print rm command");
-                exit(-1);
-            }
-            
-            if(system(command) < 0){
+            int ret = unlink(coreDumpFileName);
+            if (ret < 0 && errno != ENOENT) {
                 Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
                 exit(-1);
             }
