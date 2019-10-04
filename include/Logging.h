@@ -44,11 +44,13 @@ pthread_mutex_t LoggerLock;
 void DiagTrace(const char* message, ...);
 
 /*
-* Behavior: Trace() prints variable number of information appended with line number of its invocation. 
-* Params: 1. [Conditionally Required] format. format is required if non-string-literal were passed in as the 2nd param.
-*         2. [Required] variable number of parameters.
-* Example:  Trace("%s", strerror(errno)).
-*/
+ * Summary: Used similarly to printf, but requires a format string for all input.  
+ *          This macro appends line number and file information at the end of the format string and va_args.
+ * Params:
+ * - format: printf style format string literal
+ * - var_args: variable number of format args
+ * Example: Trace("%s", strerror(errno)) // %s format specifier required.
+ */
 #define Trace(format, ...) \
     DiagTrace(format " %s", ##__VA_ARGS__, LOCATION);
 
