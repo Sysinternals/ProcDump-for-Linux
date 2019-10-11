@@ -110,6 +110,7 @@ sudo procdump -w my_application
 ## Current Limitations
 * Currently will only run on Linux Kernels version 3.5+
 * Does not have full feature parity with Windows version of ProcDump, specifically, stay alive functionality, and custom performance counters
+* Currently will not run on BSD 4.3, because the syscall of uname() is not supported in it.
 
 # Feedback
 * Ask a question on StackOverflow (tag with ProcDumpForLinux)
