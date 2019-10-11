@@ -18,22 +18,11 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 ## Install ProcDump
 ### Via Package Manager [preferred method]
 
-#### 1. Add the Microsoft Product feed
+#### 1. Register Microsoft key and feed
 ```sh
-curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
-sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
 ```
-##### Register the Microsoft Product feed
-##### Ubuntu 16.04
-```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > /etc/apt/sources.list.d/microsoft.list'
-
-```
-##### Ubuntu 14.04
-```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod trusty main" > /etc/apt/sources.list.d/microsoft.list'
-```
-
 #### 2. Install Procdump
 ```sh
 sudo apt-get update
