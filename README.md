@@ -16,42 +16,56 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 ## Install ProcDump
 ### Via Package Manager [preferred method]
 
-#### 1. Register Microsoft key and feed
+#### Ubuntu 14.04+
+1.  Register Microsoft key and feed
+    ```sh
+    wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+    sudo dpkg -i packages-microsoft-prod.deb
+    ```
+
+2.  Install Procdump
+    ```sh
+    sudo apt-get update
+    sudo apt-get install procdump
+    ```
+
+#### Fedora 30+
+ProcDump is also available in the repositories for Fedora 30 and later. You can
+install it using `dnf` as usual:
 ```sh
-wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-```
-#### 2. Install Procdump
-```sh
-sudo apt-get update
-sudo apt-get install procdump
+sudo dnf install --refresh procdump
 ```
 
 ### Via `.deb` Package
 > Pre-Depends: `dpkg`(>=1.17.5) 
 
-#### 1. Download `.deb` Package
-#### Ubuntu 16.04
-```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
-```
+1.  Download `.deb` Package
+    On Ubuntu 16.04:
+    ```sh
+    wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
+    ```
+    On Ubuntu 14.04:
+    ```sh
+    wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
+    ```
 
-#### Ubuntu 14.04
+2.  Install Procdump
+    ```sh
+    sudo dpkg -i procdump_1.0.1_amd64.deb
+    sudo apt-get -f install
+    ```
 
-```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
-```
 
-#### 2. Install Procdump
-```sh
-sudo dpkg -i procdump_1.0.1_amd64.deb
-sudo apt-get -f install
-```
 ### Uninstall
 #### Ubuntu 14.04+
 ```sh
 sudo apt-get purge procdump
 ```
+#### Fedora
+```sh
+sudo dnf remove procdump
+```
+
 ## Usage
 ```
 Usage: procdump [OPTIONS...] TARGET
