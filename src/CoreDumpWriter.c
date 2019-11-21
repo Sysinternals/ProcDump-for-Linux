@@ -303,6 +303,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                 temp_buffer = malloc(totalPacketSize);
                 if(temp_buffer!=NULL)
                 {
+                    memset(temp_buffer, 0, totalPacketSize);
                     struct IpcHeader dumpHeader =
                     {
                         { {"DOTNET_IPC_V1"} },
