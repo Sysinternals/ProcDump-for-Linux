@@ -470,7 +470,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 rc = 1;
             }
         }
-        
+
+        free(outputBuffer);
     }
     else
     {
