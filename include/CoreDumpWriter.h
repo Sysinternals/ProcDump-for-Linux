@@ -41,7 +41,7 @@ struct IpcHeader
     union
     {
         struct MagicVersion _magic;
-        uint8_t  Magic[14];  // Magic Version number; a 0 terminated char array
+        uint8_t  Magic[14];  // Magic Version number
     };
 
     uint16_t Size;       // The size of the incoming packet, size = header + payload size

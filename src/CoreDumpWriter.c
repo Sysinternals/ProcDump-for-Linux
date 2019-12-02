@@ -288,7 +288,6 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
             }
             else
             {   
-                // Get the payload and payload size
                 unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));//*sizeof(wchar_t);
                 int payloadSize = sizeof(dumpFileNameLen);
                 payloadSize += dumpFileNameLen*sizeof(wchar_t);
