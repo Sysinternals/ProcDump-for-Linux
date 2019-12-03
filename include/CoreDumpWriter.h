@@ -27,6 +27,9 @@
 #define MAX_LINES 15
 #define BUFFER_LENGTH 1024
 
+#define CORECLR_DUMPTYPE_FULL 4
+#define CORECLR_DUMPLOGGING_OFF 0
+#define CORECLR_DIAG_IPCHEADER_SIZE 24
 
 // Magic version for the IpcHeader struct
 struct MagicVersion

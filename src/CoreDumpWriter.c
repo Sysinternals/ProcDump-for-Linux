@@ -137,7 +137,7 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
                         memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
                         if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
                         {
-                            // TODO: Log the socket name
+                            Trace("CoreCLR diagnostics socket: %s", socketName);
                             bRet = true;
                         }
                         break;                        
@@ -288,12 +288,12 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
             }
             else
             {   
-                unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));//*sizeof(wchar_t);
+                unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));
                 int payloadSize = sizeof(dumpFileNameLen);
                 payloadSize += dumpFileNameLen*sizeof(wchar_t);
-                unsigned int dumpType = 4;          // 4 = full dump
+                unsigned int dumpType = CORECLR_DUMPTYPE_FULL;
                 payloadSize += sizeof(dumpType);     
-                unsigned int diagnostics = 0;       // 0 = turn off console logging. Unfortunately this still logs some stuff
+                unsigned int diagnostics = CORECLR_DUMPLOGGING_OFF;       
                 payloadSize += sizeof(diagnostics);     
                 
                 uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
@@ -346,7 +346,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                         else
                         {
                             // Check the header to make sure its the right size
-                            if(retHeader.Size != 24)
+                            if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
                             {
                                 Trace("Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
                             }
