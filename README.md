@@ -14,44 +14,29 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * `zlib` (build-time only)
 
 ## Install ProcDump
-### Via Package Manager [preferred method]
+Checkout our [install instructions](INSTALL.md) for ditribution specific steps to install Procdump.
 
-#### 1. Register Microsoft key and feed
-```sh
-wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
+## Build ProcDump from Scratch
+To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run: 
+
 ```
-#### 2. Install Procdump
-```sh
-sudo apt-get update
-sudo apt-get install procdump
+make
+make install
 ```
 
-### Via `.deb` Package
-> Pre-Depends: `dpkg`(>=1.17.5) 
+### Building Procdump Packages 
+The distribution packages for Procdump for Linux are constructed utilizing `debbuild` for Debian targets and `rpmbuild` for Fedora targets.
 
-#### 1. Download `.deb` Package
-#### Ubuntu 16.04
+To build a `deb` package of Procdump on Ubuntu simply run:
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
+make && make deb
 ```
 
-#### Ubuntu 14.04
-
+To build a `rpm` package of Procdump on Fedora simply run:
 ```sh
-wget https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod/pool/main/p/procdump/procdump_1.0.1_amd64.deb
+make && make rpm
 ```
 
-#### 2. Install Procdump
-```sh
-sudo dpkg -i procdump_1.0.1_amd64.deb
-sudo apt-get -f install
-```
-### Uninstall
-#### Ubuntu 14.04+
-```sh
-sudo apt-get purge procdump
-```
 ## Usage
 ```
 Usage: procdump [OPTIONS...] TARGET
