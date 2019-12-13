@@ -1,6 +1,6 @@
 # Install ProcDump
 
-## Ubuntu 14.04, 16.04, 18.04 & 19.04
+## Ubuntu 14.04, 16.04, 18.04, 19.04 & 19.10
 #### 1. Register Microsoft key and feed
 ```sh
 wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
@@ -87,6 +87,18 @@ sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.
 sudo yum install procdump
 ```
 
+## RHEL 8
+#### 1. Register Microsoft key and feed
+```sh
+sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/rhel/8/prod.repo
+```
+
+#### 2. Install Procdump
+```sh
+sudo yum install procdump
+```
+
 ## CentOS 7
 #### 1. Register Microsoft key and feed
 ```sh
@@ -96,21 +108,6 @@ sudo rpm -Uvh https://packages.microsoft.com/config/centos/7/packages-microsoft-
 #### 2. Install Procdump
 ```sh
 sudo yum install procdump
-```
-
-## openSUSE 42.3
-#### 1. Register Microsoft key and feed
-```sh
-sudo zypper install libicu
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-wget -q https://packages.microsoft.com/config/opensuse/42.3/prod.repo
-sudo mv prod.repo /etc/zypp/repos.d/microsoft-prod.repo
-sudo chown root:root /etc/zypp/repos.d/microsoft-prod.repo
-```
-
-#### 2. Install Procdump
-```sh
-sudo zypper install procdump
 ```
 
 ## openSUSE 15
