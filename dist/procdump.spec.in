@@ -1,6 +1,6 @@
 Name:           procdump
 Version:        @PKG_VERSION@
-Release:        %_BuildID
+Release:        %_Revision
 Summary:        Sysinternals process dump utility
 
 %if %{_vendor} == "debbuild"

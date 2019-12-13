@@ -34,6 +34,8 @@ jobs:
     condition: not(eq(variables['Build.Reason'], 'PullRequest'))
     dependsOn:
       - Run_Unit_Tests
+    variables:
+      - Revision: '$(Build.BuildId)'
     steps:
     - script: |
         make
@@ -60,6 +62,8 @@ jobs:
     pool: 'Centos-Docker-Pool'
     dependsOn:
       - DEB_Package_Build
+    variables:
+      - Revision: '$(Build.BuildId)'
     steps:
       - script: |
           make
