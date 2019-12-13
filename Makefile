@@ -82,8 +82,8 @@ tarball:
 
 .PHONY: deb
 deb: tarball
-	debbuild $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
+	debbuild --define="Version ${env.BuildID}" $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
 
 .PHONY: rpm
 rpm: tarball
-	rpmbuild $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
+	rpmbuild --define="Version ${env.BuildID}" $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
