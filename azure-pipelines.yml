@@ -35,7 +35,7 @@ jobs:
     dependsOn:
       - Run_Unit_Tests
     variables:
-      - Revision: '$(Build.BuildId)'
+      Revision: '$(Build.BuildId)'
     steps:
     - script: |
         make
@@ -63,7 +63,7 @@ jobs:
     dependsOn:
       - DEB_Package_Build
     variables:
-      - Revision: '$(Build.BuildId)'
+      Revision: '$(Build.BuildId)'
     steps:
       - script: |
           make
