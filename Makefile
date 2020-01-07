@@ -16,6 +16,8 @@ TESTOBJS=$(patsubst $(TESTDIR)/%.c, $(OBJDIR)/%.o, $(TESTSRC))
 OUT=$(BINDIR)/procdump
 TESTOUT=$(BINDIR)/ProcDumpTestApplication
 
+# Revision value from build pipeline
+REVISION:=$(if $(REVISION),$(REVISION),'99999')
 
 # installation directory
 DESTDIR ?= /
@@ -82,7 +84,7 @@ tarball:
 
 .PHONY: deb
 deb: tarball
-	debbuild --define='_Revision ${Revision}' $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
+	debbuild --define='_Revision ${REVISION}' $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
 
 .PHONY: rpm
 rpm: tarball
