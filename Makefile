@@ -88,4 +88,4 @@ deb: tarball
 
 .PHONY: rpm
 rpm: tarball
-	rpmbuild --define='_Revision ${Revision}' $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
+	rpmbuild --define='_Revision ${REVISION}' $(PKGBUILDFLAGS) $(BUILDDIR)/SPECS/procdump.spec
