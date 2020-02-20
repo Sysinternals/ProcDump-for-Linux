@@ -26,8 +26,6 @@
 #define S2(x) S1(x)
 #define LOCATION "in "__FILE__ ", at line " S2(__LINE__)
 
-extern struct ProcDumpConfiguration g_config;
-
 
 enum LogLevel{
     debug,
@@ -39,7 +37,7 @@ enum LogLevel{
 
 void Log(enum LogLevel logLevel, const char *message, ...);
 
-pthread_mutex_t LoggerLock;
+extern pthread_mutex_t LoggerLock;
 
 void DiagTrace(const char* message, ...);
 

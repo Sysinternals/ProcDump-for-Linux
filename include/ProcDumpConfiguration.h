@@ -38,10 +38,10 @@
 #define MIN_KERNEL_VERSION 3
 #define MIN_KERNEL_PATCH 5
 
-struct ProcDumpConfiguration g_config;  // backbone of the program
+extern struct ProcDumpConfiguration g_config;  // backbone of the program
 
-long HZ;                                // clock ticks per second
-int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
+extern long HZ;                                // clock ticks per second
+extern int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
 
 // -------------------
 // Structs
