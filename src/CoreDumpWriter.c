@@ -524,6 +524,9 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         }
         free(outputBuffer);
 
+        // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
+        sleep(1);
+
         // validate that core dump file was generated
         if(access(coreDumpFileName, F_OK) != -1) {
             if(self->Config->nQuit){
