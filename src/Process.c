@@ -7,6 +7,9 @@
 //
 //--------------------------------------------------------------------
 
+#include <dirent.h>
+#include <sys/stat.h>
+
 #include "Process.h"
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
@@ -16,6 +19,25 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     char *savePtr = NULL;
 
     FILE *procFile = NULL;
+    DIR* fddir = NULL;
+    struct dirent* entry = NULL;
+
+    // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
+    if(sprintf(procFilePath, "/proc/%d/fdinfo", pid) < 0){
+        return false;
+    }
+
+    fddir = opendir(procFilePath);
+    if(fddir)
+    {
+        proc->num_filedescriptors = -2;                 // Account for "." and ".."
+        while ((entry = readdir(fddir)) != NULL)
+        {
+            proc->num_filedescriptors++;
+        }
+
+        closedir(fddir);
+    }
 
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){

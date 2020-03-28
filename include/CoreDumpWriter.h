@@ -58,6 +58,7 @@ enum ECoreDumpType {
     COMMIT,
     CPU,
     THREAD,
+    FILEDESC,
     TIME,
     MANUAL
 };

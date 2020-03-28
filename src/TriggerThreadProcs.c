@@ -81,7 +81,7 @@ void* ThreadThread(void *thread_args /* struct ProcDumpConfiguration* */)
             {
                 if (proc.num_threads > config->ThreadThreshold)
                 {
-                    Log(info, "Current threads: %ld", proc.num_threads);
+                    Log(info, "Threads: %ld", proc.num_threads);
                     rc = WriteCoreDump(writer);
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -106,6 +106,52 @@ void* ThreadThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     free(writer);
     Trace("ThreadThread: Exiting Thread trigger Thread");
+    pthread_exit(NULL);
+}
+
+
+void* FileDescriptorThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("ThreadThread: Starting Filedescriptor Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+
+    struct ProcessStat proc = {0};
+    int rc = 0;
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(FILEDESC, config); 
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        while ((rc = WaitForQuit(config, 1000)) == WAIT_TIMEOUT)
+        {
+            if (GetProcessStat(config->ProcessId, &proc))
+            {
+                if (proc.num_filedescriptors > config->FileDescriptorThreshold)
+                {
+                    Log(info, "File descriptors: %ld", proc.num_filedescriptors);
+                    rc = WriteCoreDump(writer);
+
+                    if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                Log(error, "An error occured while parsing procfs\n");
+                exit(-1);
+            }            
+        }
+
+        // handle exit cases
+        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
+        {
+            // clean up!
+        }
+    }
+
+    free(writer);
+    Trace("ThreadThread: Exiting Filedescriptor trigger Thread");
     pthread_exit(NULL);
 }
 
