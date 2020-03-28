@@ -122,6 +122,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->NumberOfDumpsToCollect =      DEFAULT_NUMBER_OF_DUMPS;
     self->CpuThreshold =                -1;
     self->MemoryThreshold =             -1;
+    self->ThreadThreshold =             -1;
     self->ThresholdSeconds =            DEFAULT_DELTA_TIME;
     self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
@@ -177,7 +178,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:T:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -187,6 +188,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "number-of-dumps",           required_argument,  NULL,           'n' },
         { "time-between-dumps",        required_argument,  NULL,           's' },
         { "wait",                      required_argument,  NULL,           'w' },
+        { "threads",                   required_argument,  NULL,           'T' },        
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' }
     };
@@ -206,6 +208,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
                     (self->CpuThreshold = atoi(optarg)) < 0 || self->CpuThreshold > MAXIMUM_CPU) {
                     Log(error, "Invalid CPU threshold specified.");
+                    return PrintUsage(self);
+                }
+                break;
+
+            case 'T':
+                if (self->ThreadThreshold != -1 || !IsValidNumberArg(optarg) ||
+                    (self->ThreadThreshold = atoi(optarg)) < 0 ) {
+                    Log(error, "Invalid threads threshold specified.");
                     return PrintUsage(self);
                 }
                 break;
@@ -277,7 +287,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // if number of dumps is set, but no thresholds, just go on timer
     if (self->NumberOfDumpsToCollect != -1 &&
         self->MemoryThreshold == -1 &&
-        self->CpuThreshold == -1) {
+        self->CpuThreshold == -1 &&
+        self->ThreadThreshold == -1) {
             self->bTimerThreshold = true;
         }
 
@@ -495,6 +506,13 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     if (self->MemoryThreshold != -1) {
         if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create CommitThread.");            
+            return rc;
+        }
+    }
+
+    if (self->ThreadThreshold != -1) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadThread, (void *)self)) != 0) {
+            Trace("CreateTriggerThreads: failed to create ThreadThread.");            
             return rc;
         }
     }
@@ -798,6 +816,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
     printf("      -M          Memory commit threshold in MB at which to create a dump\n");
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
+    printf("      -T          Trigger when thread count exceeds the specified value.\n");
     printf("      -n          Number of dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
     printf("      -d          Writes diagnostic logs to syslog\n");

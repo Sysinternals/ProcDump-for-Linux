@@ -78,6 +78,7 @@ struct ProcDumpConfiguration {
     int NumberOfDumpsToCollect;     // -n
     bool WaitingForProcessName;     // -w
     bool DiagnosticsLoggingEnabled; // -d
+    int ThreadThreshold;            // -T
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

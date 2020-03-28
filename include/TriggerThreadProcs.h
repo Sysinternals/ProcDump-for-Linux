@@ -30,6 +30,7 @@
 // worker thread process for monitoring memory commit
 void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *ThreadThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */);
 
 #endif // TRIGGER_THREAD_PROCS_H

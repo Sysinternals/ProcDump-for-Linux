@@ -57,6 +57,7 @@ struct IpcHeader
 enum ECoreDumpType {
     COMMIT,
     CPU,
+    THREAD,
     TIME,
     MANUAL
 };
