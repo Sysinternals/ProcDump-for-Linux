@@ -130,7 +130,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bTimerThreshold =             false;
     self->WaitingForProcessName =       false;
     self->DiagnosticsLoggingEnabled =   false;
-    self->gcorePid = NO_PID;
+    self->gcorePid =                    NO_PID;
+    self->PollingInterval =             DEFAULT_POLLING_INTERVAL;
 
     SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
 }
@@ -179,7 +180,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:I:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -191,6 +192,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "wait",                      required_argument,  NULL,           'w' },
         { "threads",                   required_argument,  NULL,           'T' },        
         { "filedescriptors",           required_argument,  NULL,           'F' },                
+        { "pollinginterval",           required_argument,  NULL,           'I' },                        
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' }
     };
@@ -210,6 +212,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
                     (self->CpuThreshold = atoi(optarg)) < 0 || self->CpuThreshold > MAXIMUM_CPU) {
                     Log(error, "Invalid CPU threshold specified.");
+                    return PrintUsage(self);
+                }
+                break;
+
+            case 'I':
+                if (!IsValidNumberArg(optarg) || (self->PollingInterval = atoi(optarg)) < 0 || self->PollingInterval < 1000) {
+                    Log(error, "Invalid polling interval specified (minimum 1000).");
                     return PrintUsage(self);
                 }
                 break;
@@ -836,6 +845,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -m          Trigger when memory commit drops below specified MB value.\n");
     printf("      -T          Trigger when thread count exceeds the specified value.\n");
     printf("      -F          Trigger when filedescriptor count exceeds the specified value.\n");    
+    printf("      -I          Polling frequency in milliseconds.\n");        
     printf("      -n          Number of dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
     printf("      -d          Writes diagnostic logs to syslog\n");

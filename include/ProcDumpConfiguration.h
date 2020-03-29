@@ -38,6 +38,8 @@
 #define MIN_KERNEL_VERSION 3
 #define MIN_KERNEL_PATCH 5
 
+#define DEFAULT_POLLING_INTERVAL 1000
+
 struct ProcDumpConfiguration g_config;  // backbone of the program
 
 long HZ;                                // clock ticks per second
@@ -80,6 +82,7 @@ struct ProcDumpConfiguration {
     bool DiagnosticsLoggingEnabled; // -d
     int ThreadThreshold;            // -T
     int FileDescriptorThreshold;    // -F
+    int PollingInterval;            // -I
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

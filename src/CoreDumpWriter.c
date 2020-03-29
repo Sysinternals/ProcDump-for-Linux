@@ -12,7 +12,7 @@
 
 char *sanitize(char *processName);
 
-static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "time", "manual" };
+static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "thread", "filedesc", "time", "manual" };
 
 bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
 bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName);
