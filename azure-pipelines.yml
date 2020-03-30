@@ -34,14 +34,13 @@ jobs:
     condition: not(eq(variables['Build.Reason'], 'PullRequest'))
     dependsOn:
       - Run_Unit_Tests
-    variables:
-      Revision: '$(Build.BuildId)'
     steps:
     - script: |
         make
       displayName: 'Build procdump Ubuntu'
 
     - script: |
+        export REVISION=$(Build.BuildId)
         make release
         make deb
       displayName: 'Building debian package & artifacts'
@@ -62,14 +61,13 @@ jobs:
     pool: 'Centos-Docker-Pool'
     dependsOn:
       - DEB_Package_Build
-    variables:
-      Revision: '$(Build.BuildId)'
     steps:
       - script: |
           make
         displayName: "Build Procdump Centos"
 
       - script: |
+          export REVISION=$(Build.BuildId)
           make release
           make rpm
         displayName: 'Building centos package & artifacts'
