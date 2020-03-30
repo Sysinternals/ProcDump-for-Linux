@@ -38,7 +38,7 @@
 #define MIN_KERNEL_VERSION 3
 #define MIN_KERNEL_PATCH 5
 
-#define DEFAULT_POLLING_INTERVAL 1000
+#define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 

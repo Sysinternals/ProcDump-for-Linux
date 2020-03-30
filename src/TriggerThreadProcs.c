@@ -9,9 +9,9 @@
 
 #include "TriggerThreadProcs.h"
 
-void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("CommitThread: Starting Trigger Thread");
+    Trace("CommitMonitoringThread: Starting Trigger Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     long pageSize_kb;
@@ -51,22 +51,16 @@ void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 exit(-1);
             }            
         }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
-        }
     }
 
     free(writer);
-    Trace("CommitThread: Exiting Trigger Thread");
+    Trace("CommitMonitoringThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
 
-void* ThreadThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("ThreadThread: Starting Thread Thread");
+    Trace("ThreadCountMonitoringThread: Starting Thread Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     struct ProcessStat proc = {0};
@@ -96,23 +90,17 @@ void* ThreadThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 exit(-1);
             }            
         }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
-        }
     }
 
     free(writer);
-    Trace("ThreadThread: Exiting Thread trigger Thread");
+    Trace("ThreadCountMonitoringThread: Exiting Thread trigger Thread");
     pthread_exit(NULL);
 }
 
 
-void* FileDescriptorThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("ThreadThread: Starting Filedescriptor Thread");
+    Trace("FileDescriptorCountMonitoringThread: Starting Filedescriptor Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     struct ProcessStat proc = {0};
@@ -123,7 +111,6 @@ void* FileDescriptorThread(void *thread_args /* struct ProcDumpConfiguration* */
     {
         while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
-            Log(info, "Polling...");
             if (GetProcessStat(config->ProcessId, &proc))
             {
                 if (proc.num_filedescriptors > config->FileDescriptorThreshold)
@@ -143,22 +130,16 @@ void* FileDescriptorThread(void *thread_args /* struct ProcDumpConfiguration* */
                 exit(-1);
             }            
         }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
-        }
     }
 
     free(writer);
-    Trace("ThreadThread: Exiting Filedescriptor trigger Thread");
+    Trace("FileDescriptorCountMonitoringThread: Exiting Filedescriptor trigger Thread");
     pthread_exit(NULL);
 }
 
-void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("CpuThread: Starting Trigger Thread");
+    Trace("CpuMonitoringThread: Starting Trigger Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     unsigned long totalTime = 0;
@@ -202,16 +183,10 @@ void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 exit(-1);
             }
         }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
-        }
     }
 
     free(writer);
-    Trace("CpuThread: Exiting Trigger Thread");
+    Trace("CpuTCpuMonitoringThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
 
@@ -234,12 +209,6 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
                 break;
             }
-        }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
         }
     }
 

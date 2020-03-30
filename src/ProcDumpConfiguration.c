@@ -131,7 +131,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->WaitingForProcessName =       false;
     self->DiagnosticsLoggingEnabled =   false;
     self->gcorePid =                    NO_PID;
-    self->PollingInterval =             DEFAULT_POLLING_INTERVAL;
+    self->PollingInterval =             MIN_POLLING_INTERVAL;
 
     SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
 }
@@ -217,8 +217,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 break;
 
             case 'I':
-                if (!IsValidNumberArg(optarg) || (self->PollingInterval = atoi(optarg)) < 0 || self->PollingInterval < 1000) {
-                    Log(error, "Invalid polling interval specified (minimum 1000).");
+                if (!IsValidNumberArg(optarg) || (self->PollingInterval = atoi(optarg)) < 0 || self->PollingInterval < MIN_POLLING_INTERVAL) {
+                    Log(error, "Invalid polling interval specified (minimum %d).", MIN_POLLING_INTERVAL);
                     return PrintUsage(self);
                 }
                 break;
@@ -517,28 +517,28 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 
     // create threads
     if (self->CpuThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create CpuThread.");            
             return rc;
         }
     }
 
     if (self->MemoryThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create CommitThread.");            
             return rc;
         }
     }
 
     if (self->ThreadThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create ThreadThread.");            
             return rc;
         }
     }
 
     if (self->FileDescriptorThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
             return rc;
         }
@@ -839,14 +839,14 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("\nUsage: procdump [OPTIONS...] TARGET\n");
     printf("   OPTIONS\n");
     printf("      -h          Prints this help screen\n");
-    printf("      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU\n");
-    printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
-    printf("      -M          Memory commit threshold in MB at which to create a dump\n");
-    printf("      -m          Trigger when memory commit drops below specified MB value.\n");
-    printf("      -T          Trigger when thread count exceeds the specified value.\n");
-    printf("      -F          Trigger when filedescriptor count exceeds the specified value.\n");    
-    printf("      -I          Polling frequency in milliseconds.\n");        
-    printf("      -n          Number of dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
+    printf("      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)\n");
+    printf("      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)\n");
+    printf("      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)\n");
+    printf("      -m          Trigger core dump generation when when memory commit is less than specified value (MB)\n");
+    printf("      -T          Trigger when thread count exceeds or equals specified value.\n");
+    printf("      -F          Trigger when filedescriptor count exceeds or equals specified value.\n");    
+    printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
+    printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
     printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");

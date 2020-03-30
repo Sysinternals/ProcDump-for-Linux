@@ -273,6 +273,5 @@ struct ProcessStatus {
 // -----------------------------------------------------------
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc);
-bool GetProcessStatus(pid_t pid, struct ProcessStatus *proc);
 
 #endif // PROCFSLIB_PROCESS_H
