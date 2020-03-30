@@ -38,6 +38,13 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 
         closedir(fddir);
     }
+    else
+    {
+        Log(error, "Failed to open %s. Exiting...\n", procFilePath);
+        return false; 
+
+    }
+    
 
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
