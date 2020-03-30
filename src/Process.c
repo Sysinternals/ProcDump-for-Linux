@@ -30,7 +30,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     fddir = opendir(procFilePath);
     if(fddir)
     {
-        proc->num_filedescriptors = -2;                 // Account for "." and ".."
+        proc->num_filedescriptors = 0;                 
         while ((entry = readdir(fddir)) != NULL)
         {
             proc->num_filedescriptors++;
@@ -44,6 +44,8 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false; 
 
     }
+
+    proc->num_filedescriptors-=2;                   // Account for "." and ".."
     
 
     // Read /proc/[pid]/stat
