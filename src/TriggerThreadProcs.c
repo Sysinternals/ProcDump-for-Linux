@@ -113,7 +113,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {
-                if (proc.num_filedescriptors > config->FileDescriptorThreshold)
+                if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
                     Log(info, "File descriptors: %ld", proc.num_filedescriptors);
                     rc = WriteCoreDump(writer);
