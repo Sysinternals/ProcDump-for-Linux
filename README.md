@@ -41,12 +41,17 @@ make && make rpm
 ```
 Usage: procdump [OPTIONS...] TARGET
    OPTIONS
-      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU
-      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU
-      -M          Memory commit threshold in MB at which to create a dump
-      -m          Trigger when memory commit drops below specified MB value.
-      -n          Number of dumps to write before exiting
+      -h          Prints this help screen
+      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)
+      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)
+      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)
+      -m          Trigger core dump generation when when memory commit is less than specified value (MB)
+      -T          Trigger when thread count exceeds or equals specified value.
+      -F          Trigger when filedescriptor count exceeds or equals specified value.
+      -I          Polling frequency in milliseconds (default is 1000)
+      -n          Number of core dumps to write before exiting (default is 1)
       -s          Consecutive seconds before dump is written (default is 10)
+      -d          Writes diagnostic logs to syslog
    TARGET must be exactly one of these:
       -p          pid of the process
       -w          Name of the process executable
