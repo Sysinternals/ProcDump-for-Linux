@@ -195,6 +195,9 @@ struct ProcessStat {
 
     // The thread'd exit status in the form reported by waitpid.
     int exit_code;    
+
+    // NOTE: This does not come from /proc/[pid]/stat rather is populated by enumerating the /proc/<pid>>/fdinfo
+    int num_filedescriptors;
 };
 
 //
@@ -270,6 +273,5 @@ struct ProcessStatus {
 // -----------------------------------------------------------
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc);
-bool GetProcessStatus(pid_t pid, struct ProcessStatus *proc);
 
 #endif // PROCFSLIB_PROCESS_H

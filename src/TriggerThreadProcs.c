@@ -9,9 +9,9 @@
 
 #include "TriggerThreadProcs.h"
 
-void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("CommitThread: Starting Trigger Thread");
+    Trace("CommitMonitoringThread: Starting Trigger Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     long pageSize_kb;
@@ -24,7 +24,7 @@ void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        while ((rc = WaitForQuit(config, 1000)) == WAIT_TIMEOUT)
+        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {
@@ -51,22 +51,95 @@ void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 exit(-1);
             }            
         }
+    }
 
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
+    free(writer);
+    Trace("CommitMonitoringThread: Exiting Trigger Thread");
+    pthread_exit(NULL);
+}
+
+void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("ThreadCountMonitoringThread: Starting Thread Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+
+    struct ProcessStat proc = {0};
+    int rc = 0;
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(THREAD, config); 
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
-            // clean up!
+            if (GetProcessStat(config->ProcessId, &proc))
+            {
+                if (proc.num_threads >= config->ThreadThreshold)
+                {
+                    Log(info, "Threads: %ld", proc.num_threads);
+                    rc = WriteCoreDump(writer);
+
+                    if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                Log(error, "An error occured while parsing procfs\n");
+                exit(-1);
+            }            
         }
     }
 
     free(writer);
-    Trace("CommitThread: Exiting Trigger Thread");
+    Trace("ThreadCountMonitoringThread: Exiting Thread trigger Thread");
     pthread_exit(NULL);
 }
 
-void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */)
+
+void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("CpuThread: Starting Trigger Thread");
+    Trace("FileDescriptorCountMonitoringThread: Starting Filedescriptor Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+
+    struct ProcessStat proc = {0};
+    int rc = 0;
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(FILEDESC, config); 
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
+        {
+            if (GetProcessStat(config->ProcessId, &proc))
+            {
+                if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
+                {
+                    Log(info, "File descriptors: %ld", proc.num_filedescriptors);
+                    rc = WriteCoreDump(writer);
+
+                    if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                Log(error, "An error occured while parsing procfs\n");
+                exit(-1);
+            }            
+        }
+    }
+
+    free(writer);
+    Trace("FileDescriptorCountMonitoringThread: Exiting Filedescriptor trigger Thread");
+    pthread_exit(NULL);
+}
+
+void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("CpuMonitoringThread: Starting Trigger Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     unsigned long totalTime = 0;
@@ -80,7 +153,7 @@ void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        while ((rc = WaitForQuit(config, 1000)) == WAIT_TIMEOUT)
+        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
             sysinfo(&sysInfo);
 
@@ -110,16 +183,10 @@ void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 exit(-1);
             }
         }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
-        }
     }
 
     free(writer);
-    Trace("CpuThread: Exiting Trigger Thread");
+    Trace("CpuTCpuMonitoringThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
 
@@ -142,12 +209,6 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
                 break;
             }
-        }
-
-        // handle exit cases
-        if (rc == WAIT_ABANDONED || rc == WAIT_OBJECT_0)
-        {
-            // clean up!
         }
     }
 

@@ -122,13 +122,16 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->NumberOfDumpsToCollect =      DEFAULT_NUMBER_OF_DUMPS;
     self->CpuThreshold =                -1;
     self->MemoryThreshold =             -1;
+    self->ThreadThreshold =             -1;
+    self->FileDescriptorThreshold =     -1;
     self->ThresholdSeconds =            DEFAULT_DELTA_TIME;
     self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
     self->bTimerThreshold =             false;
     self->WaitingForProcessName =       false;
     self->DiagnosticsLoggingEnabled =   false;
-    self->gcorePid = NO_PID;
+    self->gcorePid =                    NO_PID;
+    self->PollingInterval =             MIN_POLLING_INTERVAL;
 
     SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
 }
@@ -177,7 +180,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:I:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -187,6 +190,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "number-of-dumps",           required_argument,  NULL,           'n' },
         { "time-between-dumps",        required_argument,  NULL,           's' },
         { "wait",                      required_argument,  NULL,           'w' },
+        { "threads",                   required_argument,  NULL,           'T' },        
+        { "filedescriptors",           required_argument,  NULL,           'F' },                
+        { "pollinginterval",           required_argument,  NULL,           'I' },                        
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' }
     };
@@ -206,6 +212,29 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
                     (self->CpuThreshold = atoi(optarg)) < 0 || self->CpuThreshold > MAXIMUM_CPU) {
                     Log(error, "Invalid CPU threshold specified.");
+                    return PrintUsage(self);
+                }
+                break;
+
+            case 'I':
+                if (!IsValidNumberArg(optarg) || (self->PollingInterval = atoi(optarg)) < 0 || self->PollingInterval < MIN_POLLING_INTERVAL) {
+                    Log(error, "Invalid polling interval specified (minimum %d).", MIN_POLLING_INTERVAL);
+                    return PrintUsage(self);
+                }
+                break;
+
+            case 'T':
+                if (self->ThreadThreshold != -1 || !IsValidNumberArg(optarg) ||
+                    (self->ThreadThreshold = atoi(optarg)) < 0 ) {
+                    Log(error, "Invalid threads threshold specified.");
+                    return PrintUsage(self);
+                }
+                break;
+
+            case 'F':
+                if (self->FileDescriptorThreshold != -1 || !IsValidNumberArg(optarg) ||
+                    (self->FileDescriptorThreshold = atoi(optarg)) < 0 ) {
+                    Log(error, "Invalid file descriptor threshold specified.");
                     return PrintUsage(self);
                 }
                 break;
@@ -277,7 +306,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // if number of dumps is set, but no thresholds, just go on timer
     if (self->NumberOfDumpsToCollect != -1 &&
         self->MemoryThreshold == -1 &&
-        self->CpuThreshold == -1) {
+        self->CpuThreshold == -1 &&
+        self->ThreadThreshold == -1 &&
+        self->FileDescriptorThreshold == -1) {
             self->bTimerThreshold = true;
         }
 
@@ -486,15 +517,29 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 
     // create threads
     if (self->CpuThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create CpuThread.");            
             return rc;
         }
     }
 
     if (self->MemoryThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create CommitThread.");            
+            return rc;
+        }
+    }
+
+    if (self->ThreadThreshold != -1) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
+            Trace("CreateTriggerThreads: failed to create ThreadThread.");            
+            return rc;
+        }
+    }
+
+    if (self->FileDescriptorThreshold != -1) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
+            Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
             return rc;
         }
     }
@@ -666,8 +711,21 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             printf("Commit Threshold:\tn/a\n");
         }
 
+        // Thread
+        if (self->ThreadThreshold != -1) {
+            printf("Thread Threshold:\t>=%d\n", self->ThreadThreshold);
+        }
+
+        // File descriptor
+        if (self->FileDescriptorThreshold != -1) {
+            printf("File descriptor Threshold:\t>=%d\n", self->FileDescriptorThreshold);
+        }
+
+        // Polling inverval
+        printf("Polling interval (ms):\t%d\n", self->PollingInterval);
+
         // time
-        printf("Threshold Seconds:\t%d\n", self->ThresholdSeconds);
+        printf("Threshold (s):\t%d\n", self->ThresholdSeconds);
 
         // number of dumps and others
         printf("Number of Dumps:\t%d\n", self->NumberOfDumpsToCollect);
@@ -794,11 +852,14 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("\nUsage: procdump [OPTIONS...] TARGET\n");
     printf("   OPTIONS\n");
     printf("      -h          Prints this help screen\n");
-    printf("      -C          CPU threshold at which to create a dump of the process from 0 to 100 * nCPU\n");
-    printf("      -c          CPU threshold below which to create a dump of the process from 0 to 100 * nCPU\n");
-    printf("      -M          Memory commit threshold in MB at which to create a dump\n");
-    printf("      -m          Trigger when memory commit drops below specified MB value.\n");
-    printf("      -n          Number of dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
+    printf("      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)\n");
+    printf("      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)\n");
+    printf("      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)\n");
+    printf("      -m          Trigger core dump generation when when memory commit is less than specified value (MB)\n");
+    printf("      -T          Trigger when thread count exceeds or equals specified value.\n");
+    printf("      -F          Trigger when filedescriptor count exceeds or equals specified value.\n");    
+    printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
+    printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
     printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");

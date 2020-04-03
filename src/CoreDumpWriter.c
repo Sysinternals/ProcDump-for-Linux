@@ -12,7 +12,7 @@
 
 char *sanitize(char *processName);
 
-static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "time", "manual" };
+static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "thread", "filedesc", "time", "manual" };
 
 bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
 bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName);
@@ -523,6 +523,9 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             free(outputBuffer[j]);
         }
         free(outputBuffer);
+
+        // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
+        sleep(1);
 
         // validate that core dump file was generated
         if(access(coreDumpFileName, F_OK) != -1) {

@@ -55,10 +55,12 @@ struct IpcHeader
 
 
 enum ECoreDumpType {
-    COMMIT,
-    CPU,
-    TIME,
-    MANUAL
+    COMMIT,                 // trigger on memory threshold
+    CPU,                    // trigger on CPU threshold
+    THREAD,                 // trigger on thread count
+    FILEDESC,               // trigger on file descriptor count
+    TIME,                   // trigger on time interval
+    MANUAL                  // manual trigger
 };
 
 struct CoreDumpWriter {

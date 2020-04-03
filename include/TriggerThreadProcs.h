@@ -28,8 +28,10 @@
 #include "Logging.h"
 
 // worker thread process for monitoring memory commit
-void *CommitThread(void *thread_args /* struct ProcDumpConfiguration* */);
-void *CpuThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */);
 
 #endif // TRIGGER_THREAD_PROCS_H
