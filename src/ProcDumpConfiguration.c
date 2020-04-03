@@ -833,7 +833,7 @@ bool CheckKernelVersion()
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v1.1 - Sysinternals process dump utility\n");
+    printf("\nProcDump v1.1.1 - Sysinternals process dump utility\n");
     printf("Copyright (C) 2019 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
 
