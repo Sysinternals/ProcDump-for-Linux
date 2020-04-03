@@ -711,8 +711,21 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             printf("Commit Threshold:\tn/a\n");
         }
 
+        // Thread
+        if (self->ThreadThreshold != -1) {
+            printf("Thread Threshold:\t>=%d\n", self->ThreadThreshold);
+        }
+
+        // File descriptor
+        if (self->FileDescriptorThreshold != -1) {
+            printf("File descriptor Threshold:\t>=%d\n", self->FileDescriptorThreshold);
+        }
+
+        // Polling inverval
+        printf("Polling interval (ms):\t%d\n", self->PollingInterval);
+
         // time
-        printf("Threshold Seconds:\t%d\n", self->ThresholdSeconds);
+        printf("Threshold (s):\t%d\n", self->ThresholdSeconds);
 
         // number of dumps and others
         printf("Number of Dumps:\t%d\n", self->NumberOfDumpsToCollect);
