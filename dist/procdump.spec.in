@@ -54,13 +54,17 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Fri Apr 3 2020 Javid Habibi <jahabibi@microsoft.com> - 1.1.1
+- implimented thread and file descriptor count trigger
+- added polling interval switch
+
 * Mon Dec 9 2019 Javid Habibi <jahabibi@microsoft.com> - 1.1
 - Added support for .Net Core 3.x+ core dump generation that results in more manageable core dump sizes
 
 * Fri Nov 8 2019 Javid Habibi <jahabibi@microsoft.com> - 1.0.2
-- implimented -w target flag #34
-- fixed pthread cancellation bug #49
-- added additional error checking for null process names #58
+- implimented -w target flag 
+- fixed pthread cancellation bug 
+- added additional error checking for null process names 
 - implimented a minimal kernel check validation
 - various bug fixes
 
