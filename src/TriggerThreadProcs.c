@@ -73,7 +73,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {
-                if (proc.num_threads > config->ThreadThreshold)
+                if (proc.num_threads >= config->ThreadThreshold)
                 {
                     Log(info, "Threads: %ld", proc.num_threads);
                     rc = WriteCoreDump(writer);
