@@ -8,8 +8,8 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 ## Requirements
 * Minimum OS:
   * Red Hat Enterprise Linux / CentOS 7
-  * Fedora 26
-  * Ubuntu 14.04 LTS
+  * Fedora 29
+  * Ubuntu 16.04 LTS
 * `gdb` >= 7.6.1
 * `zlib` (build-time only)
 
