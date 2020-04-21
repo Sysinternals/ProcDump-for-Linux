@@ -1,6 +1,6 @@
 # Install ProcDump
 
-## Ubuntu 16.04, 18.04 & 19.10
+## Ubuntu 16.04, 18.04, 19.10 & 20.04
 #### 1. Register Microsoft key and feed
 ```sh
 wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
