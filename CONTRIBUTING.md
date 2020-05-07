@@ -10,7 +10,7 @@ To contribute, fork the repository and create a branch in your fork for your wor
 
 ## Build and run from source
 ### Environment
-* Linux OS (dev team is using Ubuntu 16.04)
+* Linux OS (dev team is using Ubuntu 18.04)
   * Development can be done on Windows Subsystem for Linux (WSL), but ProcDump cannot be executed in that environment
 * git
 * GDB
