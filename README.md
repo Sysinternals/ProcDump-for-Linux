@@ -14,7 +14,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * `zlib` (build-time only)
 
 ## Install ProcDump
-Checkout our [install instructions](INSTALL.md) for ditribution specific steps to install Procdump.
+Checkout our [install instructions](INSTALL.md) for distribution specific steps to install Procdump.
 
 ## Build ProcDump from Scratch
 To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run: 
