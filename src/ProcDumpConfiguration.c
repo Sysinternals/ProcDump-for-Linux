@@ -857,7 +857,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)\n");
     printf("      -m          Trigger core dump generation when when memory commit is less than specified value (MB)\n");
     printf("      -T          Trigger when thread count exceeds or equals specified value.\n");
-    printf("      -F          Trigger when filedescriptor count exceeds or equals specified value.\n");    
+    printf("      -F          Trigger when file descriptor count exceeds or equals specified value.\n");    
     printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
     printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);

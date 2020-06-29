@@ -14,7 +14,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * `zlib` (build-time only)
 
 ## Install ProcDump
-Checkout our [install instructions](INSTALL.md) for ditribution specific steps to install Procdump.
+Checkout our [install instructions](INSTALL.md) for distribution specific steps to install Procdump.
 
 ## Build ProcDump from Scratch
 To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run: 
@@ -47,7 +47,7 @@ Usage: procdump [OPTIONS...] TARGET
       -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)
       -m          Trigger core dump generation when when memory commit is less than specified value (MB)
       -T          Trigger when thread count exceeds or equals specified value.
-      -F          Trigger when filedescriptor count exceeds or equals specified value.
+      -F          Trigger when file descriptor count exceeds or equals specified value.
       -I          Polling frequency in milliseconds (default is 1000)
       -n          Number of core dumps to write before exiting (default is 1)
       -s          Consecutive seconds before dump is written (default is 10)
