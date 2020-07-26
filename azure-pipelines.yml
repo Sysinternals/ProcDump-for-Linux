@@ -20,7 +20,7 @@ jobs:
         sudo apt update
         sudo apt install -y gdb stress-ng zlib1g-dev
       displayName: 'Setup build environment'
-      
+
     - script: |
         make
       displayName: 'Build test binary'
@@ -50,13 +50,13 @@ jobs:
         SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
         TargetFolder: '$(Build.ArtifactStagingDirectory)'
       displayName: 'Copy build artifacts to staging'
-    
+
     - task: PublishBuildArtifacts@1
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)'
         ArtifactName: 'drop'
         publishLocation: 'Container'
-  
+
   - job: 'RPM_Package_Build'
     pool: 'Centos-Docker-Pool'
     dependsOn:
@@ -78,7 +78,7 @@ jobs:
           Contents: '**'
           TargetFolder: '$(Build.ArtifactStagingDirectory)'
         displayName: 'Copy build RPM artifacts to staging'
-      
+
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'

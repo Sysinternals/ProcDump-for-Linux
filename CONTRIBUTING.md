@@ -28,8 +28,8 @@ make
 ```
 
 ## Testing
-* There are a multitude of tests included in the `tests` directory of the repository.  
-* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.  
+* There are a multitude of tests included in the `tests` directory of the repository.
+* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.
 * Make sure that the tests are all passing, including your new tests.
 
 ## Creating integration tests

@@ -3,7 +3,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 
 ![ProcDump in use](procdump.gif "Procdump in use")
 
-# Installation & Usage 
+# Installation & Usage
 
 ## Requirements
 * Minimum OS:
@@ -17,14 +17,14 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 Checkout our [install instructions](INSTALL.md) for distribution specific steps to install Procdump.
 
 ## Build ProcDump from Scratch
-To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run: 
+To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run:
 
 ```
 make
 make install
 ```
 
-### Building Procdump Packages 
+### Building Procdump Packages
 The distribution packages for Procdump for Linux are constructed utilizing `debbuild` for Debian targets and `rpmbuild` for Fedora targets.
 
 To build a `deb` package of Procdump on Ubuntu simply run:
@@ -119,4 +119,3 @@ Please see also our [Code of Conduct](CODE_OF_CONDUCT.md).
 Copyright (c) Microsoft Corporation. All rights reserved.
 
 Licensed under the MIT License.
-
