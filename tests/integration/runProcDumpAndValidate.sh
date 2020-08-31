@@ -17,7 +17,7 @@ function runProcDumpAndValidate {
 
 		sleep 1s
 
-		childrenpid=$(pidof -o $pid stress-ng)
+		childrenpid=$(pidof -o $pid $(which stress-ng))
 			echo "ChildrenPID: $childrenpid"
 
 		childpid=$(echo $childrenpid | cut -d " " -f1)
