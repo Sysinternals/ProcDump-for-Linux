@@ -194,7 +194,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "filedescriptors",           required_argument,  NULL,           'F' },                
         { "pollinginterval",           required_argument,  NULL,           'I' },                        
         { "diag",                      no_argument,        NULL,           'd' },
-        { "help",                      no_argument,        NULL,           'h' }
+        { "help",                      no_argument,        NULL,           'h' },
+        { NULL,                        0,                  NULL,            0  }
     };
 
     // start parsing command line arguments
