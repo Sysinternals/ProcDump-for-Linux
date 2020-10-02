@@ -51,6 +51,7 @@ Usage: procdump [OPTIONS...] TARGET
       -I          Polling frequency in milliseconds (default is 1000)
       -n          Number of core dumps to write before exiting (default is 1)
       -s          Consecutive seconds before dump is written (default is 10)
+      -o          Path and/or filename prefix where the core dump is written to
       -d          Writes diagnostic logs to syslog
    TARGET must be exactly one of these:
       -p          pid of the process
@@ -86,6 +87,14 @@ sudo procdump -c 10 -C 65 -p 1234
 The following will create a core dump when CPU usage is >= 65% or memory usage is >= 100 MB.
 ```
 sudo procdump -C 65 -M 100 -p 1234
+```
+The following will create a core dump in the `/tmp` directory immediately.
+```
+sudo procdump -o /tmp -p 1234
+```
+The following will create a core dump in the current directory with the name dump_0.1234. If -n is used, the files will be named dump_0.1234, dump_1.1234 and so on.
+```
+sudo procdump -o dump -p 1234
 ```
 
 > All options can also be used with -w instead of -p. -w will wait for a process with the given name.

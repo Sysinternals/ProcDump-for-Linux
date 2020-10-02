@@ -406,6 +406,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     char command[BUFFER_LENGTH];
     char ** outputBuffer;
     char lineBuffer[BUFFER_LENGTH];
+    char gcorePrefixName[BUFFER_LENGTH];
     char coreDumpFileName[BUFFER_LENGTH];
     int  lineLength;
     int  i;
@@ -437,17 +438,44 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     }
     strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
 
+    // assemble the full file name (including path) for core dumps
+    if(self->Config->CoreDumpName != NULL) {
+        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%d",
+                    self->Config->CoreDumpPath,
+                    self->Config->CoreDumpName,
+                    self->Config->NumberOfDumpsCollected) < 0) {
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf custom output file name");
+            exit(-1);
+        }
+    } else {
+        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%s_%s",
+                    self->Config->CoreDumpPath, name, desc, date) < 0) {
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed sprintf default output file name");
+            exit(-1);
+        }
+    }
+
     // assemble the command
-    if(sprintf(command, "gcore -o %s_%s_%s %d 2>&1", name, desc, date, pid) < 0){
+    if(snprintf(command, BUFFER_LENGTH, "gcore -o %s %d 2>&1", gcorePrefixName, pid) < 0){
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDumpInternal: failed sprintf gcore command");
         exit(-1);
     }
 
     // assemble filename
-    if(sprintf(coreDumpFileName, "%s_%s_%s.%d", name, desc, date, pid) < 0){
+    if(snprintf(coreDumpFileName, BUFFER_LENGTH, "%s.%d", gcorePrefixName, pid) < 0){
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDumpInternal: failed sprintf core file name");
+        exit(-1);
+    }
+
+    // check if we're allowed to write into the target directory
+    if(access(self->Config->CoreDumpPath, W_OK) < 0) {
+        Log(error, INTERNAL_ERROR);
+        Trace("WriteCoreDumpInternal: no write permission to core dump target file %s",
+              coreDumpFileName);
         exit(-1);
     }
 

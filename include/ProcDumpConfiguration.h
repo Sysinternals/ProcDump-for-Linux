@@ -25,6 +25,10 @@
 #include <limits.h>
 #include <dirent.h>
 #include <errno.h>
+#include <libgen.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "Handle.h"
 #include "TriggerThreadProcs.h"
@@ -83,6 +87,8 @@ struct ProcDumpConfiguration {
     int ThreadThreshold;            // -T
     int FileDescriptorThreshold;    // -F
     int PollingInterval;            // -I
+    char *CoreDumpPath;             // -o
+    char *CoreDumpName;             // -o
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

@@ -8,4 +8,4 @@ procDumpType="-c"
 procDumpTrigger=20
 shouldDump=false
 
-runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump
+runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "CPU"
