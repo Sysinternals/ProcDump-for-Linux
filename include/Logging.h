@@ -26,7 +26,6 @@
 #define S2(x) S1(x)
 #define LOCATION "in "__FILE__ ", at line " S2(__LINE__)
 
-extern struct ProcDumpConfiguration g_config;
 
 
 enum LogLevel{

@@ -40,7 +40,6 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
-struct ProcDumpConfiguration g_config;  // backbone of the program
 
 
 // -------------------
