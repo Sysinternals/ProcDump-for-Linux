@@ -42,8 +42,6 @@
 
 struct ProcDumpConfiguration g_config;  // backbone of the program
 
-long HZ;                                // clock ticks per second
-int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
 
 // -------------------
 // Structs

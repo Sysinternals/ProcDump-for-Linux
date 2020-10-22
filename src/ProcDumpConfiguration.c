@@ -15,6 +15,8 @@ struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALI
 static sigset_t sig_set;
 static pthread_t sig_thread_id;
 extern pthread_mutex_t LoggerLock;
+long HZ;                                // clock ticks per second
+int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
 
 //--------------------------------------------------------------------
 //

@@ -8,6 +8,7 @@
 //--------------------------------------------------------------------
 
 #include "TriggerThreadProcs.h"
+extern long HZ;                                // clock ticks per second
 
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
