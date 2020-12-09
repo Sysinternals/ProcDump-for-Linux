@@ -456,7 +456,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         // If we have a socket name, we're dumping a .NET Core 3+ process....
         if(GenerateCoreClrDump(socketName, coreDumpFileName)==false)
         {
-            Log(error, "An error occured while generating the core dump for .NET 3.x+ process");
+            Log(error, "An error occurred while generating the core dump for .NET 3.x+ process");
         }
         else
         {
@@ -480,7 +480,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         self->Config->gcorePid = gcorePid;
         
         if(commandPipe == NULL){
-            Log(error, "An error occured while generating the core dump");      
+            Log(error, "An error occurred while generating the core dump");
             Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
             exit(1);
         }
@@ -507,7 +507,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
         // check if gcore was able to generate the dump
         if(strstr(outputBuffer[i-1], "gcore: failed") != NULL){
-            Log(error, "An error occured while generating the core dump");
+            Log(error, "An error occurred while generating the core dump");
                     
             // log gcore message
             for(int j = 0; j < i; j++){

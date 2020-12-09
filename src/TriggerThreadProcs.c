@@ -47,7 +47,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                Log(error, "An error occured while parsing procfs\n");
+                Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
             }            
         }
@@ -86,7 +86,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
             }
             else
             {
-                Log(error, "An error occured while parsing procfs\n");
+                Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
             }            
         }
@@ -126,7 +126,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             }
             else
             {
-                Log(error, "An error occured while parsing procfs\n");
+                Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
             }            
         }
@@ -179,7 +179,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
             }
             else
             {
-                Log(error, "An error occured while parsing procfs\n");
+                Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
             }
         }
