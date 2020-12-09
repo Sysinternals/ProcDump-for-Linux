@@ -1,22 +1,72 @@
 .\" Manpage for procdump.
-.TH man 8 "04/03/2020" "1.1.1" "procdump manpage"
+.TH PROCDUMP 1 "04/03/2020" "PROCDUMP" "General Commands Manual"
 .SH NAME
-procdump \- generate coredumps based off performance triggers.
+procdump \- generate core dumps based off performance triggers
 .SH SYNOPSIS
-procdump [OPTIONS...] TARGET
-      -h          Prints this help screen
-      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)
-      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)
-      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)
-      -m          Trigger core dump generation when when memory commit is less than specified value (MB)
-      -T          Trigger when thread count exceeds or equals specified value.
-      -F          Trigger when filedescriptor count exceeds or equals specified value.
-      -I          Polling frequency in milliseconds (default is 1000)
-      -n          Number of core dumps to write before exiting (default is 1)
-      -s          Consecutive seconds before dump is written (default is 10)
-      -d          Writes diagnostic logs to syslog
-  TARGET must be exactly one of these:
-      -p   pid of the process
-      -w   Name of the process executable
+.B
+procdump
+[OPTIONS...] TARGET
 .SH DESCRIPTION
-procdump is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
+.B procdump
+is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
+.SH OPTIONS
+.BR
+.PD 0
+.TP
+.B
+\-h
+Displays a summary of the command-line usage of procdump
+.TP
+.B
+\-C
+Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)
+.TP
+.B
+\-c
+Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)
+.TP
+.B
+\-M
+Trigger core dump generation when memory commit exceeds or equals specified value (MB)
+.TP
+.B
+\-m
+Trigger core dump generation when when memory commit is less than specified value (MB)
+.TP
+.B
+\-T
+Trigger when thread count exceeds or equals specified value.
+.TP
+.B
+\-F
+Trigger when filedescriptor count exceeds or equals specified value.
+.TP
+.B
+\-I
+Polling frequency in milliseconds (default is 1000)
+.TP
+.B
+\-n
+Number of core dumps to write before exiting (default is 1)
+.TP
+.B
+\-s
+Consecutive seconds before dump is written (default is 10)
+.TP
+.B
+\-d
+Writes diagnostic logs to syslog
+
+.TP
+TARGET must be exactly one of these:
+.TP
+.B
+\-p
+pid of the process
+.TP
+.B
+\-w
+Name of the process executable
+
+.SH COPYRIGHT
+Copyright (C) 2019 Microsoft Corporation. All rights reserved. Licensed under the MIT license.
