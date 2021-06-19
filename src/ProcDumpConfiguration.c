@@ -634,16 +634,16 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
     int rc = 0;
     for (int i = 0; i < self->nThreads; i++) {
         if ((rc = pthread_join(self->Threads[i], NULL)) != 0) {
-            Log(error, "An error occured while joining threads\n");
+            Log(error, "An error occurred while joining threads\n");
             exit(-1);
         }
     }
     if ((rc = pthread_cancel(sig_thread_id)) != 0) {
-        Log(error, "An error occured while canceling SignalThread.\n");
+        Log(error, "An error occurred while canceling SignalThread.\n");
         exit(-1);
     }
     if ((rc = pthread_join(sig_thread_id, NULL)) != 0) {
-        Log(error, "An error occured while joining SignalThread.\n");
+        Log(error, "An error occurred while joining SignalThread.\n");
         exit(-1);
     }
     return rc;
