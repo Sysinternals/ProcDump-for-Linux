@@ -132,6 +132,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->DiagnosticsLoggingEnabled =   false;
     self->gcorePid =                    NO_PID;
     self->PollingInterval =             MIN_POLLING_INTERVAL;
+    self->CoreDumpPath =                NULL;
+    self->CoreDumpName =                NULL;
 
     SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
 }
@@ -157,6 +159,9 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         // The string constant is not on the heap.
         free(self->ProcessName);
     }
+
+    free(self->CoreDumpPath);
+    free(self->CoreDumpName);
 }
 
 //--------------------------------------------------------------------
@@ -180,7 +185,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:I:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:I:o:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -193,10 +198,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "threads",                   required_argument,  NULL,           'T' },        
         { "filedescriptors",           required_argument,  NULL,           'F' },                
         { "pollinginterval",           required_argument,  NULL,           'I' },                        
+        { "output-path",               required_argument,  NULL,           'o' },
         { "diag",                      no_argument,        NULL,           'd' },
         { "help",                      no_argument,        NULL,           'h' },
         { NULL,                        0,                  NULL,            0  }
     };
+
+    char *tempOutputPath = NULL;
+    struct stat statbuf;
 
     // start parsing command line arguments
     while ((next_option = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
@@ -289,10 +298,36 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 self->ProcessName = strdup(optarg);
                 break;
 
+            case 'o':
+                tempOutputPath = strdup(optarg);
+
+                // Check if the user provided an existing directory or a path
+                // ending in a '/'. In this case, use the default naming
+                // convention but place the files in the given directory.
+                if ((stat(tempOutputPath, &statbuf) == 0 && S_ISDIR(statbuf.st_mode)) ||
+                        tempOutputPath[strlen(tempOutputPath)-1] == '/') {
+                    self->CoreDumpPath = tempOutputPath;
+                    self->CoreDumpName = NULL;
+                } else {
+                    self->CoreDumpPath = strdup(dirname(tempOutputPath));
+                    free(tempOutputPath);
+                    tempOutputPath = strdup(optarg);
+                    self->CoreDumpName = strdup(basename(tempOutputPath));
+                    free(tempOutputPath);
+                }
+
+                // Check if the path portion of the output format is valid
+                if (stat(self->CoreDumpPath, &statbuf) < 0 || !S_ISDIR(statbuf.st_mode)) {
+                    Log(error, "Invalid directory (\"%s\") provided for core dump output.",
+                        self->CoreDumpPath);
+                    return PrintUsage(self);
+                }
+                break;
+
             case 'd':
                 self->DiagnosticsLoggingEnabled = true;
                 break;
-                
+
             case 'h':
                 return PrintUsage(self);
 
@@ -300,6 +335,11 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 Log(error, "Invalid switch specified");
                 return PrintUsage(self);
         }
+    }
+
+    // If no path was provided, assume the current directory
+    if (self->CoreDumpPath == NULL) {
+        self->CoreDumpPath = strdup(".");
     }
 
     // Check for multi-arg situations
@@ -731,6 +771,12 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         // number of dumps and others
         printf("Number of Dumps:\t%d\n", self->NumberOfDumpsToCollect);
 
+        // Output directory and filename
+        printf("Output directory for core dumps:\t%s\n", self->CoreDumpPath);
+        if (self->CoreDumpName != NULL) {
+            printf("Custom name for core dumps:\t%s_<counter>.<pid>\n", self->CoreDumpName);
+        }
+
         SetEvent(&self->evtConfigurationPrinted.event);
         return true;
     }
@@ -862,6 +908,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
     printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
+    printf("      -o          Path and/or filename prefix where the core dump is written to\n");
     printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");
     printf("      -p          pid of the process\n");

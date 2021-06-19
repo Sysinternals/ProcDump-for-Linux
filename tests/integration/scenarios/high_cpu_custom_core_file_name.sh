@@ -4,8 +4,9 @@ runProcDumpAndValidate=$(readlink -m "$DIR/../runProcDumpAndValidate.sh");
 source $runProcDumpAndValidate
 
 stressPercentage=90
-procDumpType="-M 1000 -C"
+procDumpType="-C"
 procDumpTrigger=80
 shouldDump=true
+customDumpFileName="custom_dump_file"
 
-runProcDumpAndValidate $stressPercentage "$procDumpType" $procDumpTrigger $shouldDump "CPU"
+runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "CPU" $customDumpFileName
