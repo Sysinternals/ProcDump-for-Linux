@@ -11,6 +11,8 @@
 #include "ProcDumpConfiguration.h"
 
 static const char *LogLevelStrings[] = { "DEBUG", "INFO", "WARN", "CRITICAL", "ERROR" }; 
+extern struct ProcDumpConfiguration g_config;
+pthread_mutex_t LoggerLock;
 
 void LogFormatter(enum LogLevel logLevel, const char *message, va_list args)
 {

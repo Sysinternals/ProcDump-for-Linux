@@ -44,10 +44,7 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
-struct ProcDumpConfiguration g_config;  // backbone of the program
 
-long HZ;                                // clock ticks per second
-int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
 
 // -------------------
 // Structs

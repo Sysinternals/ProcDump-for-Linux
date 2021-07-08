@@ -9,6 +9,7 @@
 //--------------------------------------------------------------------
 
 #include "Procdump.h"
+extern struct ProcDumpConfiguration g_config;
 
 int main(int argc, char *argv[])
 {
