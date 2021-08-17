@@ -158,42 +158,60 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
+        // Attach to the target process. We use SEIZE here to avoid
+        // the SIGSTOP issues of the ATTACH method.
         if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
         {
-            Log(error, "Unable to ptrace attach to target process");
-            exit(-1);
+            Log(error, "Unable to PTRACE the target process");
         }
-
-        while(1)
+        else
         {
-            int wstatus;
-            int signum;
-
-            waitpid(config->ProcessId, &wstatus, 0);
-            if(WIFEXITED(wstatus) || WIFSIGNALED(wstatus))
+            while(1)
             {
-                break;
-            }
+                int wstatus;
+                int signum;
 
-            signum = WSTOPSIG(wstatus);
-            if(signum == config->SignalNumber)
-            {
-                Log(error, "Got sig:%d", signum);
-
-                ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
-
-                Log(info, "Signal intercepted: %d", signum);
-                rc = WriteCoreDump(writer);
-
-                if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
+                // Wait for signal to be delivered
+                waitpid(config->ProcessId, &wstatus, 0);
+                if(WIFEXITED(wstatus) || WIFSIGNALED(wstatus))
                 {
-                    ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                     break;
                 }
-            }
 
-            ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
-        }        
+                // We are now in a signal-stop state
+
+                signum = WSTOPSIG(wstatus);
+                if(signum == config->SignalNumber)
+                {
+                    // We have to detach in a STOP state so we can invoke gcore
+                    ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
+
+                    // Write core dump
+                    Log(info, "Signal intercepted: %d", signum);
+                    rc = WriteCoreDump(writer);
+
+                    if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
+                    {
+                        // If we are over the max number of dumps to collect, send the SIGCONT to 
+                        // target process and exit
+                        kill(config->ProcessId, SIGCONT);
+                        break;
+                    }
+
+                    // If we continue monitoring, re-attach to the target process
+                    if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
+                    {
+                        Log(error, "Unable to ptrace attach to target process");
+                        break;
+                    }
+                    
+                    continue;
+                }
+
+                // Resume execution of the target process
+                ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+            }        
+        }
     }
 
     free(writer);
