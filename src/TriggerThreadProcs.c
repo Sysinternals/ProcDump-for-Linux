@@ -138,6 +138,69 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     pthread_exit(NULL);
 }
 
+// 
+// This thread monitors for a specific signal to be sent to target process.
+// It uses ptrace (PTRACE_SEIZE) and once the signal with the corresponding 
+// signal number is intercepted, it detaches from the target process in a stopped state
+// followed by invoking gcore to generate the dump. Once completed, a SIGCONT followed by the
+// original signal is sent to the target process. Signals of non-interest are simply forwarded
+// to the target process. 
+//
+// Polling interval has no meaning during signal monitoring.
+//
+void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("SignalMonitoringThread: Starting SignalMonitoring Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+
+    int rc = 0;
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config); 
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
+        {
+            Log(error, "Unable to ptrace attach to target process");
+            exit(-1);
+        }
+
+        while(1)
+        {
+            int wstatus;
+            int signum;
+
+            waitpid(config->ProcessId, &wstatus, 0);
+            if(WIFEXITED(wstatus) || WIFSIGNALED(wstatus))
+            {
+                break;
+            }
+
+            signum = WSTOPSIG(wstatus);
+            if(signum == config->SignalNumber)
+            {
+                Log(error, "Got sig:%d", signum);
+
+                ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
+
+                Log(info, "Signal intercepted: %d", signum);
+                rc = WriteCoreDump(writer);
+
+                if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
+                {
+                    ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+                    break;
+                }
+            }
+
+            ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+        }        
+    }
+
+    free(writer);
+    Trace("SignalMonitoringThread: Exiting SignalMonitoring Thread");
+    pthread_exit(NULL);
+}
+
 void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("CpuMonitoringThread: Starting Trigger Thread");

@@ -128,6 +128,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->MemoryThreshold =             -1;
     self->ThreadThreshold =             -1;
     self->FileDescriptorThreshold =     -1;
+    self->SignalNumber =                -1;
     self->ThresholdSeconds =            DEFAULT_DELTA_TIME;
     self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
@@ -189,7 +190,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:I:o:dh";
+    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:G:I:o:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
@@ -199,8 +200,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         { "number-of-dumps",           required_argument,  NULL,           'n' },
         { "time-between-dumps",        required_argument,  NULL,           's' },
         { "wait",                      required_argument,  NULL,           'w' },
-        { "threads",                   required_argument,  NULL,           'T' },        
-        { "filedescriptors",           required_argument,  NULL,           'F' },                
+        { "threads",                   required_argument,  NULL,           'T' },
+        { "filedescriptors",           required_argument,  NULL,           'F' },
+        { "signal",                    required_argument,  NULL,           'G' },
         { "pollinginterval",           required_argument,  NULL,           'I' },                        
         { "output-path",               required_argument,  NULL,           'o' },
         { "diag",                      no_argument,        NULL,           'd' },
@@ -252,6 +254,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     return PrintUsage(self);
                 }
                 break;
+
+            case 'G':
+                if (self->SignalNumber != -1 || !IsValidNumberArg(optarg) ||
+                    (self->SignalNumber = atoi(optarg)) < 0 ) {
+                    Log(error, "Invalid signal specified.");
+                    return PrintUsage(self);
+                }
+                break;                
 
             case 'c':
                 if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
@@ -347,7 +357,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     }
 
     // Check for multi-arg situations
-
     // if number of dumps is set, but no thresholds, just go on timer
     if (self->NumberOfDumpsToCollect != -1 &&
         self->MemoryThreshold == -1 &&
@@ -356,6 +365,31 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         self->FileDescriptorThreshold == -1) {
             self->bTimerThreshold = true;
         }
+
+
+    // If signal dump is specified, it can be the only trigger that is used.
+    // Otherwise we might run into a situation where the other triggers invoke
+    // gcore while the target is being ptraced due to signal trigger.
+    // Interval has no meaning during signal monitoring.
+    // 
+    if(self->SignalNumber != -1) 
+    {
+        if(self->CpuThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != -1)
+        {
+            Log(error, "Signal trigger must be the only trigger specified.");
+            return PrintUsage(self);            
+        }
+        if(self->PollingInterval != MIN_POLLING_INTERVAL)
+        {
+            Log(error, "Polling interval has no meaning during signal monitoring.");
+            return PrintUsage(self);            
+        }
+
+        // Again, we cant have another trigger (in this case timer) kicking off another dump generation since we will already
+        // be attached via ptrace. 
+        self->bTimerThreshold = false;
+    }
+
 
     if(self->ProcessId == NO_PID && !self->WaitingForProcessName){
         Log(error, "A valid PID or process name must be specified");
@@ -589,6 +623,13 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
         }
     }
 
+    if (self->SignalNumber != -1) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, SignalMonitoringThread, (void *)self)) != 0) {
+            Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");            
+            return rc;
+        }
+    }
+
     if (self->bTimerThreshold) {
         if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, TimerThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create TimerThread.");
@@ -760,11 +801,25 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         if (self->ThreadThreshold != -1) {
             printf("Thread Threshold:\t>=%d\n", self->ThreadThreshold);
         }
+        else {
+            printf("Thread Threshold:\t\tn/a\n");
+        }
 
         // File descriptor
         if (self->FileDescriptorThreshold != -1) {
             printf("File descriptor Threshold:\t>=%d\n", self->FileDescriptorThreshold);
         }
+        else {
+            printf("File descriptor Threshold:\t\tn/a\n");
+        }
+
+        // Signal
+        if (self->SignalNumber != -1) {
+            printf("Signal number:\t%d\n", self->SignalNumber);
+        }
+        else {
+            printf("Signal:\t\tn/a\n");
+        }        
 
         // Polling inverval
         printf("Polling interval (ms):\t%d\n", self->PollingInterval);
@@ -888,7 +943,7 @@ void PrintBanner()
     printf("Copyright (C) 2020 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
 
-    printf("Monitors a process and writes a dump file when the process exceeds the\n");
+    printf("Monitors a process and writes a dump file when the process meets the\n");
     printf("specified criteria.\n\n");
 }
 
@@ -908,7 +963,8 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)\n");
     printf("      -m          Trigger core dump generation when when memory commit is less than specified value (MB)\n");
     printf("      -T          Trigger when thread count exceeds or equals specified value.\n");
-    printf("      -F          Trigger when file descriptor count exceeds or equals specified value.\n");    
+    printf("      -F          Trigger when file descriptor count exceeds or equals specified value.\n");  
+    printf("      -G          Trigger when signal with the specified value is sent.\n");  
     printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
     printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);

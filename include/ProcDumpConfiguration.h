@@ -83,6 +83,7 @@ struct ProcDumpConfiguration {
     bool DiagnosticsLoggingEnabled; // -d
     int ThreadThreshold;            // -T
     int FileDescriptorThreshold;    // -F
+    int SignalNumber;               // -G    
     int PollingInterval;            // -I
     char *CoreDumpPath;             // -o
     char *CoreDumpName;             // -o
