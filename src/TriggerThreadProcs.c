@@ -152,6 +152,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 {
     Trace("SignalMonitoringThread: Starting SignalMonitoring Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    bool bAttached=false; 
 
     int rc = 0;
     struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config); 
@@ -168,6 +169,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         {
             while(1)
             {
+                bAttached = true;
                 int wstatus;
                 int signum;
 
@@ -184,7 +186,13 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 if(signum == config->SignalNumber)
                 {
                     // We have to detach in a STOP state so we can invoke gcore
-                    ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
+                    if(ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP) == -1)
+                    {
+                        Log(error, "Unable to PTRACE (DETACH) the target process");                        
+                        break; 
+                    }
+
+                    bAttached = false;
 
                     // Write core dump
                     Log(info, "Signal intercepted: %d", signum);
@@ -201,10 +209,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     // If we continue monitoring, re-attach to the target process
                     if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
                     {
-                        Log(error, "Unable to ptrace attach to target process");
+                        Log(error, "Unable to PTRACE the target process");
                         break;
                     }
-                    
+                    bAttached = true;
+
                     continue;
                 }
 
@@ -212,6 +221,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
             }        
         }
+    }
+
+    if(bAttached==true)
+    {
+        ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
     }
 
     free(writer);
