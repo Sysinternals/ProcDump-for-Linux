@@ -767,6 +767,10 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 bool PrintConfiguration(struct ProcDumpConfiguration *self)
 {
     if (WaitForSingleObject(&self->evtConfigurationPrinted,0) == WAIT_TIMEOUT) {
+        if(self->SignalNumber != -1)
+        {
+            printf("** NOTE ** Signal triggers use PTRACE which will impact the performance of the target process\n\n");
+        }
         printf("Process:\t\t%s", self->ProcessName);
         if (!self->WaitingForProcessName) {
             printf(" (%d)", self->ProcessId);
@@ -964,7 +968,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -m          Trigger core dump generation when when memory commit is less than specified value (MB)\n");
     printf("      -T          Trigger when thread count exceeds or equals specified value.\n");
     printf("      -F          Trigger when file descriptor count exceeds or equals specified value.\n");  
-    printf("      -G          Trigger when signal with the specified value (num) is sent.\n");  
+    printf("      -G          Trigger when signal with the specified value (num) is sent (uses PTRACE and will affect performance of target process).\n");  
     printf("      -I          Polling frequency in milliseconds (default is %d)\n", MIN_POLLING_INTERVAL);        
     printf("      -n          Number of core dumps to write before exiting (default is %d)\n", DEFAULT_NUMBER_OF_DUMPS);
     printf("      -s          Consecutive seconds before dump is written (default is %d)\n", DEFAULT_DELTA_TIME);
