@@ -152,8 +152,8 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 {
     Trace("SignalMonitoringThread: Starting SignalMonitoring Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    bool bAttached=false; 
-
+    int wstatus;
+    int signum=-1;
     int rc = 0;
     struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config); 
 
@@ -169,14 +169,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         {
             while(1)
             {
-                bAttached = true;
-                int wstatus;
-                int signum;
-
                 // Wait for signal to be delivered
                 waitpid(config->ProcessId, &wstatus, 0);
                 if(WIFEXITED(wstatus) || WIFSIGNALED(wstatus))
                 {
+                    ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
                     break;
                 }
 
@@ -192,8 +189,6 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                         break; 
                     }
 
-                    bAttached = false;
-
                     // Write core dump
                     Log(info, "Signal intercepted: %d", signum);
                     rc = WriteCoreDump(writer);
@@ -201,8 +196,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
                     {
                         // If we are over the max number of dumps to collect, send the SIGCONT to 
-                        // target process and exit
+                        // target process followed by the original signal we intercepted.
                         kill(config->ProcessId, SIGCONT);
+                        kill(config->ProcessId, signum);                        
                         break;
                     }
 
@@ -212,7 +208,6 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                         Log(error, "Unable to PTRACE the target process");
                         break;
                     }
-                    bAttached = true;
 
                     continue;
                 }
@@ -221,11 +216,6 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
             }        
         }
-    }
-
-    if(bAttached==true)
-    {
-        ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP);
     }
 
     free(writer);
