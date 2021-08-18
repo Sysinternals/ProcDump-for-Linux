@@ -100,6 +100,7 @@ sudo procdump -o dump -p 1234
 The following will create a core dump when a SIGSEGV occurs.
 ```
 sudo procdump -G 11 -p 1234
+```
 > All options can also be used with -w instead of -p. -w will wait for a process with the given name.
 
 The following waits for a process named `my_application` and creates a core dump immediately when it is found.
