@@ -44,7 +44,7 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
-
+pthread_mutex_t ptrace_mutex;
 
 // -------------------
 // Structs

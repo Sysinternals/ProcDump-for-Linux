@@ -14,6 +14,7 @@ struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALI
 
 static sigset_t sig_set;
 static pthread_t sig_thread_id;
+static pthread_t sig_monitor_thread_id;
 extern pthread_mutex_t LoggerLock;
 long HZ;                                // clock ticks per second
 int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
@@ -21,12 +22,12 @@ struct ProcDumpConfiguration g_config;  // backbone of the program
 
 //--------------------------------------------------------------------
 //
-// SignalThread - Thread for hanlding graceful Async signals (e.g., SIGINT, SIGTERM)
+// SignalThread - Thread for handling graceful Async signals (e.g., SIGINT, SIGTERM)
 //
 //--------------------------------------------------------------------
 void *SignalThread(void *input)
 {
-    struct ProcDumpConfiguration *self = (struct ProcDumpConfiguration *)input;
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)input;
     int sig_caught, rc;
 
     if ((rc = sigwait(&sig_set, &sig_caught)) != 0) {
@@ -37,13 +38,31 @@ void *SignalThread(void *input)
     switch (sig_caught)
     {
     case SIGINT:
-        SetQuit(self, 1);
-        if(self->gcorePid != NO_PID) {
+        SetQuit(config, 1);
+        if(config->gcorePid != NO_PID) {
             Log(info, "Shutting down gcore");
-            if((rc = kill(-self->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
+            if((rc = kill(-config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
                 Log(error, "Failed to shutdown gcore.");
             }
         }
+
+        // Need to make sure we detach from ptrace (if not attached it will silently fail)
+        // To avoid situations where we have intercepted a signal and CTRL-C is hit, we synchronize
+        // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
+        // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
+        // break it out of waitpid call. 
+        if(config->SignalNumber != -1)
+        {
+            pthread_mutex_lock(&ptrace_mutex);
+            ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
+            pthread_mutex_unlock(&ptrace_mutex);
+
+            if ((rc = pthread_cancel(sig_monitor_thread_id)) != 0) {
+                Log(error, "An error occurred while canceling SignalMonitorThread.\n");
+                exit(-1);
+            }
+        }
+
         Log(info, "Quit");
         break;
     default:
@@ -69,6 +88,7 @@ void InitProcDump()
     }
     InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
+    pthread_mutex_init(&ptrace_mutex, NULL);
 }
 
 //--------------------------------------------------------------------
@@ -624,7 +644,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     }
 
     if (self->SignalNumber != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, SignalMonitoringThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&sig_monitor_thread_id, NULL, SignalMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");            
             return rc;
         }
@@ -717,20 +737,38 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
-    for (int i = 0; i < self->nThreads; i++) {
-        if ((rc = pthread_join(self->Threads[i], NULL)) != 0) {
-            Log(error, "An error occurred while joining threads\n");
+
+
+    // Wait for the signal monitoring thread if there is one. If there is one, it will be the only
+    // one. 
+    if(self->SignalNumber != -1)
+    {
+        if ((rc = pthread_join(sig_monitor_thread_id, NULL)) != 0) {
+            Log(error, "An error occurred while joining SignalMonitorThread.\n");
             exit(-1);
         }
     }
-    if ((rc = pthread_cancel(sig_thread_id)) != 0) {
-        Log(error, "An error occurred while canceling SignalThread.\n");
-        exit(-1);
+    else
+    {
+        // Wait for the other monitoring threads
+        for (int i = 0; i < self->nThreads; i++) {
+            if ((rc = pthread_join(self->Threads[i], NULL)) != 0) {
+                Log(error, "An error occurred while joining threads\n");
+                exit(-1);
+            }
+        }
     }
+
+    // Cancel the signal handling thread. 
+    // We dont care about the return since the signal thread might already be gone. 
+    pthread_cancel(sig_thread_id);
+
+    // Wait for signal handling thread to complete
     if ((rc = pthread_join(sig_thread_id, NULL)) != 0) {
         Log(error, "An error occurred while joining SignalThread.\n");
         exit(-1);
     }
+
     return rc;
 }
 
