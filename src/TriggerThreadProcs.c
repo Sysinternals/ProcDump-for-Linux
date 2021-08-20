@@ -196,17 +196,19 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     Log(info, "Signal intercepted: %d", signum);
                     rc = WriteCoreDump(writer);
 
+                    kill(config->ProcessId, SIGCONT);
+
                     if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
                     {
-                        // If we are over the max number of dumps to collect, send the SIGCONT to 
-                        // target process followed by the original signal we intercepted.
-                        kill(config->ProcessId, SIGCONT);
+                        // If we are over the max number of dumps to collect, send the original signal we intercepted.
                         kill(config->ProcessId, signum);    
                         pthread_mutex_unlock(&ptrace_mutex);                    
                         break;
                     }
 
-                    // If we continue monitoring, re-attach to the target process
+                    ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+
+                    // Re-attach to the target process
                     if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
                     {
                         Log(error, "Unable to PTRACE the target process");
