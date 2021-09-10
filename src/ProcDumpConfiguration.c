@@ -19,6 +19,7 @@ extern pthread_mutex_t LoggerLock;
 long HZ;                                // clock ticks per second
 int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
 struct ProcDumpConfiguration g_config;  // backbone of the program
+pthread_mutex_t ptrace_mutex;
 
 //--------------------------------------------------------------------
 //
