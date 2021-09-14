@@ -16,9 +16,11 @@ static sigset_t sig_set;
 static pthread_t sig_thread_id;
 static pthread_t sig_monitor_thread_id;
 extern pthread_mutex_t LoggerLock;
-long HZ;                                // clock ticks per second
-int MAXIMUM_CPU;                        // maximum cpu usage percentage (# cores * 100)
-struct ProcDumpConfiguration g_config;  // backbone of the program
+long HZ;                                                        // clock ticks per second
+int MAXIMUM_CPU;                                                // maximum cpu usage percentage (# cores * 100)
+struct ProcDumpConfiguration g_config;                          // backbone of the program
+struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
+pthread_mutex_t ptrace_mutex;
 
 //--------------------------------------------------------------------
 //
@@ -142,6 +144,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     // Additional initialization
     self->ProcessId =                   NO_PID;
+    self->ProcessGroupId =              NO_PID;
     self->NumberOfDumpsCollected =      0;
     self->NumberOfDumpsToCollect =      DEFAULT_NUMBER_OF_DUMPS;
     self->CpuThreshold =                -1;
@@ -210,9 +213,10 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+p:C:c:M:m:n:s:w:T:F:G:I:o:dh";
+    const char* short_options = "+pg:g:C:c:M:m:n:s:w:T:F:G:I:o:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
+        { "pgid",                      required_argument,  NULL,           'g' },
     	{ "cpu",                       required_argument,  NULL,           'C' },
     	{ "lower-cpu",                 required_argument,  NULL,           'c' },
     	{ "memory",                    required_argument,  NULL,           'M' },
@@ -240,6 +244,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 self->ProcessId = (pid_t)atoi(optarg);
                 if (!LookupProcessByPid(self)) {
                     Log(error, "Invalid PID - failed looking up process name by PID.");
+                    return PrintUsage(self);
+                }
+                break;
+            
+            case 'g':
+                self->ProcessGroupId = (gid_t)atoi(optarg);
+                if(!LookupProcessByPid(self)) {
+                    Log(error, "Invalid PGID - failed looking up process name by PGID.");
                     return PrintUsage(self);
                 }
                 break;
@@ -411,7 +423,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     }
 
 
-    if(self->ProcessId == NO_PID && !self->WaitingForProcessName){
+    if(self->ProcessId == NO_PID && self->ProcessGroupId == NO_PID && !self->WaitingForProcessName){
         Log(error, "A valid PID or process name must be specified");
         return PrintUsage(self);
     }
@@ -433,18 +445,24 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
 //--------------------------------------------------------------------
 //
-// LookupProcessByPid - Find process using PID provided.  
+// LookupProcessByPid - Find process using PID or PGID provided.  
 //
 //--------------------------------------------------------------------
 bool LookupProcessByPid(struct ProcDumpConfiguration *self)
 {
     char statFilePath[32];
 
-    // check to see if pid is an actual process running
-    sprintf(statFilePath, "/proc/%d/stat", self->ProcessId);
+    // check to see if pid is an actual process running1`
+    if(self->ProcessId != NO_PID) {
+        sprintf(statFilePath, "/proc/%d/stat", self->ProcessId);
+    }
+    else {
+        sprintf(statFilePath, "/proc/%d/stat", self->ProcessGroupId);
+    }
+
     FILE *fd = fopen(statFilePath, "r");
     if (fd == NULL) {
-        Log(error, "No process matching the specified PID can be found.");
+        Log(error, "No process matching the specified PID or PGID can be found.");
         Log(error, "Try elevating the command prompt (i.e., `sudo procdump ...`)");
         return false;
     }
@@ -467,51 +485,181 @@ static int FilterForPid(const struct dirent *entry)
 
 //--------------------------------------------------------------------
 //
-// WaitForProcessName - Actively wait until a process with the configured name is launched.
+// MonitorProcesses - Monitor Processes for PGID members or a name match.
 //
 //--------------------------------------------------------------------
-bool WaitForProcessName(struct ProcDumpConfiguration *self)
+void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
-    Log(info, "Waiting for process '%s' to launch...", self->ProcessName);
+    if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch...", self->ProcessName);
+    if (self->ProcessGroupId != NO_PID) Log(info, "Waiting for processes of PGID '%s' to launch...", self->ProcessGroupId);
+
+    // allocate list of configs for process monitoring
+    target_config = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration) * MAX_TARGET_PROCESSES);
+    int rc;
+
     while (true) {
         struct dirent ** nameList;
-        bool moreThanOne = false;
-        pid_t matchingPid = NO_PID;
+        int numMonitoredProcesses = 0;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+        
+        // evaluate all running processes
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
-            char *nameForPid = GetProcessName(procPid);
-            if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
-                continue;
-            }
-            if (strcmp(nameForPid, self->ProcessName) == 0) {
-                if (matchingPid == NO_PID) {
-                    matchingPid = procPid;
-                } else {
-                    Log(error, "More than one matching process found, exiting...");
-                    moreThanOne = true;
-                    free(nameForPid);
-                    break;
+
+            if (self->ProcessGroupId != NO_PID) {
+                // check to see if this process is in our target group
+                if(GetProcessPgid(procPid) == self->ProcessGroupId) {
+                    int j = 0;
+
+                    // check to see if we already monitoring this process
+                    for(; j < numMonitoredProcesses; j++) {
+                        if(target_config[j].ProcessId == procPid) break;
+                    }
+
+                    // have we found a new process?
+                    if(j == numMonitoredProcesses) {
+                        // copy global config object
+                        target_config[numMonitoredProcesses] = *self;
+
+                        // populate fields for this target
+                        target_config[numMonitoredProcesses].ProcessId = procPid;
+
+                        // launch new monitor
+                        if(CreateTriggerThreads(&target_config[numMonitoredProcesses]) != 0) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("main: failed to create trigger threads.");
+                            ExitProcDump();
+                        }
+
+                        if(BeginMonitoring(&target_config[numMonitoredProcesses]) == false) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("main: failed to start monitoring.");
+                            ExitProcDump();
+                        }
+                        else {
+                            Log(info, "Starting monitor on process %s (%d)", target_config[numMonitoredProcesses].ProcessName, target_config[numMonitoredProcesses].ProcessId);
+                        }
+                  
+                        numMonitoredProcesses++;
+                    }
                 }
             }
-            free(nameForPid);
+
+            if (self->WaitingForProcessName) {
+                char *nameForPid = GetProcessName(procPid);
+
+                if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
+                    continue;
+                }
+
+                // check to see if process name matches target
+                if (strcmp(nameForPid, self->ProcessName) == 0) {
+                    int j = 0;
+
+                    // check to see if we already monitoring this process
+                    for(; j < numMonitoredProcesses; j++) {
+                        if(target_config[j].ProcessId == procPid) break;
+                    }
+
+                    // have we found a new process?
+                    if(j == numMonitoredProcesses) {
+                        // copy global config object
+                        target_config[numMonitoredProcesses] = *self;
+
+                        // populate fields for this target
+                        target_config[numMonitoredProcesses].ProcessId = procPid;
+
+                        // launch new monitor
+                        if(CreateTriggerThreads(&target_config[numMonitoredProcesses]) != 0) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("main: failed to create trigger threads.");
+                            ExitProcDump();
+                        }
+
+                        if(BeginMonitoring(&target_config[numMonitoredProcesses]) == false) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("main: failed to start monitoring.");
+                            ExitProcDump();
+                        }
+                        else {
+                            Log(info, "Starting monitor on process %s (%d)", target_config[numMonitoredProcesses].ProcessName, target_config[numMonitoredProcesses].ProcessId);
+                        }
+                  
+                        numMonitoredProcesses++;
+                    }
+                }
+
+                free(nameForPid);
+            }
         }
-        // Cleanup
+
+        // clean up
         for (int i = 0; i < numEntries; i++) {
             free(nameList[i]);
         }
         free(nameList);
 
-        // Check for exactly one match
-        if (moreThanOne) {
-            self->bTerminated = true;
-            return false;
-        } else if (matchingPid != NO_PID) {
-            self->ProcessId = matchingPid;
-            Log(info, "Found process with PID %d", matchingPid);
-            return true;
-        }
+        // sleep till next scan
+        if((rc = WaitForQuit(self, 0)) == WAIT_TIMEOUT) break;
     }
+
+    free(target_config);
+}
+
+//--------------------------------------------------------------------
+//
+// GetProcessPgid - Get process pgid using PID provided.
+//                  Returns NO_PID on error
+//
+//--------------------------------------------------------------------
+gid_t GetProcessPgid(pid_t pid){
+	gid_t pgid;
+
+    char procFilePath[32];
+    char fileBuffer[1024];
+    char *token;
+    char *savePtr = NULL;
+
+    FILE *procFile = NULL;
+
+    // Read /proc/[pid]/stat
+    if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
+        return false;
+    }
+    procFile = fopen(procFilePath, "r");
+    
+    if(procFile != NULL){
+        if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
+            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+            fclose(procFile);
+            return false;
+        }
+        
+        // close file after reading this iteration of stats
+        fclose(procFile);
+    }
+    else{
+        Log(error, "Failed to open %s.\n", procFilePath);
+        return false;
+    }
+
+    // itaerate past process state
+    savePtr = strrchr(fileBuffer, ')');
+
+    // iterate past parent process ID
+    token = strtok_r(NULL, " ", &savePtr);
+
+    // grab process group ID
+    token = strtok_r(NULL, " ", &savePtr);
+    if(token == NULL){
+        Trace("GetProcessStat: failed to get token from proc/[pid]/stat - Process group ID.");        
+        return false;
+    }
+    
+    pgid = (gid_t)strtol(token, NULL, 10);
+
+
+    return pgid;
 }
 
 //--------------------------------------------------------------------
@@ -530,26 +678,29 @@ char * GetProcessName(pid_t pid){
 	FILE * procFile;
 	
 	
-        if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0) {
 		return EMPTY_PROC_NAME;
 	}
 
 	procFile = fopen(procFilePath, "r");
 
-	if(procFile != NULL){
-		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
-	    		fclose(procFile);
-			if(strlen(fileBuffer) == 0){
-                		Log(debug, "Empty cmdline.\n");
-            		}else{
-	        		Log(debug, "Failed to read from %s.\n", procFilePath);
+	if(procFile != NULL) {
+		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {           
+            fclose(procFile);
+			
+            if(strlen(fileBuffer) == 0) {
+                Log(debug, "Empty cmdline.\n");
+            }
+            else{
+                Log(debug, "Failed to read from %s.\n", procFilePath);
 			}
 			return EMPTY_PROC_NAME;
 		}
+
 		// close file
 		fclose(procFile);
 	}
-	else{
+	else {
 		Log(debug, "Failed to open %s.\n", procFilePath);
 		return EMPTY_PROC_NAME;
 	}
@@ -681,7 +832,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds)
 {
     if (!ContinueMonitoring(self)) {
-        return WAIT_ABANDONED; 
+        return WAIT_ABANDONED;
     }
 
     int wait = WaitForSingleObject(&self->evtQuit, milliseconds);
@@ -805,17 +956,19 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 bool PrintConfiguration(struct ProcDumpConfiguration *self)
 {
     if (WaitForSingleObject(&self->evtConfigurationPrinted,0) == WAIT_TIMEOUT) {
-        if(self->SignalNumber != -1)
-        {
+        if(self->SignalNumber != -1) {
             printf("** NOTE ** Signal triggers use PTRACE which will impact the performance of the target process\n\n");
         }
-        printf("Process:\t\t%s", self->ProcessName);
-        if (!self->WaitingForProcessName) {
-            printf(" (%d)", self->ProcessId);
-        } else {
-            printf(" (pending)");
+
+        if (self->ProcessGroupId != NO_PID) {
+            printf("Process Group:\t\t%d\n", self->ProcessGroupId);
         }
-        printf("\n");
+        else if (self->WaitingForProcessName) {
+            printf("Process Name:\t\t%s\n", self->ProcessName);
+        }
+        else {
+            printf("Process:\t\t%s (%d)\n", self->ProcessName, self->ProcessId);
+        }
 
         // CPU
         if (self->CpuThreshold != -1) {
@@ -1014,6 +1167,7 @@ int PrintUsage(struct ProcDumpConfiguration *self)
     printf("      -d          Writes diagnostic logs to syslog\n");
     printf("   TARGET must be exactly one of these:\n");
     printf("      -p          pid of the process\n");
+    printf("      -g          pgid of the process group\n");
     printf("      -w          Name of the process executable\n\n");
 
     return -1;

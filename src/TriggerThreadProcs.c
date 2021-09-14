@@ -9,6 +9,7 @@
 
 #include "TriggerThreadProcs.h"
 extern long HZ;                                // clock ticks per second
+extern pthread_mutex_t ptrace_mutex;
 
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {

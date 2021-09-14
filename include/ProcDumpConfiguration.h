@@ -36,6 +36,7 @@
 #include "Logging.h"
 
 #define MAX_TRIGGERS 3
+#define MAX_TARGET_PROCESSES 256
 #define NO_PID INT_MAX
 #define MAX_CMDLINE_LEN 4096+1
 #define EMPTY_PROC_NAME "null"
@@ -44,8 +45,6 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
-pthread_mutex_t ptrace_mutex;
-
 // -------------------
 // Structs
 // -------------------
@@ -53,6 +52,7 @@ pthread_mutex_t ptrace_mutex;
 struct ProcDumpConfiguration {
     // Process and System info
     pid_t ProcessId;
+    gid_t ProcessGroupId;
     char *ProcessName;
     struct sysinfo SystemInfo;
 
@@ -108,8 +108,9 @@ struct ProcDumpConfiguration {
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 char * GetProcessName(pid_t pid);
+gid_t GetProcessPgid(pid_t pid);
 bool LookupProcessByPid(struct ProcDumpConfiguration *self);
-bool WaitForProcessName(struct ProcDumpConfiguration *self);
+void MonitorProcesses(struct ProcDumpConfiguration *self);
 int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration *self);
 int CreateTriggerThreads(struct ProcDumpConfiguration *self);
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);

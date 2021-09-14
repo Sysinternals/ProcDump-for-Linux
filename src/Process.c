@@ -472,7 +472,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
     
-    proc->end_data = strtoul(token, NULL, 10);
+    proc->start_brk = strtoul(token, NULL, 10);
 
     // (48) arg_start
     token = strtok_r(NULL, " ", &savePtr);
