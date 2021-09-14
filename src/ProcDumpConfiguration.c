@@ -491,7 +491,7 @@ static int FilterForPid(const struct dirent *entry)
 void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
     if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch...", self->ProcessName);
-    if (self->ProcessGroupId != NO_PID) Log(info, "Waiting for processes of PGID '%s' to launch...", self->ProcessGroupId);
+    if (self->ProcessGroupId != NO_PID) Log(info, "Waiting for processes of PGID '%d' to launch...", self->ProcessGroupId);
 
     // allocate list of configs for process monitoring
     target_config = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration) * MAX_TARGET_PROCESSES);
