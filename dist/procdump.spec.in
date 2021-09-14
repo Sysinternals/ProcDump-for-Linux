@@ -54,6 +54,11 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Tue Sep 14 2021 Javid Habibi <jahabibi@microsoft.com> - 1.2
+- added signal trigger
+- added custom filepath for memory dump generation
+- various small bug fixes
+
 * Fri Apr 3 2020 Javid Habibi <jahabibi@microsoft.com> - 1.1.1
 - implimented thread and file descriptor count trigger
 - added polling interval switch
