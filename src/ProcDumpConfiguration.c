@@ -961,21 +961,21 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         }
 
         if (self->ProcessGroupId != NO_PID) {
-            printf("Process Group:\t\t%d\n", self->ProcessGroupId);
+            printf("%-30s%d\n", "Process Group:", self->ProcessGroupId);
         }
         else if (self->WaitingForProcessName) {
-            printf("Process Name:\t\t%s\n", self->ProcessName);
+            printf("%-30s%s\n", "Process Name:", self->ProcessName);
         }
         else {
-            printf("Process:\t\t%s (%d)\n", self->ProcessName, self->ProcessId);
+            printf("%-30s%s (%d)\n", "Process:", self->ProcessName, self->ProcessId);
         }
 
         // CPU
         if (self->CpuThreshold != -1) {
             if (self->bCpuTriggerBelowValue) {
-                printf("CPU Threshold:\t\t<%d\n", self->CpuThreshold);
+                printf("%-30s<%d\n", "CPU Threshold:", self->CpuThreshold);
             } else {
-                printf("CPU Threshold:\t\t>=%d\n", self->CpuThreshold);
+                printf("%-30s>=%d\n", "CPU Threshold:", self->CpuThreshold);
             }
         } else {
             printf("CPU Threshold:\t\tn/a\n");
@@ -984,28 +984,28 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         // Memory
         if (self->MemoryThreshold != -1) {
             if (self->bMemoryTriggerBelowValue) {
-                printf("Commit Threshold:\t<%d\n", self->MemoryThreshold);
+                printf("%-30s<%d\n", "Commit Threshold:", self->MemoryThreshold);
             } else {
-                printf("Commit Threshold:\t>=%d\n", self->MemoryThreshold);
+                printf("%-30s>=%d\n", "Commit Threshold:", self->MemoryThreshold);
             }
         } else {
-            printf("Commit Threshold:\tn/a\n");
+            printf("%-30s%s\n", "Commit Threshold:", "n/a");
         }
 
         // Thread
         if (self->ThreadThreshold != -1) {
-            printf("Thread Threshold:\t>=%d\n", self->ThreadThreshold);
+            printf("%-30s%d\n", "Thread Threshold:", self->ThreadThreshold);
         }
         else {
-            printf("Thread Threshold:\t\tn/a\n");
+            printf("%-30s%s\n", "Thread Threshold:", "n/a");
         }
 
         // File descriptor
         if (self->FileDescriptorThreshold != -1) {
-            printf("File descriptor Threshold:\t>=%d\n", self->FileDescriptorThreshold);
+            printf("%-30s%d\n", "File Descriptor Threshold:", self->FileDescriptorThreshold);
         }
         else {
-            printf("File descriptor Threshold:\t\tn/a\n");
+            printf("%-30s%s\n", "File Descriptor Threshold:", "n/a");
         }
 
         // Signal
@@ -1013,22 +1013,22 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             printf("Signal number:\t%d\n", self->SignalNumber);
         }
         else {
-            printf("Signal:\t\tn/a\n");
+            printf("%-30s%s\n", "Signal:", "n/a");
         }        
 
         // Polling inverval
-        printf("Polling interval (ms):\t%d\n", self->PollingInterval);
+        printf("%-30s%d\n", "Polling Interval (ms):", self->PollingInterval);
 
         // time
-        printf("Threshold (s):\t%d\n", self->ThresholdSeconds);
+        printf("%-30s%d\n", "Threshold (s):", self->ThresholdSeconds);
 
         // number of dumps and others
-        printf("Number of Dumps:\t%d\n", self->NumberOfDumpsToCollect);
+        printf("%-30s%d\n", "Number of Dumps:", self->NumberOfDumpsToCollect);
 
         // Output directory and filename
-        printf("Output directory for core dumps:\t%s\n", self->CoreDumpPath);
+        printf("%-30s%s\n", "Output directory:", self->CoreDumpPath);
         if (self->CoreDumpName != NULL) {
-            printf("Custom name for core dumps:\t%s_<counter>.<pid>\n", self->CoreDumpName);
+            printf("\n%-30s%s_<counter>.<pid>\n", "Custom name for core dumps:", self->CoreDumpName);
         }
 
         SetEvent(&self->evtConfigurationPrinted.event);
