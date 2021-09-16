@@ -52,7 +52,7 @@
 struct ProcDumpConfiguration {
     // Process and System info
     pid_t ProcessId;
-    gid_t ProcessGroupId;
+    pid_t ProcessGroupId;
     char *ProcessName;
     struct sysinfo SystemInfo;
 
@@ -108,7 +108,7 @@ struct ProcDumpConfiguration {
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 char * GetProcessName(pid_t pid);
-gid_t GetProcessPgid(pid_t pid);
+pid_t GetProcessPgid(pid_t pid);
 bool LookupProcessByPid(struct ProcDumpConfiguration *self);
 void MonitorProcesses(struct ProcDumpConfiguration *self);
 int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration *self);

@@ -31,14 +31,14 @@ struct ProcessStat {
     char *comm;     // The filename of the executable : %s
     char state;     // Process State, one of RSDZTtWXxKP : %c
     pid_t ppid;     // the parent process ID : %d
-    gid_t pgrp;     // the process group ID of the process : %d
+    pid_t pgrp;     // the process group ID of the process : %d
     int session;    // The session ID of the process : %d
     
     // The controlling terminal of the process. 
     // (the minor device number is contained in the combination 
     // of bits 31 to 20 and 7 to 0; the major device number is in bits 15 to 8) : %d
     int tty_nr; 
-    gid_t tpgid; // The ID of the foreground process group of the controlling terminal process : %d
+    pid_t tpgid; // The ID of the foreground process group of the controlling terminal process : %d
 
     unsigned int flags;  // Kernel flags word of the process. See PF_* definitions in include/linux/sched.h : %u
 
@@ -206,14 +206,14 @@ struct ProcessStat {
 struct ProcessStatus {
     char *Name;             // Command run by this process
     char State;             // Current state of the process. One of RSDTZX
-    gid_t Tgid;             // Thread Group ID (i.e., Process ID).
+    pid_t Tgid;             // Thread Group ID (i.e., Process ID).
     pid_t Pid;              // Thread ID
     pid_t PPid;             // PID of the parent process
     pid_t TracerPid;        // PID of the processtracing this process (0 if not being traced).
     uid_t Uid[4];           // Real [0], effective [1], saved set [2], and filesystem [3] UIDs
-    gid_t Gid[4];           // Real [0], effective [1], saved set [2], and filesystem [3] GIDs
+    pid_t Gid[4];           // Real [0], effective [1], saved set [2], and filesystem [3] GIDs
     int FDSize;             // Number of file descriptor slots currently allocated.
-    gid_t *Groups;          // Supplementary group list (array).
+    pid_t *Groups;          // Supplementary group list (array).
     int GroupsLen;          
     unsigned long VmPeak;   // Peak virtual memory size.
     unsigned long VmSize;   // Virtual memory size.

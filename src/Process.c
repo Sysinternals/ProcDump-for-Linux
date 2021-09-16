@@ -94,7 +94,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
     
-    proc->pgrp = (gid_t)strtol(token, NULL, 10);
+    proc->pgrp = (pid_t)strtol(token, NULL, 10);
 
     // (6) session ID
     token = strtok_r(NULL, " ", &savePtr);
@@ -121,7 +121,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
     
-    proc->tpgid = (gid_t)strtol(token, NULL, 10);
+    proc->tpgid = (pid_t)strtol(token, NULL, 10);
 
     // (9) Kernel flags
     token = strtok_r(NULL, " ", &savePtr);

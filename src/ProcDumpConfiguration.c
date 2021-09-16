@@ -41,6 +41,12 @@ void *SignalThread(void *input)
     {
     case SIGINT:
         SetQuit(config, 1);
+
+        // signal global config as well if we are monitoring pgid & process names
+        if(config->ProcessGroupId != NO_PID || config->WaitingForProcessName) {
+            SetQuit(&g_config, 1);
+        }
+
         if(config->gcorePid != NO_PID) {
             Log(info, "Shutting down gcore");
             if((rc = kill(-config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
@@ -249,7 +255,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 break;
             
             case 'g':
-                self->ProcessGroupId = (gid_t)atoi(optarg);
+                self->ProcessGroupId = (pid_t)atoi(optarg);
                 if(!LookupProcessByPid(self)) {
                     Log(error, "Invalid PGID - failed looking up process name by PGID.");
                     return PrintUsage(self);
@@ -496,15 +502,24 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     // allocate list of configs for process monitoring
     target_config = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration) * MAX_TARGET_PROCESSES);
     int rc;
+    int numMonitoredProcesses = 0;
+    bool foundRootProcess = false;
 
-    while (true) {
+    while ((rc = WaitForQuit(self, self->PollingInterval)) == WAIT_TIMEOUT) {
         struct dirent ** nameList;
-        int numMonitoredProcesses = 0;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+
+        // flip root search flag
+        foundRootProcess = false;
         
         // evaluate all running processes
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
+
+            // is the target root process still running?
+            if(procPid == self->ProcessGroupId) {
+                foundRootProcess = true;
+            }
 
             if (self->ProcessGroupId != NO_PID) {
                 // check to see if this process is in our target group
@@ -519,10 +534,11 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     // have we found a new process?
                     if(j == numMonitoredProcesses) {
                         // copy global config object
-                        target_config[numMonitoredProcesses] = *self;
+                        memcpy(&target_config[numMonitoredProcesses], self, sizeof(struct ProcDumpConfiguration));
 
                         // populate fields for this target
                         target_config[numMonitoredProcesses].ProcessId = procPid;
+                        target_config[numMonitoredProcesses].ProcessName = GetProcessName(procPid);
 
                         // launch new monitor
                         if(CreateTriggerThreads(&target_config[numMonitoredProcesses]) != 0) {
@@ -599,10 +615,17 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         }
         free(nameList);
 
-        // sleep till next scan
-        if((rc = WaitForQuit(self, 0)) == WAIT_TIMEOUT) break;
-    }
+        // if the root process is no longer present exit
+        if(!foundRootProcess) {
+            for(int i = 0; i < numMonitoredProcesses; i++) {
+                Log(error, "Target PGID %d no longer alive", self->ProcessGroupId);
+                SetQuit(&target_config[i], 1);
+            }
 
+            // signal main to exit
+            SetQuit(&g_config, 1);
+        }
+    }
     free(target_config);
 }
 
@@ -612,8 +635,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 //                  Returns NO_PID on error
 //
 //--------------------------------------------------------------------
-gid_t GetProcessPgid(pid_t pid){
-	gid_t pgid;
+pid_t GetProcessPgid(pid_t pid){
+	pid_t pgid;
 
     char procFilePath[32];
     char fileBuffer[1024];
@@ -645,6 +668,7 @@ gid_t GetProcessPgid(pid_t pid){
 
     // itaerate past process state
     savePtr = strrchr(fileBuffer, ')');
+    savePtr += 2;   // iterate past ')' and ' ' in /proc/[pid]/stat
 
     // iterate past parent process ID
     token = strtok_r(NULL, " ", &savePtr);
@@ -656,8 +680,7 @@ gid_t GetProcessPgid(pid_t pid){
         return false;
     }
     
-    pgid = (gid_t)strtol(token, NULL, 10);
-
+    pgid = (pid_t)strtol(token, NULL, 10);
 
     return pgid;
 }
@@ -808,10 +831,13 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
         }
     }
     
-    if((rc = pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
-    {
-        Trace("CreateTriggerThreads: failed to create SignalThread.");
-        return rc;
+    // only create signal thread when one doesn't exist
+    if(sig_thread_id == 0){
+        if((rc = pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
+        {
+            Trace("CreateTriggerThreads: failed to create SignalThread.");
+            return rc;
+        }
     }
 
     return 0;
@@ -1058,9 +1084,9 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
     // Let's check to make sure the process is still alive then
     // note: kill([pid], 0) doesn't send a signal but does perform error checking
     //       therefore, if it returns 0, the process is still alive, -1 means it errored out
-    if (kill(self->ProcessId, 0)) {
+    if (self->ProcessId != NO_PID && kill(self->ProcessId, 0)) {
         self->bTerminated = true;
-        Log(error, "Target process is no longer alive");
+        Log(warn, "Target process %d is no longer alive", self->ProcessId);
         return false;
     }
 
