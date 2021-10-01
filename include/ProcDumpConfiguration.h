@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/queue.h>
 
 #include "Handle.h"
 #include "TriggerThreadProcs.h"
@@ -106,6 +107,12 @@ struct ProcDumpConfiguration {
     pid_t gcorePid;
 };
 
+struct ConfigQueueEntry {
+    struct ProcDumpConfiguration * config;
+
+    TAILQ_ENTRY(ConfigQueueEntry) element;
+};
+
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 char * GetProcessName(pid_t pid);
 pid_t GetProcessPgid(pid_t pid);
@@ -115,7 +122,8 @@ int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration
 int CreateTriggerThreads(struct ProcDumpConfiguration *self);
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
 int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle, int milliseconds);
-int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self);
+int WaitForAllMonitoringThreadsToTerminate(struct ProcDumpConfiguration *self);
+int WaitForSignalThreadToTerminate(struct ProcDumpConfiguration *self);
 bool IsQuit(struct ProcDumpConfiguration *self);
 int SetQuit(struct ProcDumpConfiguration *self, int quit);
 bool PrintConfiguration(struct ProcDumpConfiguration *self);

@@ -20,6 +20,8 @@ long HZ;                                                        // clock ticks p
 int MAXIMUM_CPU;                                                // maximum cpu usage percentage (# cores * 100)
 struct ProcDumpConfiguration g_config;                          // backbone of the program
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
+TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
+// struct ConfigQueueEntry configQueue;                            // circle queue to hold target configs
 pthread_mutex_t ptrace_mutex;
 
 //--------------------------------------------------------------------
@@ -500,10 +502,43 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     if (self->ProcessGroupId != NO_PID) Log(info, "Waiting for processes of PGID '%d' to launch...", self->ProcessGroupId);
 
     // allocate list of configs for process monitoring
-    target_config = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration) * MAX_TARGET_PROCESSES);
+    TAILQ_INIT(&configQueueHead);
     int rc;
     int numMonitoredProcesses = 0;
     bool foundRootProcess = false;
+    struct ProcDumpConfiguration * target;
+    struct ConfigQueueEntry * item;
+
+    // start monitor on root process
+    self->ProcessId = self->ProcessGroupId;
+    self->ProcessName = GetProcessName(self->ProcessId);
+
+    // allocate structs for queue
+    item = (struct ConfigQueueEntry*)malloc(sizeof(item));
+    target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+    
+    memcpy(target, self, sizeof(struct ProcDumpConfiguration));
+    item->config = target;
+
+    // insert config into queue
+    TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+
+    // launch new monitor
+    if(CreateTriggerThreads(self) != 0) {
+        Log(error, INTERNAL_ERROR);
+        Trace("MonitorProcesses: failed to create trigger threads for root process.");
+        ExitProcDump();
+    }
+
+    if(BeginMonitoring(self) == false) {
+        Log(error, INTERNAL_ERROR);
+        Trace("MonitorProcesses: failed to start monitoring on root process.");
+        ExitProcDump();
+    }
+    else {
+        Log(info, "Starting monitor on root process %s (%d)", self->ProcessName, self->ProcessId);
+        numMonitoredProcesses++;
+    }
 
     while ((rc = WaitForQuit(self, self->PollingInterval)) == WAIT_TIMEOUT) {
         struct dirent ** nameList;
@@ -521,47 +556,78 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 foundRootProcess = true;
             }
 
+            int k = 0;
+            // cleanup process configs for child processes that have exited
+            TAILQ_FOREACH(item, &configQueueHead, element) {
+                k++;
+                // is the current config in a quit state?
+                if(item->config->bTerminated) { 
+                    printf("Shutting down monitors for process: %d\n", item->config->ProcessId);
+                    WaitForAllMonitoringThreadsToTerminate(item->config);
+
+                    // free config entry
+                    free(item->config);
+
+                    // remove current config from list
+                    TAILQ_REMOVE(&configQueueHead, item, element);
+                    numMonitoredProcesses--;
+                }
+
+                printf("Process: %s\tPID: %d\tnQuit: %d\n", item->config->ProcessName, item->config->ProcessId, item->config->nQuit);
+            }
+
+            printf("Monitored Processes: %d\t %d entries in queue\n", numMonitoredProcesses, k);
+            
+            // check to see if we are monitoring PGID target
             if (self->ProcessGroupId != NO_PID) {
                 // check to see if this process is in our target group
                 if(GetProcessPgid(procPid) == self->ProcessGroupId) {
                     int j = 0;
 
                     // check to see if we already monitoring this process
-                    for(; j < numMonitoredProcesses; j++) {
-                        if(target_config[j].ProcessId == procPid) break;
+                    TAILQ_FOREACH(item, &configQueueHead, element) {
+                        if(procPid == item->config->ProcessId) break;
+                        j++;
                     }
 
                     // have we found a new process?
                     if(j == numMonitoredProcesses) {
-                        // copy global config object
-                        memcpy(&target_config[numMonitoredProcesses], self, sizeof(struct ProcDumpConfiguration));
+
+                        // allocate for new queue entry
+                        item = (struct ConfigQueueEntry*)malloc(sizeof(item));
+                        target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+                        
+                        memcpy(target, self, sizeof(struct ProcDumpConfiguration));
+                        item->config = target;
 
                         // populate fields for this target
-                        target_config[numMonitoredProcesses].ProcessId = procPid;
-                        target_config[numMonitoredProcesses].ProcessName = GetProcessName(procPid);
+                        item->config->ProcessId = procPid;
+                        item->config->ProcessName = GetProcessName(procPid);
+
+                        // insert config into queue
+                        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
 
                         // launch new monitor
-                        if(CreateTriggerThreads(&target_config[numMonitoredProcesses]) != 0) {
+                        if(CreateTriggerThreads(item->config) != 0) {
                             Log(error, INTERNAL_ERROR);
                             Trace("main: failed to create trigger threads.");
                             ExitProcDump();
                         }
 
-                        if(BeginMonitoring(&target_config[numMonitoredProcesses]) == false) {
+                        if(BeginMonitoring(item->config) == false) {
                             Log(error, INTERNAL_ERROR);
                             Trace("main: failed to start monitoring.");
                             ExitProcDump();
                         }
                         else {
-                            Log(info, "Starting monitor on process %s (%d)", target_config[numMonitoredProcesses].ProcessName, target_config[numMonitoredProcesses].ProcessId);
+                            Log(info, "Starting monitor on process %s (%d)", item->config->ProcessName, item->config->ProcessId);
                         }
                   
                         numMonitoredProcesses++;
                     }
                 }
             }
-
-            if (self->WaitingForProcessName) {
+            else if (self->WaitingForProcessName) {
                 char *nameForPid = GetProcessName(procPid);
 
                 if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
@@ -572,6 +638,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 if (strcmp(nameForPid, self->ProcessName) == 0) {
                     int j = 0;
 
+                    /*
                     // check to see if we already monitoring this process
                     for(; j < numMonitoredProcesses; j++) {
                         if(target_config[j].ProcessId == procPid) break;
@@ -603,6 +670,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                   
                         numMonitoredProcesses++;
                     }
+                    */
                 }
 
                 free(nameForPid);
@@ -617,8 +685,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
         // if the root process is no longer present exit
         if(!foundRootProcess) {
+            Log(error, "Target PGID %d no longer alive", self->ProcessGroupId);
+
+            // set quit event for all child process monitoring threads
             for(int i = 0; i < numMonitoredProcesses; i++) {
-                Log(error, "Target PGID %d no longer alive", self->ProcessGroupId);
                 SetQuit(&target_config[i], 1);
             }
 
@@ -626,6 +696,19 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             SetQuit(&g_config, 1);
         }
     }
+
+    // cleanup monitoring queue
+    TAILQ_FOREACH(item, &configQueueHead, element) {
+        SetQuit(item->config, 1);
+        WaitForAllMonitoringThreadsToTerminate(item->config);
+
+        // free config entry
+        free(item->config);
+
+        // remove current config from list
+        TAILQ_REMOVE(&configQueueHead, item, element);
+    }
+
     free(target_config);
 }
 
@@ -832,7 +915,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     }
     
     // only create signal thread when one doesn't exist
-    if(sig_thread_id == 0){
+    if(sig_thread_id == 0) {
         if((rc = pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
         {
             Trace("CreateTriggerThreads: failed to create SignalThread.");
@@ -908,16 +991,12 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 
 //--------------------------------------------------------------------
 //
-// WaitForAllThreadsToTerminate - Wait for all threads to terminate  
+// WaitForAllMonitoringThreadsToTerminate - Wait for all trigger threads to terminate  
 //
 //--------------------------------------------------------------------
-int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
+int WaitForAllMonitoringThreadsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
-
-
-    // Wait for the signal monitoring thread if there is one. If there is one, it will be the only
-    // one. 
     if(self->SignalNumber != -1)
     {
         if ((rc = pthread_join(sig_monitor_thread_id, NULL)) != 0) {
@@ -935,6 +1014,18 @@ int WaitForAllThreadsToTerminate(struct ProcDumpConfiguration *self)
             }
         }
     }
+
+    return rc;
+}
+
+//--------------------------------------------------------------------
+//
+// WaitForSignalThreadToTerminate - Wait for signal handler thread to terminate
+//
+//--------------------------------------------------------------------
+int WaitForSignalThreadToTerminate(struct ProcDumpConfiguration *self)
+{
+    int rc = 0;
 
     // Cancel the signal handling thread. 
     // We dont care about the return since the signal thread might already be gone. 

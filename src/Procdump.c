@@ -50,7 +50,8 @@ int main(int argc, char *argv[])
             ExitProcDump();
         }
 
-        WaitForAllThreadsToTerminate(&g_config);
+        WaitForAllMonitoringThreadsToTerminate(&g_config);
+        WaitForSignalThreadToTerminate(&g_config);
     }
     ExitProcDump();
 }
