@@ -660,7 +660,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     
     if (self->nThreads > MAX_TRIGGERS)
     {
-        Log(error, "Too many triggers.  ProcDump only supports %d triggers.", MAX_TRIGGERS);
+        Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
         return -1;
     }
 
