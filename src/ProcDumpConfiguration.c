@@ -592,7 +592,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 {    
     int rc = 0;
     self->nThreads = 0;
-    bool tooManyThreads = false;
+    bool tooManyTriggers = false;
 
     if((rc=sigemptyset (&sig_set)) < 0)
     {
@@ -624,7 +624,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
                 return rc;
             }
         } else
-            tooManyThreads = true;
+            tooManyTriggers = true;
     }
 
     if (self->MemoryThreshold != -1) {
@@ -634,7 +634,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
                 return rc;
             }
         } else
-            tooManyThreads = true;
+            tooManyTriggers = true;
     }
 
     if (self->ThreadThreshold != -1) {
@@ -644,7 +644,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
                 return rc;
             }
         } else
-            tooManyThreads = true;
+            tooManyTriggers = true;
     }
 
     if (self->FileDescriptorThreshold != -1) {
@@ -654,7 +654,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
                 return rc;
             }
         } else
-            tooManyThreads = true;
+            tooManyTriggers = true;
     }
 
     if (self->SignalNumber != -1) {
@@ -671,10 +671,10 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
                 return rc;
             }
         } else
-            tooManyThreads = true;
+            tooManyTriggers = true;
     }
     
-    if (tooManyThreads)
+    if (tooManyTriggers)
     {
         Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
         return -1;
