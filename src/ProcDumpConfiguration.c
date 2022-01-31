@@ -627,7 +627,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
             tooManyTriggers = true;
     }
 
-    if (self->MemoryThreshold != -1) {
+    if (self->MemoryThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
             if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create CommitThread.");            
@@ -637,7 +637,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
             tooManyTriggers = true;
     }
 
-    if (self->ThreadThreshold != -1) {
+    if (self->ThreadThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
             if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create ThreadThread.");            
@@ -647,7 +647,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
             tooManyTriggers = true;
     }
 
-    if (self->FileDescriptorThreshold != -1) {
+    if (self->FileDescriptorThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
             if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
@@ -657,14 +657,14 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
             tooManyTriggers = true;
     }
 
-    if (self->SignalNumber != -1) {
+    if (self->SignalNumber != -1 && !tooManyTriggers) {
         if ((rc = pthread_create(&sig_monitor_thread_id, NULL, SignalMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");            
             return rc;
         }
     }
 
-    if (self->bTimerThreshold) {
+    if (self->bTimerThreshold && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
             if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, TimerThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create TimerThread.");
