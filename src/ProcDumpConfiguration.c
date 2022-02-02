@@ -6,7 +6,7 @@
 // The global configuration structure and utilities header
 //
 //--------------------------------------------------------------------
-
+ 
 #include "Procdump.h"
 #include "ProcDumpConfiguration.h"
 
