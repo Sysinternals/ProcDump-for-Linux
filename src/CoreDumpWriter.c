@@ -506,13 +506,18 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         // someone wants to use gcore even for .NET Core 3.x+ processes.
         commandPipe = popen2(command, "r", &gcorePid);
         self->Config->gcorePid = gcorePid;
-        
+
+        // Wait for child process to end and get exit status for bash gcore command
+        int stat;
+        waitpid(gcorePid, &stat, 0);
+        int gcoreStatus = WEXITSTATUS(stat);
+
         if(commandPipe == NULL){
             Log(error, "An error occurred while generating the core dump");
             Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
             exit(1);
         }
-        
+
         // read all output from gcore command
         for(i = 0; i < MAX_LINES && fgets(lineBuffer, sizeof(lineBuffer), commandPipe) != NULL; i++) {
             lineLength = strlen(lineBuffer);                                // get # of characters read
@@ -534,8 +539,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         pclose(commandPipe);
 
         // check if gcore was able to generate the dump
-        if(strstr(outputBuffer[i-1], "gcore: failed") != NULL){
-            Log(error, "An error occurred while generating the core dump");
+        if(strstr(outputBuffer[i-1], "gcore: failed") != NULL || gcoreStatus > 0){
+            Log(error, "An error occurred while generating the core dump: %d", gcoreStatus);
                     
             // log gcore message
             for(int j = 0; j < i; j++){
@@ -544,7 +549,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            exit(1);
+            exit(gcoreStatus > 0 ? gcoreStatus : 1);
         }
 
         for(int j = 0; j < i; j++) {
@@ -620,6 +625,7 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         if (type[0] == 'r') {
             close(pipefd[0]);
             dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to write end of pipe
+            dup2(pipefd[1], STDERR_FILENO); // redirect stderr to write end of pipe
         } else {
             close(pipefd[1]);
             dup2(pipefd[0], STDIN_FILENO); // redirect pipe read to stdin
