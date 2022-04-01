@@ -549,7 +549,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            exit(gcoreStatus > 0 ? gcoreStatus : 1);
+            exit(gcoreStatus != 0 ? gcoreStatus : 1);
         }
 
         for(int j = 0; j < i; j++) {
