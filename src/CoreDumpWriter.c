@@ -539,7 +539,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         pclose(commandPipe);
 
         // check if gcore was able to generate the dump
-        if(strstr(outputBuffer[i-1], "gcore: failed") != NULL || gcoreStatus > 0){
+        if (gcoreStatus != 0 || strstr(outputBuffer[i-1], "gcore: failed") != NULL) {
             Log(error, "An error occurred while generating the core dump: %d", gcoreStatus);
                     
             // log gcore message
