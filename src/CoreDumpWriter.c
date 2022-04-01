@@ -507,11 +507,6 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         commandPipe = popen2(command, "r", &gcorePid);
         self->Config->gcorePid = gcorePid;
 
-        // Wait for child process to end and get exit status for bash gcore command
-        int stat;
-        waitpid(gcorePid, &stat, 0);
-        int gcoreStatus = WEXITSTATUS(stat);
-
         if(commandPipe == NULL){
             Log(error, "An error occurred while generating the core dump");
             Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
@@ -534,14 +529,27 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             }
         }
         
+        // After reading all input, wait for child process to end and get exit status for bash gcore command
+        int stat;
+        waitpid(gcorePid, &stat, 0);
+        int gcoreStatus = WEXITSTATUS(stat);
+        
         // close pipe reading from gcore
         self->Config->gcorePid = NO_PID;                // reset gcore pid so that signal handler knows we aren't dumping
-        pclose(commandPipe);
+        int pcloseStatus = pclose(commandPipe);
+
+        bool gcoreFailedMsg = false;    // in case error sneaks through the message output
 
         // check if gcore was able to generate the dump
-        if (gcoreStatus != 0 || strstr(outputBuffer[i-1], "gcore: failed") != NULL) {
-            Log(error, "An error occurred while generating the core dump: %d", gcoreStatus);
-                    
+        if(gcoreStatus != 0 || pcloseStatus != 0 || (gcoreFailedMsg = (strstr(outputBuffer[i-1], "gcore: failed") != NULL))){
+            Log(error, "An error occurred while generating the core dump:");
+            if (gcoreStatus != 0)
+                Log(error, "\tDump exit status = %d", gcoreStatus);
+            if (pcloseStatus != 0)
+                Log(error, "\tError closing pipe: %d", pcloseStatus);
+            if (gcoreFailedMsg)
+                Log(error, "\tgcore failed");
+
             // log gcore message
             for(int j = 0; j < i; j++){
                 if(outputBuffer[j] != NULL){
@@ -549,7 +557,11 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            exit(gcoreStatus != 0 ? gcoreStatus : 1);
+            if (gcoreStatus != 0)
+                exit(gcoreStatus);
+            if (pcloseStatus != 0)
+                exit(pcloseStatus);
+            exit(1);
         }
 
         for(int j = 0; j < i; j++) {
