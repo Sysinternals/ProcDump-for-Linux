@@ -70,8 +70,8 @@ struct ProcDumpConfiguration {
     bool bTriggerThenSnoozeTimer;   // Detect+Trigger=>Wait N second=>[repeat]
 
     // Options
-    int CpuThreshold;               // -C
-    bool bCpuTriggerBelowValue;     // -c
+    int CpuUpperThreshold;          // -C
+    int CpuLowerThreshold;          // -c    
     int MemoryThreshold;            // -M
     bool bMemoryTriggerBelowValue;  // -m
     int ThresholdSeconds;           // -s

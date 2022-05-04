@@ -261,8 +261,8 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
 
                 // CPU Trigger
-                if ((config->bCpuTriggerBelowValue && (cpuUsage < config->CpuThreshold)) ||
-                    (!config->bCpuTriggerBelowValue && (cpuUsage >= config->CpuThreshold)))
+                if ((config->CpuUpperThreshold != -1 && (cpuUsage >= config->CpuUpperThreshold)) ||
+                    (config->CpuLowerThreshold != -1 && (cpuUsage < config->CpuLowerThreshold)))
                 {
                     Log(info, "CPU:\t%d%%", cpuUsage);
                     rc = WriteCoreDump(writer);
