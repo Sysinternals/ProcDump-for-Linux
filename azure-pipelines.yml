@@ -30,7 +30,7 @@ jobs:
       displayName: 'Run unit tests'
 
   - job: "DEB_Package_Build"
-    pool: "Ubuntu-Docker-Pool"
+    pool: "Ubuntu_18_Package_Build"
     condition: not(eq(variables['Build.Reason'], 'PullRequest'))
     dependsOn:
       - Run_Unit_Tests
@@ -58,7 +58,7 @@ jobs:
         publishLocation: 'Container'
   
   - job: 'RPM_Package_Build'
-    pool: 'Centos-Docker-Pool'
+    pool: 'CentOS_Package_Build'
     dependsOn:
       - DEB_Package_Build
     steps:
