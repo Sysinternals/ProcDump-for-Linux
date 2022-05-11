@@ -114,6 +114,13 @@ stages:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'drop'
           publishLocation: 'Container'
+      
+      - task: UseDotNet@2
+        displayName: 'Install .NET Core 2.1'
+        inputs:
+          packageType: 'runtime'
+          version: '2.1.x'
+
       - task: EsrpCodeSigning@1
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
