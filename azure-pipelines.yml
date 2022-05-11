@@ -95,10 +95,10 @@ stages:
       steps:
       - script: |
           apt install -y wget
+          apt install -y apt-transport-https
           wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
           dpkg -i packages-microsoft-prod.deb 
           apt update
-          apt install -y apt-transport-https
           apt install -y dotnet-sdk-2.1
           make
         displayName: 'Build procdump Ubuntu'
