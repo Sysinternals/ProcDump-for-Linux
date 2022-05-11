@@ -94,6 +94,7 @@ stages:
       condition: not(eq(variables['Build.Reason'], 'PullRequest'))
       steps:
       - script: |
+          apt install -y dotnet-sdk-2.1
           make
         displayName: 'Build procdump Ubuntu'
 
