@@ -15,7 +15,8 @@ stages:
  - stage: Build
    jobs:
     - job: "Run_Unit_Tests"
-      pool: "Ubuntu_18_Package_Build"
+      pool: 
+        vmImage: 'ubuntu-latest'
       steps:
       - script: |
           sudo apt update
