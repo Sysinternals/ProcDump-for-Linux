@@ -115,23 +115,12 @@ stages:
           TargetFolder: '$(Build.ArtifactStagingDirectory)'
         displayName: 'Copy build artifacts to staging'
 
-      - script: |
-          ls $(Build.ArtifactStagingDirectory)
-          ls $(Build.ArtifactStagingDirectory)/DEBS
-          ls $(Build.ArtifactStagingDirectory)/DEBS/amd64
-        displayName: 'Artifact staging' 
-
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'drop'
           publishLocation: 'Container'
 
-      - script: |
-          ls $(Build.ArtifactStagingDirectory)
-          ls $(Build.ArtifactStagingDirectory)/drop
-        displayName: 'Artifact'   
-        
       - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
         displayName: 'ESRP CodeSigning DEB'
         inputs:
