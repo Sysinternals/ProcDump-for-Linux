@@ -117,6 +117,8 @@ stages:
 
       - script: |
           ls $(Build.ArtifactStagingDirectory)
+          ls $(Build.ArtifactStagingDirectory)/DEBS
+          ls $(Build.ArtifactStagingDirectory)/DEBS/amd64
         displayName: 'Artifact staging' 
 
       - task: PublishBuildArtifacts@1
@@ -126,8 +128,8 @@ stages:
           publishLocation: 'Container'
 
       - script: |
-          ls $(Build.ArtifactStagingDirectory
-          ls $(Build.ArtifactStagingDirectory/drop
+          ls $(Build.ArtifactStagingDirectory)
+          ls $(Build.ArtifactStagingDirectory)/drop
         displayName: 'Artifact'   
         
       - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
