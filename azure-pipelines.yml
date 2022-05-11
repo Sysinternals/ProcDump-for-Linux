@@ -94,6 +94,11 @@ stages:
       condition: not(eq(variables['Build.Reason'], 'PullRequest'))
       steps:
       - script: |
+          apt install -y wget
+          wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+          dpkg -i packages-microsoft-prod.deb 
+          apt update
+          apt install -y apt-transport-https
           apt install -y dotnet-sdk-2.1
           make
         displayName: 'Build procdump Ubuntu'
@@ -115,12 +120,6 @@ stages:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'drop'
           publishLocation: 'Container'
-      
-      - task: UseDotNet@2
-        displayName: 'Install .NET Core 2.1'
-        inputs:
-          packageType: 'runtime'
-          version: '2.1.22'
 
       - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
         displayName: 'ESRP CodeSigning DEB'
