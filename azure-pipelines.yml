@@ -119,14 +119,15 @@ stages:
         displayName: 'Install .NET Core 2.1'
         inputs:
           packageType: 'runtime'
-          version: '2.1.x'
+          version: '2.1.22'
 
-      - task: EsrpCodeSigning@1
+      - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+        displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
           FolderPath: '$(Build.ArtifactStagingDirectory)\drop'
           Pattern: '*.deb'
-          signConfigType: 'inlineSignParams'
+          signConfigType: inlineSignParams
           inlineOperation: |
             [
               {
@@ -137,9 +138,6 @@ stages:
                 "ToolVersion": "1.0"
               }
             ]
-          SessionTimeout: '60'
-          MaxConcurrency: '50'
-          MaxRetryAttempts: '5'
     
     - job: 'RPM_Package_Build'
       pool: 'CentOS_Package_Build'
