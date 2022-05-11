@@ -125,7 +125,7 @@ stages:
         displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
-          FolderPath: '$(Build.ArtifactStagingDirectory)/drop/DEBS/amd64'
+          FolderPath: '$(System.DefaultWorkingDirectory)/_Sysinternals.ProcDump-for-Linux/drop/DEBS/amd64'
           Pattern: '*.deb'
           signConfigType: inlineSignParams
           inlineOperation: |
