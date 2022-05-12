@@ -161,3 +161,21 @@ stages:
             ArtifactName: 'drop'
             publishLocation: 'Container'
 
+        - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+          displayName: 'ESRP CodeSigning RPM'
+          inputs:
+            ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
+            FolderPath: '$(Build.ArtifactStagingDirectory)/RPMS/x86_64'
+            Pattern: '*.rpm'
+            signConfigType: inlineSignParams
+            inlineOperation: |
+              [
+                {
+                  "keyCode": "CP-450779-Pgp",
+                  "OperationCode": "LinuxSign",
+                  "Parameters": {},
+                  "ToolName": "sign",
+                  "ToolVersion": "1.0"
+                }
+              ]            
+
