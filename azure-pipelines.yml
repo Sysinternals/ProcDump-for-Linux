@@ -87,7 +87,7 @@ stages:
             ArtifactName: 'drop'
             publishLocation: 'Container'
 
- - stage: Sign
+ - stage: SignPackages
    jobs:
     - job: "DEB_Package_Build"
       pool: "Ubuntu_18_Package_Build"
