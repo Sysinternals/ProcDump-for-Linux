@@ -15,7 +15,8 @@ stages:
  - stage: "Build"
    jobs:
     - job: "ProcDump_Run_Unit_Tests"
-      vmImage: 'ubuntu-latest'
+      pool:
+       vmImage: 'ubuntu-latest'
       steps:
       - script: |
           sudo apt update
