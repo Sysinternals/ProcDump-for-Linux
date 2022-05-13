@@ -32,7 +32,7 @@ stages:
         displayName: 'Run unit tests'   
 
     - job: "Build_ProcDump_Ubuntu_18_04_Package"
-      pool: "Ubuntu-Docker-Pool"
+      pool: "Ubuntu_18_Package_Build"
       condition: not(eq(variables['Build.Reason'], 'PullRequest'))
       dependsOn:
        - ProcDump_Run_Unit_Tests
@@ -61,7 +61,7 @@ stages:
         displayName: 'Copy to artifacts'
     
     - job: 'Build_ProcDump_CentOS_8_Package'
-      pool: 'Centos-Docker-Pool'
+      pool: 'CentOS_Package_Build'
       condition: not(eq(variables['Build.Reason'], 'PullRequest'))
       steps:
         - script: |
