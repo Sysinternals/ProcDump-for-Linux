@@ -63,6 +63,8 @@ stages:
     - job: 'Build_ProcDump_CentOS_8_Package'
       pool: 'CentOS_Package_Build'
       condition: not(eq(variables['Build.Reason'], 'PullRequest'))
+      dependsOn:
+       - ProcDump_Run_Unit_Tests      
       steps:
         - script: |
             make
@@ -87,3 +89,62 @@ stages:
             ArtifactName: 'CentOS_8_drop'
             publishLocation: 'Container'
           displayName: 'Copy to artifacts'
+
+ - stage: Sign
+   jobs:
+    - job: "Sign_ProcDump_Ubuntu_18_04"
+      pool: "Ubuntu_18_Package_Build"
+      steps:
+      
+      - task: DownloadPipelineArtifact@2
+        inputs:
+          buildType: 'current'
+          artifactName: 'Ubuntu_18_04_drop'
+          targetPath: '$(Pipeline.Workspace)'
+           
+      - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+        displayName: 'ESRP CodeSigning DEB'
+        inputs:
+          ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
+          FolderPath: '$(Pipeline.Workspace)/DEBS/amd64'
+          Pattern: '*.deb'
+          signConfigType: inlineSignParams
+          inlineOperation: |
+            [
+              {
+                "keyCode": "CP-450779-Pgp",
+                "OperationCode": "LinuxSign",
+                "Parameters": {},
+                "ToolName": "sign",
+                "ToolVersion": "1.0"
+              }
+            ]
+
+    - job: "Sign_ProcDump_CentOS_8"
+      pool: "CentOS_Package_Build"
+      steps:
+
+      - task: DownloadPipelineArtifact@2
+        inputs:
+          buildType: 'current'
+          artifactName: 'CentOS_8_drop'
+          targetPath: '$(Pipeline.Workspace)'
+
+      - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+        displayName: 'ESRP CodeSigning DEB'
+        inputs:
+          ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
+          FolderPath: '$(Pipeline.Workspace)/RPMS/x86_x64'
+          Pattern: '*.rpm'
+          signConfigType: inlineSignParams
+          inlineOperation: |
+            [
+              {
+                "keyCode": "CP-450779-Pgp",
+                "OperationCode": "LinuxSign",
+                "Parameters": {},
+                "ToolName": "sign",
+                "ToolVersion": "1.0"
+              }
+            ]
+          
