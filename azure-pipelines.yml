@@ -134,7 +134,7 @@ stages:
         displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
-          FolderPath: '$(Pipeline.Workspace)/RPMS/x86_x64'
+          FolderPath: '$(Pipeline.Workspace)/RPMS/x86_64'
           Pattern: '*.rpm'
           signConfigType: inlineSignParams
           inlineOperation: |
