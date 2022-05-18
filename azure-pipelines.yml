@@ -94,6 +94,8 @@ stages:
    jobs:
     - job: "Sign_ProcDump_Ubuntu_18_04"
       pool: "Ubuntu_18_Package_Build"
+      workspace:
+        clean: all
       steps:
       
       - task: DownloadPipelineArtifact@2
@@ -122,6 +124,8 @@ stages:
 
     - job: "Sign_ProcDump_CentOS_8"
       pool: "CentOS_Package_Build"
+      workspace:
+        clean: all
       steps:
 
       - task: DownloadPipelineArtifact@2
