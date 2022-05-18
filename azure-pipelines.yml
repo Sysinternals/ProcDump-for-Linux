@@ -98,7 +98,7 @@ stages:
       
       - task: DownloadPipelineArtifact@2
         inputs:
-          buildType: 'current'
+          source: 'current'
           artifactName: 'Ubuntu_18_04_drop'
           targetPath: '$(Pipeline.Workspace)'
            
@@ -126,7 +126,7 @@ stages:
 
       - task: DownloadPipelineArtifact@2
         inputs:
-          buildType: 'current'
+          source: 'current'
           artifactName: 'CentOS_8_drop'
           targetPath: '$(Pipeline.Workspace)'
 
