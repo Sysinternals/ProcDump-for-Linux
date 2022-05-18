@@ -105,7 +105,7 @@ stages:
    jobs:
     - job: "Sign_ProcDump_Ubuntu_18_04"
       pool: "Ubuntu_18_Package_Build"
-      condition: not(eq(variables['Build.Reason'], 'PullRequest'))        
+      condition: eq(variables['Sign'], 'true')
       workspace:
         clean: all
       steps:
@@ -136,7 +136,7 @@ stages:
 
     - job: "Sign_ProcDump_CentOS_8"
       pool: "CentOS_Package_Build"
-      condition: not(eq(variables['Build.Reason'], 'PullRequest'))        
+      condition: eq(variables['Sign'], 'true')
       workspace:
         clean: all
       steps:
