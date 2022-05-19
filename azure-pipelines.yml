@@ -119,7 +119,7 @@ stages:
         displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
-          FolderPath: '$(Pipeline.Workspace)/Ubuntu_18_04_drop'
+          FolderPath: '$(Build.SourcesDirectory)/Ubuntu_18_04_drop'
           Pattern: '*.deb'
           signConfigType: inlineSignParams
           inlineOperation: |
@@ -135,7 +135,7 @@ stages:
 
       - task: CopyFiles@2
         inputs:
-          Contents: '$(Build.SourcesDirectory)/Ubuntu_18_04_drop/pkgbuild/*.deb'
+          Contents: '$(Build.SourcesDirectory)/Ubuntu_18_04_drop/pkgbuild/DEBS/amd64/*.deb'
           TargetFolder: '$(Build.ArtifactStagingDirectory)/Ubuntu_18_04_Signed/'
         displayName: 'Copy signed DEB package to staging'
 
@@ -179,7 +179,7 @@ stages:
           
       - task: CopyFiles@2
         inputs:
-          Contents: '$(Build.SourcesDirectory)/CentOS_8_drop/pkgbuild/*.rpm'
+          Contents: '$(Build.SourcesDirectory)/CentOS_8_drop/pkgbuild/RPMS/x86_64/*.rpm'
           TargetFolder: '$(Build.ArtifactStagingDirectory)/CentOS_8_Signed/'
         displayName: 'Copy signed DEB package to staging'
 
