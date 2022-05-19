@@ -59,16 +59,16 @@ stages:
 
       - task: CopyFiles@2
         inputs:
-          SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
-          TargetFolder: '$(Build.ArtifactStagingDirectory)'
+          Contents: '$(Build.SourcesDirectory)/pkgbuild/DEBS/amd64/*.deb'
+          TargetFolder: '$(Build.ArtifactStagingDirectory)/Ubuntu_18.04'
         displayName: 'Copy build to staging'
     
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)/Ubuntu_18.04'
           ArtifactName: 'Ubuntu_18_04_drop'
           publishLocation: 'Container'
-        displayName: 'Copy to artifacts'
+        displayName: 'Copy DEB package to artifacts'
     
     - job: 'Build_ProcDump_CentOS_8_Package'
       pool: 'CentOS_Package_Build'
@@ -89,17 +89,16 @@ stages:
 
         - task: CopyFiles@2
           inputs:
-            SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
-            Contents: '**'
-            TargetFolder: '$(Build.ArtifactStagingDirectory)'
-          displayName: 'Copy build to staging'
+            Contents: '$(Build.SourcesDirectory)/pkgbuild/RPMS/x86_64/*.rpm'
+            TargetFolder: '$(Build.ArtifactStagingDirectory)/CentOS_8'
+          displayName: 'Copy build artifacts to staging'
       
         - task: PublishBuildArtifacts@1
           inputs:
-            PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)/CentOS_8'
             ArtifactName: 'CentOS_8_drop'
             publishLocation: 'Container'
-          displayName: 'Copy to artifacts'
+          displayName: 'Copy RPM package to artifacts'
 
  - stage: Sign
    jobs:
@@ -114,13 +113,13 @@ stages:
         inputs:
           source: 'current'
           artifactName: 'Ubuntu_18_04_drop'
-          targetPath: '$(Pipeline.Workspace)'
+          targetPath: '$(Build.SourcesDirectory)/Ubuntu_18_04_drop'
            
       - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
         displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
-          FolderPath: '$(Pipeline.Workspace)/DEBS/amd64'
+          FolderPath: '$(Pipeline.Workspace)/Ubuntu_18_04_drop'
           Pattern: '*.deb'
           signConfigType: inlineSignParams
           inlineOperation: |
@@ -134,6 +133,19 @@ stages:
               }
             ]
 
+      - task: CopyFiles@2
+        inputs:
+          Contents: '$(Build.SourcesDirectory)/Ubuntu_18_04_drop/pkgbuild/*.deb'
+          TargetFolder: '$(Build.ArtifactStagingDirectory)/Ubuntu_18_04_Signed/'
+        displayName: 'Copy signed DEB package to staging'
+
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)/Ubuntu_18_04_Signed/'
+          ArtifactName: 'Ubuntu_18_04_Signed'
+          publishLocation: 'Container'
+        displayName: 'Copy signed DEB package to artifacts'
+
     - job: "Sign_ProcDump_CentOS_8"
       pool: "CentOS_Package_Build"
       condition: eq(variables['Sign'], 'true')
@@ -145,13 +157,13 @@ stages:
         inputs:
           source: 'current'
           artifactName: 'CentOS_8_drop'
-          targetPath: '$(Pipeline.Workspace)'
+          targetPath: '$(Build.SourcesDirectory)/CentOS_8_drop'
 
       - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
         displayName: 'ESRP CodeSigning DEB'
         inputs:
           ConnectedServiceName: 'Sysinternals ESRP CodeSigning'
-          FolderPath: '$(Pipeline.Workspace)/RPMS/x86_64'
+          FolderPath: '$(Build.SourcesDirectory)/CentOS_8_drop'
           Pattern: '*.rpm'
           signConfigType: inlineSignParams
           inlineOperation: |
@@ -165,3 +177,15 @@ stages:
               }
             ]
           
+      - task: CopyFiles@2
+        inputs:
+          Contents: '$(Build.SourcesDirectory)/CentOS_8_drop/pkgbuild/*.rpm'
+          TargetFolder: '$(Build.ArtifactStagingDirectory)/CentOS_8_Signed/'
+        displayName: 'Copy signed DEB package to staging'
+
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)/CentOS_8_Signed/'
+          ArtifactName: 'CentOS_8_Signed'
+          publishLocation: 'Container'
+        displayName: 'Copy signed DEB package to artifacts'          
