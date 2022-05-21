@@ -45,3 +45,4 @@ stages:
        vmImage: 'ubuntu-latest'
       steps:
       - template: templates/build.yaml
+      displayName: 'Build ProcDump'

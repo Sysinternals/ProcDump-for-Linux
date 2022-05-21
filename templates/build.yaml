@@ -1,4 +1,3 @@
 steps:
 - script: |
     make
-displayName: 'Build ProcDump test binary'
