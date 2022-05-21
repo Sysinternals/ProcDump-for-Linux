@@ -40,7 +40,7 @@ stages:
           sudo ./tests/integration/run.sh
         displayName: 'Run unit tests'   
 
-    - job: "Build ProcDump"
+    - job: "Build_ProcDump"
       pool:
        vmImage: 'ubuntu-latest'
       steps:
