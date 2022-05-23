@@ -32,9 +32,7 @@ stages:
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
       
-      - script: |
-          make
-        displayName: 'Build ProcDump test binary'
+      - template: templates/build.yaml
 
       - script: |
           sudo ./tests/integration/run.sh
