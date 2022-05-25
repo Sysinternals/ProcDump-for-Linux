@@ -1,5 +1,13 @@
 # Azure build pipelines for Procdump-for-Linux
 
+resources:
+  repositories:
+  - repository: ProcDump
+    type: github
+    endpoint: sysinternals
+    name: Sysinternals/ProcDump-for-Linux
+
+
 trigger:
   branches:
     include:
@@ -11,76 +19,28 @@ trigger:
 pr:
   - master
 
-jobs:
-  - job: "Run_Unit_Tests"
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - script: |
-        sudo apt update
-        sudo apt install -y gdb stress-ng zlib1g-dev
-      displayName: 'Setup build environment'
-      
-    - script: |
-        make
-      displayName: 'Build test binary'
-
-    - script: |
-        sudo ./tests/integration/run.sh
-      displayName: 'Run unit tests'
-
-  - job: "DEB_Package_Build"
-    pool: "Ubuntu-Docker-Pool"
-    condition: not(eq(variables['Build.Reason'], 'PullRequest'))
-    dependsOn:
-      - Run_Unit_Tests
-    steps:
-    - script: |
-        make
-      displayName: 'Build procdump Ubuntu'
-
-    - script: |
-        export REVISION=$(Build.BuildId)
-        make release
-        make deb
-      displayName: 'Building debian package & artifacts'
-
-    - task: CopyFiles@2
-      inputs:
-        SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
-        TargetFolder: '$(Build.ArtifactStagingDirectory)'
-      displayName: 'Copy build artifacts to staging'
-    
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-        ArtifactName: 'drop'
-        publishLocation: 'Container'
-  
-  - job: 'RPM_Package_Build'
-    pool: 'Centos-Docker-Pool'
-    dependsOn:
-      - DEB_Package_Build
-    steps:
+stages:
+ - stage: "Build"
+   jobs:
+    - job: "ProcDump_Run_Unit_Tests"
+      pool:
+       vmImage: 'ubuntu-latest'
+      steps:
+      - checkout: ProcDump
       - script: |
-          make
-        displayName: "Build Procdump Centos"
+          sudo apt update
+          sudo apt install -y gdb stress-ng zlib1g-dev
+        displayName: 'Setup build environment'
+      
+      - template: templates/build.yaml
 
       - script: |
-          export REVISION=$(Build.BuildId)
-          make release
-          make rpm
-        displayName: 'Building centos package & artifacts'
+          sudo ./tests/integration/run.sh
+        displayName: 'Run unit tests'   
 
-      - task: CopyFiles@2
-        inputs:
-          SourceFolder: '$(Build.SourcesDirectory)/pkgbuild'
-          Contents: '**'
-          TargetFolder: '$(Build.ArtifactStagingDirectory)'
-        displayName: 'Copy build RPM artifacts to staging'
-      
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-          ArtifactName: 'drop'
-          publishLocation: 'Container'
+    - job: "Build_ProcDump"
+      pool:
+       vmImage: 'ubuntu-latest'
+      steps:
+      - template: templates/build.yaml
+      displayName: 'Build ProcDump'
