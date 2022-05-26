@@ -27,7 +27,7 @@ Using the same web app, let's use Procdump **1.1** to generate the core dump. Th
 
 _Please note that by default the core dump will be placed into the same directory that the target application is running in._
 
-This time the core dump file size is only about 273MB. Much better and much more manageable. To convince ourselves that the core dump still contains all the neccessary data to debug .NET Core 3.0 applications, we can try it out with dotnet-dump analyze (which is a REPL for SOS debugging):
+This time the core dump file size is only about 273MB. Much better and much more manageable. To convince ourselves that the core dump still contains all the necessary data to debug .NET Core 3.0 applications, we can try it out with dotnet-dump analyze (which is a REPL for SOS debugging):
 
 ```console
 dotnet-dump analyze TestWebApp_time_2019-12-04_11:44:03.3066
