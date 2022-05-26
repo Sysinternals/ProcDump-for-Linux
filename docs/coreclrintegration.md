@@ -8,7 +8,7 @@ With the release of Procdump 1.1, we now recognize if the target application is 
 
 To get a feel for the size difference, let's take a look at a simple example. We created and ran a new .NET Core app using the webapp template:
 
-```console
+```console 
 dotnet new webapp -o TestWebApp
 dotnet run
 ```
