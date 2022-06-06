@@ -11,6 +11,7 @@ procdump [OPTIONS...] TARGET
       -m          Trigger core dump generation when when memory commit is less than specified value (MB)
       -T          Trigger when thread count exceeds or equals specified value.
       -F          Trigger when filedescriptor count exceeds or equals specified value.
+      -G          Trigger when signal with the specified value (num) is sent (uses PTRACE and will affect performance of target process).
       -I          Polling frequency in milliseconds (default is 1000)
       -n          Number of core dumps to write before exiting (default is 1)
       -s          Consecutive seconds before dump is written (default is 10)
