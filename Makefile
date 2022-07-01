@@ -35,7 +35,7 @@ PKGBUILDROOT_CREATE_CMD = mkdir -p $(BUILDDIR)/DEBS $(BUILDDIR)/SDEBS $(BUILDDIR
 			$(BUILDDIR)/SOURCES $(BUILDDIR)/SPECS $(BUILDDIR)/BUILD $(BUILDDIR)/BUILDROOT
 
 # package details
-PKG_VERSION=1.2
+PKG_VERSION:=$(if $(VERSION),$(VERSION),0.0.0)
 
 all: clean build
 
@@ -47,23 +47,23 @@ install:
 	mkdir -p $(DESTDIR)$(MANDIR)
 	cp procdump.1 $(DESTDIR)$(MANDIR)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c
+$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
-$(OBJDIR)/%.o: $(TESTDIR)/%.c
+$(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
-$(OUT): $(OBJS)
+$(OUT): $(OBJS) | $(BINDIR)
 	$(CC) -o $@ $^ $(CCFLAGS)
 
-$(TESTOUT): $(TESTOBJS)
+$(TESTOUT): $(TESTOBJS) | $(BINDIR)
 	$(CC) -o $@ $^ $(CCFLAGS)
 
-$(OBJDIR):
-	-@mkdir -p $(OBJDIR)
+$(OBJDIR): clean
+	-mkdir -p $(OBJDIR)
 
-$(BINDIR):
-	-@mkdir -p $(BINDIR)
+$(BINDIR): clean
+	-mkdir -p $(BINDIR)
 
 .PHONY: clean
 clean:
@@ -77,7 +77,7 @@ test: build
 release: clean tarball
 
 .PHONY: tarball
-tarball:
+tarball: clean
 	$(PKGBUILDROOT_CREATE_CMD)
 	tar --exclude=./pkgbuild --exclude=./.git --transform 's,^\.,procdump-$(PKG_VERSION),' -czf $(BUILDDIR)/SOURCES/procdump-$(PKG_VERSION).tar.gz .
 	sed -e "s/@PKG_VERSION@/$(PKG_VERSION)/g" dist/procdump.spec.in > $(BUILDDIR)/SPECS/procdump.spec

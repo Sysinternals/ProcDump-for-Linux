@@ -506,13 +506,13 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         // someone wants to use gcore even for .NET Core 3.x+ processes.
         commandPipe = popen2(command, "r", &gcorePid);
         self->Config->gcorePid = gcorePid;
-        
+
         if(commandPipe == NULL){
             Log(error, "An error occurred while generating the core dump");
             Trace("WriteCoreDumpInternal: Failed to open pipe to gcore");
             exit(1);
         }
-        
+
         // read all output from gcore command
         for(i = 0; i < MAX_LINES && fgets(lineBuffer, sizeof(lineBuffer), commandPipe) != NULL; i++) {
             lineLength = strlen(lineBuffer);                                // get # of characters read
@@ -529,14 +529,27 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             }
         }
         
+        // After reading all input, wait for child process to end and get exit status for bash gcore command
+        int stat;
+        waitpid(gcorePid, &stat, 0);
+        int gcoreStatus = WEXITSTATUS(stat);
+        
         // close pipe reading from gcore
         self->Config->gcorePid = NO_PID;                // reset gcore pid so that signal handler knows we aren't dumping
-        pclose(commandPipe);
+        int pcloseStatus = pclose(commandPipe);
+
+        bool gcoreFailedMsg = false;    // in case error sneaks through the message output
 
         // check if gcore was able to generate the dump
-        if(strstr(outputBuffer[i-1], "gcore: failed") != NULL){
-            Log(error, "An error occurred while generating the core dump");
-                    
+        if(gcoreStatus != 0 || pcloseStatus != 0 || (gcoreFailedMsg = (strstr(outputBuffer[i-1], "gcore: failed") != NULL))){
+            Log(error, "An error occurred while generating the core dump:");
+            if (gcoreStatus != 0)
+                Log(error, "\tDump exit status = %d", gcoreStatus);
+            if (pcloseStatus != 0)
+                Log(error, "\tError closing pipe: %d", pcloseStatus);
+            if (gcoreFailedMsg)
+                Log(error, "\tgcore failed");
+
             // log gcore message
             for(int j = 0; j < i; j++){
                 if(outputBuffer[j] != NULL){
@@ -544,6 +557,10 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
+            if (gcoreStatus != 0)
+                exit(gcoreStatus);
+            if (pcloseStatus != 0)
+                exit(pcloseStatus);
             exit(1);
         }
 
@@ -620,6 +637,7 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         if (type[0] == 'r') {
             close(pipefd[0]);
             dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to write end of pipe
+            dup2(pipefd[1], STDERR_FILENO); // redirect stderr to write end of pipe
         } else {
             close(pipefd[1]);
             dup2(pipefd[0], STDIN_FILENO); // redirect pipe read to stdin
