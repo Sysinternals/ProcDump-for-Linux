@@ -1,0 +1,4 @@
+steps:
+- script: |
+    make
+  displayName: "Build ProcDump binaries"

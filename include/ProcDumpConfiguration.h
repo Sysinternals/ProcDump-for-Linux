@@ -35,7 +35,7 @@
 #include "Process.h"
 #include "Logging.h"
 
-#define MAX_TRIGGERS 3
+#define MAX_TRIGGERS 10
 #define NO_PID INT_MAX
 #define MAX_CMDLINE_LEN 4096+1
 #define EMPTY_PROC_NAME "null"
@@ -70,8 +70,8 @@ struct ProcDumpConfiguration {
     bool bTriggerThenSnoozeTimer;   // Detect+Trigger=>Wait N second=>[repeat]
 
     // Options
-    int CpuThreshold;               // -C
-    bool bCpuTriggerBelowValue;     // -c
+    int CpuUpperThreshold;          // -C
+    int CpuLowerThreshold;          // -c    
     int MemoryThreshold;            // -M
     bool bMemoryTriggerBelowValue;  // -m
     int ThresholdSeconds;           // -s

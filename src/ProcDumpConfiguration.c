@@ -6,7 +6,7 @@
 // The global configuration structure and utilities header
 //
 //--------------------------------------------------------------------
-
+ 
 #include "Procdump.h"
 #include "ProcDumpConfiguration.h"
 
@@ -145,13 +145,13 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->ProcessId =                   NO_PID;
     self->NumberOfDumpsCollected =      0;
     self->NumberOfDumpsToCollect =      DEFAULT_NUMBER_OF_DUMPS;
-    self->CpuThreshold =                -1;
+    self->CpuUpperThreshold =           -1;
+    self->CpuLowerThreshold =           -1;    
     self->MemoryThreshold =             -1;
     self->ThreadThreshold =             -1;
     self->FileDescriptorThreshold =     -1;
     self->SignalNumber =                -1;
     self->ThresholdSeconds =            DEFAULT_DELTA_TIME;
-    self->bCpuTriggerBelowValue =       false;
     self->bMemoryTriggerBelowValue =    false;
     self->bTimerThreshold =             false;
     self->WaitingForProcessName =       false;
@@ -246,9 +246,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 break;
 
             case 'C':
-                if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
-                    (self->CpuThreshold = atoi(optarg)) < 0 || self->CpuThreshold > MAXIMUM_CPU) {
-                    Log(error, "Invalid CPU threshold specified.");
+                if (self->CpuUpperThreshold != -1 || !IsValidNumberArg(optarg) ||
+                    (self->CpuUpperThreshold = atoi(optarg)) < 0 || self->CpuUpperThreshold > MAXIMUM_CPU) {
+                    Log(error, "Invalid CPU threshold specified1.");
                     return PrintUsage(self);
                 }
                 break;
@@ -285,12 +285,11 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 break;                
 
             case 'c':
-                if (self->CpuThreshold != -1 || !IsValidNumberArg(optarg) ||
-                    (self->CpuThreshold = atoi(optarg)) < 0 || self->CpuThreshold > MAXIMUM_CPU) {
-                    Log(error, "Invalid CPU threshold specified.");
+                if (self->CpuLowerThreshold != -1 || !IsValidNumberArg(optarg) ||
+                    (self->CpuLowerThreshold = atoi(optarg)) < 0 || self->CpuLowerThreshold > MAXIMUM_CPU) {
+                    Log(error, "Invalid CPU threshold specified2.");
                     return PrintUsage(self);
                 }
-                self->bCpuTriggerBelowValue = true;
                 break;
 
             case 'M':
@@ -381,7 +380,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // if number of dumps is set, but no thresholds, just go on timer
     if (self->NumberOfDumpsToCollect != -1 &&
         self->MemoryThreshold == -1 &&
-        self->CpuThreshold == -1 &&
+        self->CpuUpperThreshold == -1 &&
+        self->CpuLowerThreshold == -1 &&
         self->ThreadThreshold == -1 &&
         self->FileDescriptorThreshold == -1) {
             self->bTimerThreshold = true;
@@ -395,7 +395,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // 
     if(self->SignalNumber != -1) 
     {
-        if(self->CpuThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != -1)
+        if(self->CpuUpperThreshold != -1 || self->CpuLowerThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != -1)
         {
             Log(error, "Signal trigger must be the only trigger specified.");
             return PrintUsage(self);            
@@ -592,6 +592,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 {    
     int rc = 0;
     self->nThreads = 0;
+    bool tooManyTriggers = false;
 
     if((rc=sigemptyset (&sig_set)) < 0)
     {
@@ -616,48 +617,69 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     }
 
     // create threads
-    if (self->CpuThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create CpuThread.");            
-            return rc;
-        }
+    if (self->CpuUpperThreshold != -1 || self->CpuLowerThreshold != -1) {
+        if (self->nThreads < MAX_TRIGGERS) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
+                Trace("CreateTriggerThreads: failed to create CpuThread.");            
+                return rc;
+            }
+        } else
+            tooManyTriggers = true;
     }
 
-    if (self->MemoryThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create CommitThread.");            
-            return rc;
-        }
+    if (self->MemoryThreshold != -1 && !tooManyTriggers) {
+        if (self->nThreads < MAX_TRIGGERS) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
+                Trace("CreateTriggerThreads: failed to create CommitThread.");            
+                return rc;
+            }
+        } else
+            tooManyTriggers = true;
     }
 
-    if (self->ThreadThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create ThreadThread.");            
-            return rc;
-        }
+    if (self->ThreadThreshold != -1 && !tooManyTriggers) {
+        if (self->nThreads < MAX_TRIGGERS) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
+                Trace("CreateTriggerThreads: failed to create ThreadThread.");            
+                return rc;
+            }
+        } else
+            tooManyTriggers = true;
     }
 
-    if (self->FileDescriptorThreshold != -1) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
-            return rc;
-        }
+    if (self->FileDescriptorThreshold != -1 && !tooManyTriggers) {
+        if (self->nThreads < MAX_TRIGGERS) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
+                Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
+                return rc;
+            }
+        } else
+            tooManyTriggers = true;
     }
 
-    if (self->SignalNumber != -1) {
+    if (self->SignalNumber != -1 && !tooManyTriggers) {
         if ((rc = pthread_create(&sig_monitor_thread_id, NULL, SignalMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");            
             return rc;
         }
     }
 
-    if (self->bTimerThreshold) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, TimerThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create TimerThread.");
-            return rc;
-        }
+    if (self->bTimerThreshold && !tooManyTriggers) {
+        if (self->nThreads < MAX_TRIGGERS) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, TimerThread, (void *)self)) != 0) {
+                Trace("CreateTriggerThreads: failed to create TimerThread.");
+                return rc;
+            }
+        } else
+            tooManyTriggers = true;
     }
     
+    if (tooManyTriggers)
+    {
+        Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
+        return -1;
+    }
+
     if((rc = pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
     {
         Trace("CreateTriggerThreads: failed to create SignalThread.");
@@ -819,15 +841,18 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         printf("\n");
 
         // CPU
-        if (self->CpuThreshold != -1) {
-            if (self->bCpuTriggerBelowValue) {
-                printf("CPU Threshold:\t\t<%d\n", self->CpuThreshold);
-            } else {
-                printf("CPU Threshold:\t\t>=%d\n", self->CpuThreshold);
-            }
-        } else {
-            printf("CPU Threshold:\t\tn/a\n");
+        if (self->CpuLowerThreshold != -1) {
+            printf("CPU (less than) Threshold:\t\t<%d\n", self->CpuLowerThreshold);
+        } 
+        else {
+            printf("CPU (less than) Threshold:\t\tn/a\n");
         }
+        if (self->CpuUpperThreshold != -1) {
+            printf("CPU (greater than/equal) Threshold:\t\t>=%d\n", self->CpuUpperThreshold);
+        } else {
+            printf("CPU (greater than/equal) Threshold:\t\tn/a\n");
+        }
+
 
         // Memory
         if (self->MemoryThreshold != -1) {
