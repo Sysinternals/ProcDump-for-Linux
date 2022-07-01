@@ -514,7 +514,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     self->ProcessName = GetProcessName(self->ProcessId);
 
     // allocate structs for queue
-    item = (struct ConfigQueueEntry*)malloc(sizeof(item));
+    item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
     target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
     
     memcpy(target, self, sizeof(struct ProcDumpConfiguration));
@@ -573,10 +573,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     numMonitoredProcesses--;
                 }
 
-                printf("Process: %s\tPID: %d\tnQuit: %d\n", item->config->ProcessName, item->config->ProcessId, item->config->nQuit);
+                // printf("Process: %s\tPID: %d\tnQuit: %d\n", item->config->ProcessName, item->config->ProcessId, item->config->nQuit);
             }
 
-            printf("Monitored Processes: %d\t %d entries in queue\n", numMonitoredProcesses, k);
+            // printf("Monitored Processes: %d\t %d entries in queue\n", numMonitoredProcesses, k);
             
             // check to see if we are monitoring PGID target
             if (self->ProcessGroupId != NO_PID) {
@@ -823,10 +823,10 @@ char * GetProcessName(pid_t pid){
 				processName = strrchr(stringItr, '/');	// does this process include a filepath?
 				
 				if(processName != NULL){
-					return strdup(processName + 1);	// +1 to not include '/' character
+					return processName + 1;	// +1 to not include '/' character
 				}
 				else{
-					return strdup(stringItr);
+					return stringItr;
 				}
 			}
 			else{
