@@ -191,10 +191,10 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
+//    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
         // The string constant is not on the heap.
-        free(self->ProcessName);
-    }
+//        free(self->ProcessName);
+//    }
 
     free(self->CoreDumpPath);
     free(self->CoreDumpName);
@@ -221,7 +221,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // parse arguments
 	int next_option;
     int option_index = 0;
-    const char* short_options = "+pg:g:C:c:M:m:n:s:w:T:F:G:I:o:dh";
+    const char* short_options = ":p:+pg:g:C:c:M:m:n:s:w:T:F:G:I:o:dh";
     const struct option long_options[] = {
     	{ "pid",                       required_argument,  NULL,           'p' },
         { "pgid",                      required_argument,  NULL,           'g' },
@@ -249,6 +249,10 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     while ((next_option = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
         switch (next_option) {
             case 'p':
+                if (self->ProcessGroupId != NO_PID){
+                    Log(error, "Cannot specify both PID and PGID target.");
+                    return PrintUsage(self);
+                }
                 self->ProcessId = (pid_t)atoi(optarg);
                 if (!LookupProcessByPid(self)) {
                     Log(error, "Invalid PID - failed looking up process name by PID.");
@@ -257,6 +261,10 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 break;
             
             case 'g':
+                if (self->ProcessId != NO_PID){
+                    Log(error, "Cannot specify both PID and PGID target.");
+                    return PrintUsage(self);
+                }
                 self->ProcessGroupId = (pid_t)atoi(optarg);
                 if(!LookupProcessByPid(self)) {
                     Log(error, "Invalid PGID - failed looking up process name by PGID.");
@@ -509,23 +517,23 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     struct ProcDumpConfiguration * target;
     struct ConfigQueueEntry * item;
 
-    // start monitor on root process
-    self->ProcessId = self->ProcessGroupId;
-    self->ProcessName = GetProcessName(self->ProcessId);
-
-    // allocate structs for queue
-    item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-    target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
-    
-    memcpy(target, self, sizeof(struct ProcDumpConfiguration));
-    item->config = target;
-
-    // insert config into queue
-    TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-
-    // launch new monitor if we are not waiting on named process
+    // if we are not waiting on a named process start monitoring root process
     if(!self->WaitingForProcessName)
     {
+        // start monitor on root process
+        self->ProcessId = self->ProcessGroupId;
+        self->ProcessName = GetProcessName(self->ProcessId);
+
+        // allocate structs for queue
+        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+        target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+        
+        memcpy(target, self, sizeof(struct ProcDumpConfiguration));
+        item->config = target;
+
+        // insert config into queue
+        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+
         if(CreateTriggerThreads(self) != 0) {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to create trigger threads for root process.");
@@ -565,7 +573,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 k++;
                 // is the current config in a quit state?
                 if(item->config->bTerminated) { 
-                    printf("Shutting down monitors for process: %d\n", item->config->ProcessId);
+                    Log(info, "Shutting down monitors for process: %d\n", item->config->ProcessId);
                     WaitForAllMonitoringThreadsToTerminate(item->config);
 
                     // free config entry
@@ -575,12 +583,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     TAILQ_REMOVE(&configQueueHead, item, element);
                     numMonitoredProcesses--;
                 }
-
-                // printf("Process: %s\tPID: %d\tnQuit: %d\n", item->config->ProcessName, item->config->ProcessId, item->config->nQuit);
             }
 
-            // printf("Monitored Processes: %d\t %d entries in queue\n", numMonitoredProcesses, k);
-            
             // check to see if we are monitoring PGID target
             if (self->ProcessGroupId != NO_PID) {
                 // check to see if this process is in our target group
@@ -683,8 +687,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         numMonitoredProcesses++;
                     }
                 }
-
-                //free(nameForPid);
             }
         }
 
