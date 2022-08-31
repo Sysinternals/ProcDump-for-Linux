@@ -21,7 +21,6 @@ int MAXIMUM_CPU;                                                // maximum cpu u
 struct ProcDumpConfiguration g_config;                          // backbone of the program
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
 TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
-// struct ConfigQueueEntry configQueue;                            // circle queue to hold target configs
 pthread_mutex_t ptrace_mutex;
 
 //--------------------------------------------------------------------
@@ -120,9 +119,9 @@ void ExitProcDump()
 //--------------------------------------------------------------------
 void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 {
-    if (WaitForSingleObject(&g_evtConfigurationInitialized, 0) == WAIT_OBJECT_0) {
-        return; // The configuration has already been initialized
-    }
+    // if (WaitForSingleObject(&g_evtConfigurationInitialized, 0) == WAIT_OBJECT_0) {
+    //    return; // The configuration has already been initialized
+    //}
 
     MAXIMUM_CPU = 100 * (int)sysconf(_SC_NPROCESSORS_ONLN);
     HZ = sysconf(_SC_CLK_TCK);
@@ -191,14 +190,68 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-//    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
-        // The string constant is not on the heap.
-//        free(self->ProcessName);
-//    }
+    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
+        free(self->ProcessName);
+    }
 
     free(self->CoreDumpPath);
     free(self->CoreDumpName);
 }
+
+
+//--------------------------------------------------------------------
+//
+// CopyProcDumpConfiguration - deep copy of Procdump Config struct
+//
+//--------------------------------------------------------------------
+struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfiguration *self)
+{
+    struct ProcDumpConfiguration * copy = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+
+    if(copy != NULL) {
+        // Init new struct
+        InitProcDumpConfiguration(copy);
+
+        // copy target data we need from original config
+        copy->ProcessId = self->ProcessId;
+        copy->ProcessGroupId = self->ProcessGroupId;
+        copy->ProcessName = self->ProcessName == NULL ? NULL : strdup(self->ProcessName);
+
+        // copy runtime values from original config
+        copy->NumberOfDumpsCollecting = self->NumberOfDumpsCollecting;
+        copy->NumberOfDumpsCollected = self->NumberOfDumpsCollected;
+        copy->bTerminated = self->bTerminated;
+
+        // copy trigger behavior from original config
+        copy->bTriggerThenSnoozeCPU = self->bTriggerThenSnoozeCPU;
+        copy->bTriggerThenSnoozeMemory = self->bTriggerThenSnoozeMemory;
+        copy->bTriggerThenSnoozeTimer = self->bTriggerThenSnoozeTimer;
+
+        // copy options from original config
+        copy->CpuUpperThreshold = self->CpuUpperThreshold;
+        copy->CpuLowerThreshold = self->CpuLowerThreshold;
+        copy->MemoryThreshold = self->MemoryThreshold;
+        copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
+        copy->ThresholdSeconds = self->ThresholdSeconds;
+        copy->bTimerThreshold = self->bTimerThreshold;
+        copy->NumberOfDumpsToCollect = self->NumberOfDumpsToCollect;
+        copy->WaitingForProcessName = self->WaitingForProcessName;
+        copy->DiagnosticsLoggingEnabled = self->DiagnosticsLoggingEnabled;
+        copy->ThreadThreshold = self->ThreadThreshold;
+        copy->FileDescriptorThreshold = self->FileDescriptorThreshold;
+        copy->SignalNumber = self->SignalNumber;
+        copy->PollingInterval = self->PollingInterval;
+        copy->CoreDumpPath = self->CoreDumpPath == NULL ? NULL : strdup(self->CoreDumpPath);
+        copy->CoreDumpName = self->CoreDumpName == NULL ? NULL : strdup(self->CoreDumpName);
+
+        return copy;
+    }
+    else {
+        Trace("Failed to alloc memory for Procdump config copy");
+        return NULL;
+    }
+}
+
 
 //--------------------------------------------------------------------
 //
@@ -255,7 +308,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 }
                 self->ProcessId = (pid_t)atoi(optarg);
                 if (!LookupProcessByPid(self)) {
-                    Log(error, "Invalid PID - failed looking up process name by PID.");
+                    Log(error, "No process matching the specified PID can be found.");
+                    Log(error, "Try elevating the command prompt (i.e., `sudo procdump ...`)");
                     return PrintUsage(self);
                 }
                 break;
@@ -266,8 +320,9 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     return PrintUsage(self);
                 }
                 self->ProcessGroupId = (pid_t)atoi(optarg);
-                if(!LookupProcessByPid(self)) {
-                    Log(error, "Invalid PGID - failed looking up process name by PGID.");
+                if(!LookupProcessByPgid(self)) {
+                    Log(error, "No process matching the specified PGID can be found.");
+                    Log(error, "Try elevating the command prompt (i.e., `sudo procdump ...`)");
                     return PrintUsage(self);
                 }
                 break;
@@ -445,11 +500,21 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     }
 
     if(self->ProcessId != NO_PID && self->WaitingForProcessName){
-	Log(error, "Please only specify one of -p or -w");
-	return PrintUsage(self);
+        Log(error, "Please only specify one of -p or -w");
+        return PrintUsage(self);
     }
 
-    if(!self->WaitingForProcessName) {
+    if(self->ProcessId != NO_PID && self->ProcessGroupId != NO_PID){
+        Log(error, "Please only specify one of -p or -g");
+        return PrintUsage(self);
+    }
+
+    if(self->ProcessGroupId != NO_PID && self->WaitingForProcessName){
+        Log(error, "Please only specify one of -g or -w");
+        return PrintUsage(self);
+    }
+
+    if(!self->WaitingForProcessName && self->ProcessId != NO_PID) {
         self->ProcessName = GetProcessName(self->ProcessId);
     }
 
@@ -461,7 +526,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
 //--------------------------------------------------------------------
 //
-// LookupProcessByPid - Find process using PID or PGID provided.  
+// LookupProcessByPid - Find process using PID provided.  
 //
 //--------------------------------------------------------------------
 bool LookupProcessByPid(struct ProcDumpConfiguration *self)
@@ -472,14 +537,9 @@ bool LookupProcessByPid(struct ProcDumpConfiguration *self)
     if(self->ProcessId != NO_PID) {
         sprintf(statFilePath, "/proc/%d/stat", self->ProcessId);
     }
-    else {
-        sprintf(statFilePath, "/proc/%d/stat", self->ProcessGroupId);
-    }
 
     FILE *fd = fopen(statFilePath, "r");
     if (fd == NULL) {
-        Log(error, "No process matching the specified PID or PGID can be found.");
-        Log(error, "Try elevating the command prompt (i.e., `sudo procdump ...`)");
         return false;
     }
 
@@ -499,6 +559,36 @@ static int FilterForPid(const struct dirent *entry)
     return IsValidNumberArg(entry->d_name);
 }
 
+
+//--------------------------------------------------------------------
+//
+// LookupProcessByPgid - Find a running process using PGID provided.  
+//
+//--------------------------------------------------------------------
+bool LookupProcessByPgid(struct ProcDumpConfiguration *self)
+{
+    // check to see if pid is an actual process running1`
+    if(self->ProcessGroupId != NO_PID) {
+        struct dirent ** nameList;
+        int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+        
+        // evaluate all running processes
+        for (int i = 0; i < numEntries; i++) {
+            pid_t procPid = atoi(nameList[i]->d_name);
+            pid_t procPgid;
+            
+            procPgid = GetProcessPgid(procPid);
+
+            if(procPgid == self->ProcessGroupId) 
+                return true;
+        }
+    }
+
+    // if we have ran through all the running processes then supplied PGID is invalid
+    return false;
+}
+
+
 //--------------------------------------------------------------------
 //
 // MonitorProcesses - Monitor Processes for PGID members or a name match.
@@ -507,65 +597,63 @@ static int FilterForPid(const struct dirent *entry)
 void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
     if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch...", self->ProcessName);
-    if (self->ProcessGroupId != NO_PID) Log(info, "Waiting for processes of PGID '%d' to launch...", self->ProcessGroupId);
+    if (self->ProcessGroupId != NO_PID) Log(info, "Monitoring processes of PGID '%d'", self->ProcessGroupId);
 
     // allocate list of configs for process monitoring
     TAILQ_INIT(&configQueueHead);
     int rc;
     int numMonitoredProcesses = 0;
-    bool foundRootProcess = false;
-    struct ProcDumpConfiguration * target;
     struct ConfigQueueEntry * item;
 
     // if we are not waiting on a named process start monitoring root process
-    if(!self->WaitingForProcessName)
-    {
-        // start monitor on root process
-        self->ProcessId = self->ProcessGroupId;
-        self->ProcessName = GetProcessName(self->ProcessId);
-
-        // allocate structs for queue
-        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-        target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+    if(!self->WaitingForProcessName) {
         
-        memcpy(target, self, sizeof(struct ProcDumpConfiguration));
-        item->config = target;
+        self->ProcessId = self->ProcessGroupId;
 
-        // insert config into queue
-        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+        // check to see if root process is alive
+        if(LookupProcessByPid(self)) {
 
-        if(CreateTriggerThreads(self) != 0) {
-            Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to create trigger threads for root process.");
-            ExitProcDump();
-        }
+            // start monitor on root process
+            self->ProcessName = GetProcessName(self->ProcessId);
 
-        if(BeginMonitoring(self) == false) {
-            Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to start monitoring on root process.");
-            ExitProcDump();
-        }
-        else if(self->ProcessId != NO_PID) {
-            Log(info, "Starting monitor on root process %s (%d)", self->ProcessName, self->ProcessId);
-            numMonitoredProcesses++;
+            // allocate structs for queue
+            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+            item->config = CopyProcDumpConfiguration(self);
+
+            if(item->config == NULL) {
+                Log(error, INTERNAL_ERROR);
+                Trace("MonitorProcesses: failed to alloc struct for root process.");
+                ExitProcDump();
+            }
+
+            // insert config into queue
+            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+            
+            if(CreateTriggerThreads(item->config) != 0) {
+                Log(error, INTERNAL_ERROR);
+                Trace("MonitorProcesses: failed to create trigger threads for root process.");
+                ExitProcDump();
+            }
+
+            if(BeginMonitoring(item->config) == false) {
+                Log(error, INTERNAL_ERROR);
+                Trace("MonitorProcesses: failed to start monitoring on root process.");
+                ExitProcDump();
+            }
+            else if(self->ProcessId != NO_PID) {
+                Log(info, "Starting monitor on root process %s (%d)", self->ProcessName, self->ProcessId);
+                numMonitoredProcesses++;
+            }
         }
     }
 
     while ((rc = WaitForQuit(self, self->PollingInterval)) == WAIT_TIMEOUT) {
         struct dirent ** nameList;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
-
-        // flip root search flag
-        foundRootProcess = false;
         
         // evaluate all running processes
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
-
-            // is the target root process still running?
-            if(procPid == self->ProcessGroupId) {
-                foundRootProcess = true;
-            }
 
             int k = 0;
             // cleanup process configs for child processes that have exited
@@ -577,12 +665,14 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     WaitForAllMonitoringThreadsToTerminate(item->config);
 
                     // free config entry
-                    free(item->config);
+                    FreeProcDumpConfiguration(item->config);
 
                     // remove current config from list
                     TAILQ_REMOVE(&configQueueHead, item, element);
                     numMonitoredProcesses--;
                 }
+
+                
             }
 
             // check to see if we are monitoring PGID target
@@ -602,10 +692,13 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
                         // allocate for new queue entry
                         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                        target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
-                        
-                        memcpy(target, self, sizeof(struct ProcDumpConfiguration));
-                        item->config = target;
+                        item->config = CopyProcDumpConfiguration(self);
+
+                        if(item->config == NULL) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("MonitorProcesses: failed to alloc struct for process.");
+                            ExitProcDump();
+                        }
 
                         // populate fields for this target
                         item->config->ProcessId = procPid;
@@ -656,10 +749,13 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
                         // allocate for new queue entry
                         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                        target = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
-                        
-                        memcpy(target, self, sizeof(struct ProcDumpConfiguration));
-                        item->config = target;
+                        item->config = CopyProcDumpConfiguration(self);
+
+                        if(item->config == NULL) {
+                            Log(error, INTERNAL_ERROR);
+                            Trace("MonitorProcesses: failed to alloc struct for named process.");
+                            ExitProcDump();
+                        }
 
                         // populate fields for this target
                         item->config->ProcessId = procPid;
@@ -695,19 +791,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             free(nameList[i]);
         }
         free(nameList);
-
-        // if the root process is no longer present exit
-        if(!foundRootProcess && self->ProcessGroupId != NO_PID) {
-            Log(error, "Target PGID %d no longer alive", self->ProcessGroupId);
-
-            // set quit event for all child process monitoring threads
-            for(int i = 0; i < numMonitoredProcesses; i++) {
-                SetQuit(&target_config[i], 1);
-            }
-
-            // signal main to exit
-            SetQuit(&g_config, 1);
-        }
     }
 
     // cleanup monitoring queue
@@ -758,13 +841,16 @@ pid_t GetProcessPgid(pid_t pid){
         fclose(procFile);
     }
     else{
-        Log(error, "Failed to open %s.\n", procFilePath);
+        Log(error, "Failed to open %s.", procFilePath);
         return false;
     }
 
     // itaerate past process state
     savePtr = strrchr(fileBuffer, ')');
     savePtr += 2;   // iterate past ')' and ' ' in /proc/[pid]/stat
+
+    // iterate past process state
+    token = strtok_r(NULL, " ", &savePtr);
 
     // iterate past parent process ID
     token = strtok_r(NULL, " ", &savePtr);
@@ -1207,6 +1293,20 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
         return false;
     }
 
+    // we check to see from the root process monitor if there are anymore processes running of PGID
+    if (self->ProcessGroupId != NO_PID && self->ProcessId == self->ProcessGroupId) {
+
+        // check if any process are running with PGID
+        if(kill(-1 * self->ProcessGroupId, 0)) {
+            self->bTerminated = true;
+            Log(warn, "Target PGID %d has no processes active", self->ProcessGroupId);
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+    
     // Let's check to make sure the process is still alive then
     // note: kill([pid], 0) doesn't send a signal but does perform error checking
     //       therefore, if it returns 0, the process is still alive, -1 means it errored out
