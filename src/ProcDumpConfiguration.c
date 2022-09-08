@@ -10,8 +10,6 @@
 #include "Procdump.h"
 #include "ProcDumpConfiguration.h"
 
-struct Handle g_evtConfigurationInitialized = HANDLE_MANUAL_RESET_EVENT_INITIALIZER("ConfigurationInitialized");
-
 static sigset_t sig_set;
 static pthread_t sig_thread_id;
 static pthread_t sig_monitor_thread_id;
@@ -119,10 +117,6 @@ void ExitProcDump()
 //--------------------------------------------------------------------
 void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 {
-    // if (WaitForSingleObject(&g_evtConfigurationInitialized, 0) == WAIT_OBJECT_0) {
-    //    return; // The configuration has already been initialized
-    //}
-
     MAXIMUM_CPU = 100 * (int)sysconf(_SC_NPROCESSORS_ONLN);
     HZ = sysconf(_SC_CLK_TCK);
 
@@ -169,8 +163,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->PollingInterval =             MIN_POLLING_INTERVAL;
     self->CoreDumpPath =                NULL;
     self->CoreDumpName =                NULL;
-
-    SetEvent(&g_evtConfigurationInitialized.event); // We've initialized and are now re-entrant safe
+    self->nQuit =                       0;
 }
 
 
@@ -190,7 +183,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
+    if(self->WaitingForProcessName){
         free(self->ProcessName);
     }
 
@@ -260,12 +253,6 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 //--------------------------------------------------------------------
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 {
-    // Make sure config has been initialized
-    if (WaitForSingleObject(&g_evtConfigurationInitialized, 0) != WAIT_OBJECT_0) {
-        Trace("GetOptions: Configuration not initialized.");
-        return -1;
-    }
-
     if (argc < 2) {
         Trace("GetOptions: Invalid number of command line arguments.");
         return PrintUsage(self);
@@ -605,6 +592,9 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     int numMonitoredProcesses = 0;
     struct ConfigQueueEntry * item;
 
+    // create binary map to track processes we have already tracked and closed
+    bool monitoredProcessMap[GetMaximumPID()];
+
     // if we are not waiting on a named process start monitoring root process
     if(!self->WaitingForProcessName) {
         
@@ -628,6 +618,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
             // insert config into queue
             TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+            monitoredProcessMap[item->config->ProcessId] = true;
             
             if(CreateTriggerThreads(item->config) != 0) {
                 Log(error, INTERNAL_ERROR);
@@ -655,40 +646,12 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
 
-            int k = 0;
-            // cleanup process configs for child processes that have exited
-            TAILQ_FOREACH(item, &configQueueHead, element) {
-                k++;
-                // is the current config in a quit state?
-                if(item->config->bTerminated) { 
-                    Log(info, "Shutting down monitors for process: %d\n", item->config->ProcessId);
-                    WaitForAllMonitoringThreadsToTerminate(item->config);
-
-                    // free config entry
-                    FreeProcDumpConfiguration(item->config);
-
-                    // remove current config from list
-                    TAILQ_REMOVE(&configQueueHead, item, element);
-                    numMonitoredProcesses--;
-                }
-
-                
-            }
-
             // check to see if we are monitoring PGID target
             if (self->ProcessGroupId != NO_PID) {
                 // check to see if this process is in our target group
                 if(GetProcessPgid(procPid) == self->ProcessGroupId) {
-                    int j = 0;
 
-                    // check to see if we already monitoring this process
-                    TAILQ_FOREACH(item, &configQueueHead, element) {
-                        if(procPid == item->config->ProcessId) break;
-                        j++;
-                    }
-
-                    // have we found a new process?
-                    if(j == numMonitoredProcesses) {
+                    if(monitoredProcessMap[procPid] == false) {
 
                         // allocate for new queue entry
                         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
@@ -706,6 +669,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
                         // insert config into queue
                         TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+                        monitoredProcessMap[item->config->ProcessId] = true;
 
                         // launch new monitor
                         if(CreateTriggerThreads(item->config) != 0) {
@@ -736,16 +700,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
                 // check to see if process name matches target
                 if (strcmp(nameForPid, self->ProcessName) == 0) {
-                    int j = 0;
-
-                    // check to see if we already monitoring this process
-                    TAILQ_FOREACH(item, &configQueueHead, element) {
-                        if(procPid == item->config->ProcessId) break;
-                        j++;
-                    }
-
-                    // have we found a new process?
-                    if(j == numMonitoredProcesses) {
+                    
+                    if(monitoredProcessMap[procPid] == false) {
 
                         // allocate for new queue entry
                         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
@@ -759,10 +715,11 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
                         // populate fields for this target
                         item->config->ProcessId = procPid;
-                        item->config->ProcessName = nameForPid;
+                        item->config->ProcessName = strdup(nameForPid);
 
                         // insert config into queue
                         TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+                        monitoredProcessMap[item->config->ProcessId] = true;
 
                         // launch new monitor
                         if(CreateTriggerThreads(item->config) != 0) {
@@ -786,11 +743,34 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
         }
 
-        // clean up
+        // clean up namelist
         for (int i = 0; i < numEntries; i++) {
             free(nameList[i]);
         }
         free(nameList);
+
+        // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
+        TAILQ_FOREACH(item, &configQueueHead, element) {
+            
+            // is the current config in a quit state?
+            if(item->config->bTerminated || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) { 
+                Log(info, "Shutting down monitors for process: %d", item->config->ProcessId);
+                WaitForAllMonitoringThreadsToTerminate(item->config);
+
+                // free config entry
+                FreeProcDumpConfiguration(item->config);
+                free(item);
+
+                // remove current config from list
+                TAILQ_REMOVE(&configQueueHead, item, element);
+                numMonitoredProcesses--;
+            }
+        }
+
+        // do we have any active monitors anymore?
+        if(numMonitoredProcesses == 0) {
+            break;
+        }
     }
 
     // cleanup monitoring queue
@@ -1377,6 +1357,30 @@ bool CheckKernelVersion()
         Log(error, strerror(errno));
     }
     return false;
+}
+
+//--------------------------------------------------------------------
+//
+// GetMaximumPID - Read from kernel configs what the maximum PID value is
+//
+// Returns maximum PID value before processes role over or -1 upon error.
+//--------------------------------------------------------------------
+int GetMaximumPID()
+{
+    FILE * pidMaxFile;
+    int maxPIDs;
+
+    pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
+
+    if(pidMaxFile != NULL){
+        fscanf(pidMaxFile, "%d", &maxPIDs);
+        fclose(pidMaxFile);
+
+        return maxPIDs;
+    }
+    else {
+        return -1;
+    }
 }
 
 //--------------------------------------------------------------------

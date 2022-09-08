@@ -46,6 +46,8 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
+#define PID_MAX_KERNEL_CONFIG "/proc/sys/kernel/pid_max"
+
 // -------------------
 // Structs
 // -------------------
@@ -141,5 +143,6 @@ void PrintBanner();
 int PrintUsage(struct ProcDumpConfiguration *self);
 bool IsValidNumberArg(const char *arg);
 bool CheckKernelVersion();
+int GetMaximumPID();
 
 #endif // PROCDUMPCONFIGURATION_H
