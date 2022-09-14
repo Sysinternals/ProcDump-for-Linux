@@ -1282,6 +1282,10 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
             Log(warn, "Target PGID %d has no processes active", self->ProcessGroupId);
             return false;
         }
+        else if (self->ProcessId != NO_PID && kill(self->ProcessId, 0)) {
+            self->bTerminated = true;
+            return false;
+        }
         else {
             return true;
         }
