@@ -40,7 +40,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     }
     else
     {
-        Log(error, "Failed to open %s. Exiting...\n", procFilePath);
+        Log(error, "Failed to open %s. Exiting...", procFilePath);
         return false; 
 
     }
@@ -56,7 +56,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
-            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+            Log(error, "Failed to read from %s. Exiting...", procFilePath);
             fclose(procFile);
             return false;
         }
@@ -65,7 +65,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         fclose(procFile);
     }
     else{
-        Log(error, "Failed to open %s.\n", procFilePath);
+        Log(error, "Failed to open %s.", procFilePath);
         return false;
     }
     

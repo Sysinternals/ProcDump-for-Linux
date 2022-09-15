@@ -588,7 +588,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
     // allocate list of configs for process monitoring
     TAILQ_INIT(&configQueueHead);
-    int rc;
     int numMonitoredProcesses = 0;
     struct ConfigQueueEntry * item;
 
@@ -638,7 +637,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         }
     }
 
-    while ((rc = WaitForQuit(self, self->PollingInterval)) == WAIT_TIMEOUT) {
+    while (numMonitoredProcesses > 0 && !IsQuit(&g_config)) {
         struct dirent ** nameList;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
         
@@ -769,6 +768,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
         // do we have any active monitors anymore?
         if(numMonitoredProcesses == 0) {
+            Log(warn, "Target PGID %d has no processes active", self->ProcessGroupId);
             break;
         }
     }
@@ -821,7 +821,7 @@ pid_t GetProcessPgid(pid_t pid){
         fclose(procFile);
     }
     else{
-        Log(error, "Failed to open %s.", procFilePath);
+        Trace("GetProcessPgid: Cannot open %s to check PGID", procFilePath);
         return false;
     }
 
@@ -838,7 +838,7 @@ pid_t GetProcessPgid(pid_t pid){
     // grab process group ID
     token = strtok_r(NULL, " ", &savePtr);
     if(token == NULL){
-        Trace("GetProcessStat: failed to get token from proc/[pid]/stat - Process group ID.");        
+        Trace("GetProcessPgid: failed to get token from proc/[pid]/stat - Process group ID.");        
         return false;
     }
     
@@ -1273,22 +1273,10 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
         return false;
     }
 
-    // we check to see from the root process monitor if there are anymore processes running of PGID
-    if (self->ProcessGroupId != NO_PID && self->ProcessId == self->ProcessGroupId) {
-
-        // check if any process are running with PGID
-        if(kill(-1 * self->ProcessGroupId, 0)) {
-            self->bTerminated = true;
-            Log(warn, "Target PGID %d has no processes active", self->ProcessGroupId);
-            return false;
-        }
-        else if (self->ProcessId != NO_PID && kill(self->ProcessId, 0)) {
-            self->bTerminated = true;
-            return false;
-        }
-        else {
-            return true;
-        }
+    // check if any process are running with PGID
+    if(self->ProcessGroupId != NO_PID && kill(-1 * self->ProcessGroupId, 0)) {
+        self->bTerminated = true;
+        return false;
     }
     
     // Let's check to make sure the process is still alive then
