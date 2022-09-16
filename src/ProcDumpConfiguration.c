@@ -566,7 +566,7 @@ bool LookupProcessByPgid(struct ProcDumpConfiguration *self)
             
             procPgid = GetProcessPgid(procPid);
 
-            if(procPgid == self->ProcessGroupId) 
+            if(procPgid != NO_PID && procPgid == self->ProcessGroupId) 
                 return true;
         }
     }
@@ -648,7 +648,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             // check to see if we are monitoring PGID target
             if (self->ProcessGroupId != NO_PID) {
                 // check to see if this process is in our target group
-                if(GetProcessPgid(procPid) == self->ProcessGroupId) {
+                pid_t pgid = GetProcessPgid(procPid);
+                if(pgid != NO_PID && pgid == self->ProcessGroupId) {
 
                     if(monitoredProcessMap[procPid] == false) {
 
@@ -795,7 +796,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 //
 //--------------------------------------------------------------------
 pid_t GetProcessPgid(pid_t pid){
-	pid_t pgid;
+	pid_t pgid = NO_PID;
 
     char procFilePath[32];
     char fileBuffer[1024];
@@ -806,15 +807,15 @@ pid_t GetProcessPgid(pid_t pid){
 
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
-        return false;
+        return pgid;
     }
     procFile = fopen(procFilePath, "r");
     
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
-            Log(error, "Failed to read from %s. Exiting...\n", procFilePath);
+            Trace("Failed to read from %s.\n", procFilePath);
             fclose(procFile);
-            return false;
+            return pgid;
         }
         
         // close file after reading this iteration of stats
@@ -822,7 +823,7 @@ pid_t GetProcessPgid(pid_t pid){
     }
     else{
         Trace("GetProcessPgid: Cannot open %s to check PGID", procFilePath);
-        return false;
+        return pgid;
     }
 
     // itaerate past process state
@@ -839,7 +840,7 @@ pid_t GetProcessPgid(pid_t pid){
     token = strtok_r(NULL, " ", &savePtr);
     if(token == NULL){
         Trace("GetProcessPgid: failed to get token from proc/[pid]/stat - Process group ID.");        
-        return false;
+        return pgid;
     }
     
     pgid = (pid_t)strtol(token, NULL, 10);
