@@ -449,8 +449,8 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             exit(-1);
         }
     } else {
-        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%d_%s_%s",
-                    self->Config->CoreDumpPath, name, self->Config->ProcessId, desc, date) < 0) {
+        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%s_%s",
+                    self->Config->CoreDumpPath, name, desc, date) < 0) {
             Log(error, INTERNAL_ERROR);
             Trace("WriteCoreDumpInternal: failed sprintf default output file name");
             exit(-1);

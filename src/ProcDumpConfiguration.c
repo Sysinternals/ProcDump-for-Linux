@@ -592,201 +592,217 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     struct ConfigQueueEntry * item;
 
     // create binary map to track processes we have already tracked and closed
-    bool monitoredProcessMap[GetMaximumPID()];
-
-    // if we are not waiting on a named process start monitoring root process
-    if(!self->WaitingForProcessName) {
-        
-        self->ProcessId = self->ProcessGroupId;
-
-        // check to see if root process is alive
-        if(LookupProcessByPid(self)) {
-
-            // start monitor on root process
-            self->ProcessName = GetProcessName(self->ProcessId);
-
-            // allocate structs for queue
-            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-            item->config = CopyProcDumpConfiguration(self);
-
-            if(item->config == NULL) {
-                Log(error, INTERNAL_ERROR);
-                Trace("MonitorProcesses: failed to alloc struct for root process.");
-                ExitProcDump();
-            }
-
-            // insert config into queue
-            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-            monitoredProcessMap[item->config->ProcessId] = true;
-            
-            if(CreateTriggerThreads(item->config) != 0) {
-                Log(error, INTERNAL_ERROR);
-                Trace("MonitorProcesses: failed to create trigger threads for root process.");
-                ExitProcDump();
-            }
-
-            if(BeginMonitoring(item->config) == false) {
-                Log(error, INTERNAL_ERROR);
-                Trace("MonitorProcesses: failed to start monitoring on root process.");
-                ExitProcDump();
-            }
-            else if(self->ProcessId != NO_PID) {
-                Log(info, "Starting monitor on root process %s (%d)", self->ProcessName, self->ProcessId);
-                numMonitoredProcesses++;
-            }
-        }
+    int maxPid = GetMaximumPID();
+    if(maxPid < 0)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("Unable to get MAX_PID value\n");
+        return;
     }
 
-    while (numMonitoredProcesses > 0 && !IsQuit(&g_config)) {
-        struct dirent ** nameList;
-        int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
-        
-        // evaluate all running processes
-        for (int i = 0; i < numEntries; i++) {
-            pid_t procPid = atoi(nameList[i]->d_name);
+    bool monitoredProcessMap[maxPid];
 
-            // check to see if we are monitoring PGID target
-            if (self->ProcessGroupId != NO_PID) {
-                // check to see if this process is in our target group
-                pid_t pgid = GetProcessPgid(procPid);
-                if(pgid != NO_PID && pgid == self->ProcessGroupId) {
+    if(!g_config.WaitingForProcessName && g_config.ProcessGroupId == NO_PID)
+    {
+        // Monitoring single process (-p)
+        if(CreateTriggerThreads(&g_config) != 0) 
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("MonitorProcesses: failed to create trigger threads.");
+            ExitProcDump();
+        }
 
-                    if(monitoredProcessMap[procPid] == false) {
+        if(BeginMonitoring(&g_config) == false) 
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("MonitorProcesses: failed to start monitoring.");
+            ExitProcDump();
+        }
 
-                        // allocate for new queue entry
-                        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                        item->config = CopyProcDumpConfiguration(self);
+        Log(info, "Starting monitor for process %s (%d)", g_config.ProcessName, g_config.ProcessId);
+        WaitForAllMonitoringThreadsToTerminate(&g_config);
+        Log(info, "Stopping monitor for process %s (%d)", g_config.ProcessName, g_config.ProcessId);
+        WaitForSignalThreadToTerminate(&g_config);
+    }
+    else
+    {
+        do
+        {
+            // Multi process monitoring
 
-                        if(item->config == NULL) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("MonitorProcesses: failed to alloc struct for process.");
-                            ExitProcDump();
-                        }
+            // Iterate over all running processes
+            struct dirent ** nameList;
+            int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
-                        // populate fields for this target
-                        item->config->ProcessId = procPid;
-                        item->config->ProcessName = GetProcessName(procPid);
+            for (int i = 0; i < numEntries; i++)
+            {
+                pid_t procPid = atoi(nameList[i]->d_name);
 
-                        // insert config into queue
-                        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                        monitoredProcessMap[item->config->ProcessId] = true;
+                if(self->ProcessGroupId != NO_PID)
+                {
+                    // We are monitoring a process group (-g)
+                    pid_t pgid = GetProcessPgid(procPid);
+                    if(pgid != NO_PID && pgid == self->ProcessGroupId) 
+                    {
+                        if(monitoredProcessMap[procPid] == false) 
+                        {
+                            // allocate for new queue entry
+                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            item->config = CopyProcDumpConfiguration(self);
 
-                        // launch new monitor
-                        if(CreateTriggerThreads(item->config) != 0) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("main: failed to create trigger threads.");
-                            ExitProcDump();
-                        }
+                            if(item->config == NULL) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to alloc struct for process.");
+                                ExitProcDump();
+                            }
 
-                        if(BeginMonitoring(item->config) == false) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("main: failed to start monitoring.");
-                            ExitProcDump();
-                        }
-                        else {
-                            Log(info, "Starting monitor on process %s (%d)", item->config->ProcessName, item->config->ProcessId);
-                        }
-                  
-                        numMonitoredProcesses++;
+                            // populate fields for this target
+                            item->config->ProcessId = procPid;
+                            item->config->ProcessName = GetProcessName(procPid);
+
+                            // insert config into queue
+                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+                            monitoredProcessMap[item->config->ProcessId] = true;
+
+                            // launch new monitor
+                            if(CreateTriggerThreads(item->config) != 0) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to create trigger threads.");
+                                ExitProcDump();
+                            }
+
+                            if(BeginMonitoring(item->config) == false) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to start monitoring.");
+                                ExitProcDump();
+                            }
+                            else 
+                            {
+                                if(item->config->ProcessGroupId == procPid)
+                                {
+                                    Log(info, "Starting monitor for root process %s (%d)", item->config->ProcessName, item->config->ProcessId);
+                                }
+                                else
+                                {
+                                    Log(info, "Stopping monitor for process %s (%d)", item->config->ProcessName, item->config->ProcessId);
+                                }
+                            }
+                    
+                            numMonitoredProcesses++;
+                        } 
                     }
                 }
-            }
-            else if (self->WaitingForProcessName) {
+                else if(self->WaitingForProcessName)
+                {
+                    // We are monitoring for a process name (-w)
                 char *nameForPid = GetProcessName(procPid);
 
-                if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
-                    continue;
-                }
-
-                // check to see if process name matches target
-                if (strcmp(nameForPid, self->ProcessName) == 0) {
-                    
-                    if(monitoredProcessMap[procPid] == false) {
-
-                        // allocate for new queue entry
-                        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                        item->config = CopyProcDumpConfiguration(self);
-
-                        if(item->config == NULL) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("MonitorProcesses: failed to alloc struct for named process.");
-                            ExitProcDump();
-                        }
-
-                        // populate fields for this target
-                        item->config->ProcessId = procPid;
-                        item->config->ProcessName = strdup(nameForPid);
-
-                        // insert config into queue
-                        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                        monitoredProcessMap[item->config->ProcessId] = true;
-
-                        // launch new monitor
-                        if(CreateTriggerThreads(item->config) != 0) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("main: failed to create trigger threads.");
-                            ExitProcDump();
-                        }
-
-                        if(BeginMonitoring(item->config) == false) {
-                            Log(error, INTERNAL_ERROR);
-                            Trace("main: failed to start monitoring.");
-                            ExitProcDump();
-                        }
-                        else {
-                            Log(info, "Starting monitor on process %s (%d)", item->config->ProcessName, item->config->ProcessId);
-                        }
-                  
-                        numMonitoredProcesses++;
+                    if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) 
+                    {
+                        continue;
                     }
+
+                    // check to see if process name matches target
+                    if (strcmp(nameForPid, self->ProcessName) == 0) 
+                    {
+                        if(monitoredProcessMap[procPid] == false) 
+                        {
+                            // allocate for new queue entry
+                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            item->config = CopyProcDumpConfiguration(self);
+
+                            if(item->config == NULL) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to alloc struct for named process.");
+                                ExitProcDump();
+                            }
+
+                            // populate fields for this target
+                            item->config->ProcessId = procPid;
+                            item->config->ProcessName = strdup(nameForPid);
+
+                            // insert config into queue
+                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+                            monitoredProcessMap[item->config->ProcessId] = true;
+
+                            // launch new monitor
+                            if(CreateTriggerThreads(item->config) != 0) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to create trigger threads.");
+                                ExitProcDump();
+                            }
+
+                            if(BeginMonitoring(item->config) == false) 
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to start monitoring.");
+                                ExitProcDump();
+                            }
+                            else 
+                            {
+                                Log(info, "Starting monitor for process %s (%d)", item->config->ProcessName, item->config->ProcessId);
+                            }
+                    
+                            numMonitoredProcesses++;
+                        }
+                    }
+                }                
+            }
+
+            // clean up namelist
+            for (int i = 0; i < numEntries; i++) 
+            {
+                free(nameList[i]);
+            }
+            free(nameList);
+
+            // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
+            TAILQ_FOREACH(item, &configQueueHead, element) 
+            {
+                // is the current config in a quit state?
+                if(item->config->bTerminated || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) 
+                { 
+                    Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
+                    WaitForAllMonitoringThreadsToTerminate(item->config);
+
+                    // free config entry
+                    FreeProcDumpConfiguration(item->config);
+                    free(item);
+
+                    // remove current config from list
+                    TAILQ_REMOVE(&configQueueHead, item, element);
+                    numMonitoredProcesses--;
                 }
             }
+
+            // do we have any active monitors anymore?
+            if(numMonitoredProcesses == 0) 
+            {
+                break;
+            }        
+
+        } while (numMonitoredProcesses > 0 && !IsQuit(&g_config));
+        
+        // cleanup monitoring queue
+        TAILQ_FOREACH(item, &configQueueHead, element) 
+        {
+            SetQuit(item->config, 1);
+            WaitForAllMonitoringThreadsToTerminate(item->config);
+
+            // free config entry
+            free(item->config);
+
+            // remove current config from list
+            TAILQ_REMOVE(&configQueueHead, item, element);
         }
 
-        // clean up namelist
-        for (int i = 0; i < numEntries; i++) {
-            free(nameList[i]);
-        }
-        free(nameList);
-
-        // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
-        TAILQ_FOREACH(item, &configQueueHead, element) {
-            
-            // is the current config in a quit state?
-            if(item->config->bTerminated || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) { 
-                Log(info, "Shutting down monitors for process: %d", item->config->ProcessId);
-                WaitForAllMonitoringThreadsToTerminate(item->config);
-
-                // free config entry
-                FreeProcDumpConfiguration(item->config);
-                free(item);
-
-                // remove current config from list
-                TAILQ_REMOVE(&configQueueHead, item, element);
-                numMonitoredProcesses--;
-            }
-        }
-
-        // do we have any active monitors anymore?
-        if(numMonitoredProcesses == 0) {
-            Log(warn, "Target PGID %d has no processes active", self->ProcessGroupId);
-            break;
-        }
+        free(target_config);
     }
-
-    // cleanup monitoring queue
-    TAILQ_FOREACH(item, &configQueueHead, element) {
-        SetQuit(item->config, 1);
-        WaitForAllMonitoringThreadsToTerminate(item->config);
-
-        // free config entry
-        free(item->config);
-
-        // remove current config from list
-        TAILQ_REMOVE(&configQueueHead, item, element);
-    }
-
-    free(target_config);
 }
 
 //--------------------------------------------------------------------
@@ -1356,7 +1372,7 @@ bool CheckKernelVersion()
 //
 // GetMaximumPID - Read from kernel configs what the maximum PID value is
 //
-// Returns maximum PID value before processes role over or -1 upon error.
+// Returns maximum PID value before processes roll over or -1 upon error.
 //--------------------------------------------------------------------
 int GetMaximumPID()
 {

@@ -38,12 +38,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold)) ||
                     (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold)))
                 {
-                    if(config->ProcessGroupId != NO_PID) {
-                        Log(info, "PID: %d\tCommit: %ld MB", config->ProcessId, memUsage);
-                    }
-                    else {
-                        Log(info, "Commit: %ld MB", memUsage);
-                    }
+                    Log(info, "Trigger: Commit usage:%ld on process ID: %d", memUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -82,12 +77,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
             {
                 if (proc.num_threads >= config->ThreadThreshold)
                 {
-                    if(config->ProcessGroupId != NO_PID) {
-                        Log(info, "PID: %d\tThreads: %ld", config->ProcessId, proc.num_threads);
-                    }
-                    else {
-                        Log(info, "Threads: %ld", proc.num_threads);
-                    }
+                    Log(info, "Trigger: Thread count:%ld on process ID: %d", proc.num_threads, config->ProcessId);
                     rc = WriteCoreDump(writer);
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -127,12 +117,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             {
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
-                    if(config->ProcessGroupId != NO_PID) {
-                        Log(info, "PID: %d\tFile descriptors: %ld", config->ProcessId, proc.num_filedescriptors);
-                    }
-                    else {
-                        Log(info, "File descriptors: %ld", proc.num_filedescriptors);
-                    }
+                    Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
                     rc = WriteCoreDump(writer);
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -209,7 +194,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     }
 
                     // Write core dump
-                    Log(info, "Signal intercepted: %d", signum);
+                    Log(info, "Trigger: Signal:%d on process ID: %d", signum, config->ProcessId);
                     rc = WriteCoreDump(writer);
 
                     kill(config->ProcessId, SIGCONT);
@@ -279,12 +264,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 if ((config->CpuUpperThreshold != -1 && (cpuUsage >= config->CpuUpperThreshold)) ||
                     (config->CpuLowerThreshold != -1 && (cpuUsage < config->CpuLowerThreshold)))
                 {
-                    if(config->ProcessGroupId != NO_PID) {
-                        Log(info, "PID: %d\tCPU:\t%d%%", config->ProcessId, cpuUsage);
-                    }
-                    else {
-                        Log(info, "CPU:\t%d%%", cpuUsage);
-                    }
+                    Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -319,12 +299,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     {
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
-            if(config->ProcessGroupId != NO_PID) {
-                Log(info, "PID: %d\tTimed:", config->ProcessId);
-            }
-            else {
-                Log(info, "Timed:");
-            }
+            Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->bTimerThreshold, config->ProcessId);
             rc = WriteCoreDump(writer);
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {

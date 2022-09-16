@@ -33,25 +33,6 @@ int main(int argc, char *argv[])
     }
 
     // monitor for all process by pgid or matching name
-    if (g_config.WaitingForProcessName || g_config.ProcessGroupId != NO_PID) {
-        MonitorProcesses(&g_config);
-    }
-    else {
-        // start individual process monitor
-        if(CreateTriggerThreads(&g_config) != 0) {
-            Log(error, INTERNAL_ERROR);
-            Trace("main: failed to create trigger threads.");
-            ExitProcDump();
-        }
-
-        if(BeginMonitoring(&g_config) == false) {
-            Log(error, INTERNAL_ERROR);
-            Trace("main: failed to start monitoring.");
-            ExitProcDump();
-        }
-
-        WaitForAllMonitoringThreadsToTerminate(&g_config);
-        WaitForSignalThreadToTerminate(&g_config);
-    }
+    MonitorProcesses(&g_config);
     ExitProcDump();
 }
