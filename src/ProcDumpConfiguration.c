@@ -687,7 +687,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 }
                                 else
                                 {
-                                    Log(info, "Stopping monitor for process %s (%d)", item->config->ProcessName, item->config->ProcessId);
+                                    Log(info, "Starting monitor for process %s (%d)", item->config->ProcessName, item->config->ProcessId);
                                 }
                             }
                     
@@ -698,7 +698,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 else if(self->WaitingForProcessName)
                 {
                     // We are monitoring for a process name (-w)
-                char *nameForPid = GetProcessName(procPid);
+                    char *nameForPid = GetProcessName(procPid);
 
                     if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) 
                     {
