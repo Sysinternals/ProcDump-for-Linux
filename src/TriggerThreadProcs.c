@@ -320,7 +320,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
             if(config->ProcessGroupId != NO_PID) {
-                Log(info, "PID: %d\tTimed:");
+                Log(info, "PID: %d\tTimed:", config->ProcessId);
             }
             else {
                 Log(info, "Timed:");
