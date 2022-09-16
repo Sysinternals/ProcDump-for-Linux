@@ -56,6 +56,7 @@ Usage: procdump [OPTIONS...] TARGET
       -d          Writes diagnostic logs to syslog
    TARGET must be exactly one of these:
       -p          pid of the process
+      -g          pgid of the process group
       -w          Name of the process executable
 ```
 ### Examples

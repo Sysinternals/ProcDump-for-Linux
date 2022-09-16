@@ -1,5 +1,5 @@
 .\" Manpage for procdump.
-.TH man 8 "04/03/2020" "1.2" "procdump manpage"
+.TH man 8 "04/03/2020" "1.3" "procdump manpage"
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
@@ -18,7 +18,8 @@ procdump [OPTIONS...] TARGET
       -o          Path and/or filename prefix where the core dump is written to
       -d          Writes diagnostic logs to syslog
   TARGET must be exactly one of these:
-      -p   pid of the process
-      -w   Name of the process executable
+      -p          pid of the process
+      -g          pgid of the process group
+      -w          Name of the process executable
 .SH DESCRIPTION
 procdump is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
