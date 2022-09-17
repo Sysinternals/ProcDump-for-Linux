@@ -642,7 +642,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 {
                     // We are monitoring a process group (-g)
                     pid_t pgid = GetProcessPgid(procPid);
-                    if(pgid != NO_PID && pgid == self->ProcessGroupId) 
+                    if(pgid != NO_PID && pgid == self->ProcessGroupId)
                     {
                         if(monitoredProcessMap[procPid] == false) 
                         {
@@ -699,11 +699,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 {
                     // We are monitoring for a process name (-w)
                     char *nameForPid = GetProcessName(procPid);
-
-                    if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) 
-                    {
-                        continue;
-                    }
 
                     // check to see if process name matches target
                     if (strcmp(nameForPid, self->ProcessName) == 0) 
@@ -780,13 +775,19 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 }
             }
 
-            // do we have any active monitors anymore?
-            if(numMonitoredProcesses == 0) 
+            // Exit if we are monitoring PGID and there are no more processes to monitor.
+            // If we are monitoring for processes based on a process name we keep monitoring
+            if(numMonitoredProcesses == 0 && self->WaitingForProcessName == false)
             {
                 break;
-            }        
+            }
 
-        } while (numMonitoredProcesses > 0 && !IsQuit(&g_config));
+            // Wait for the polling interval the user specified before we check again
+            sleep(g_config.PollingInterval/1000);
+
+            // We keep iterating while we have processes to monitor (in case of -g <pgid>) or if process name has
+            // been specified (-w) in which case we keep monitoring until CTRL-C or finally if we have a quit signal. 
+        } while (numMonitoredProcesses >= 0 && !IsQuit(&g_config) && self->WaitingForProcessName == true);
         
         // cleanup monitoring queue
         TAILQ_FOREACH(item, &configQueueHead, element) 
@@ -919,10 +920,10 @@ char * GetProcessName(pid_t pid){
 				processName = strrchr(stringItr, '/');	// does this process include a filepath?
 				
 				if(processName != NULL){
-					return processName + 1;	// +1 to not include '/' character
+					return strdup(processName + 1);	// +1 to not include '/' character
 				}
 				else{
-					return stringItr;
+					return strdup(stringItr);
 				}
 			}
 			else{

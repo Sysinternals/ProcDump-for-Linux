@@ -299,7 +299,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     {
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
-            Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->bTimerThreshold, config->ProcessId);
+            Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->PollingInterval/1000, config->ProcessId);
             rc = WriteCoreDump(writer);
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
