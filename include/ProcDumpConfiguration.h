@@ -37,7 +37,6 @@
 #include "Logging.h"
 
 #define MAX_TRIGGERS 10
-#define MAX_TARGET_PROCESSES 256
 #define NO_PID INT_MAX
 #define MAX_CMDLINE_LEN 4096+1
 #define EMPTY_PROC_NAME "(null)"

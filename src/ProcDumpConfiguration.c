@@ -39,7 +39,7 @@ void *SignalThread(void *input)
     switch (sig_caught)
     {
     case SIGINT:
-        SetQuit(config, 1);
+        if(!IsQuit(config)) SetQuit(config, 1);
 
         // signal global config as well if we are monitoring pgid & process names
         if(config->ProcessGroupId != NO_PID || config->WaitingForProcessName) {
@@ -307,6 +307,10 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     return PrintUsage(self);
                 }
                 self->ProcessGroupId = (pid_t)atoi(optarg);
+                if(self->ProcessGroupId <= 0) {
+                    Log(error, "Invalid Process Group ID Specified");
+                    return PrintUsage(self);
+                }
                 if(!LookupProcessByPgid(self)) {
                     Log(error, "No process matching the specified PGID can be found.");
                     Log(error, "Try elevating the command prompt (i.e., `sudo procdump ...`)");
@@ -757,7 +761,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             free(nameList);
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
-            TAILQ_FOREACH(item, &configQueueHead, element) 
+            TAILQ_FOREACH(item, &configQueueHead, element)
             {
                 // is the current config in a quit state?
                 if(item->config->bTerminated || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) 
@@ -783,11 +787,11 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // Wait for the polling interval the user specified before we check again
-            sleep(g_config.PollingInterval/1000);
+            sleep(g_config.PollingInterval / 1000);
 
-            // We keep iterating while we have processes to monitor (in case of -g <pgid>) or if process name has
-            // been specified (-w) in which case we keep monitoring until CTRL-C or finally if we have a quit signal. 
-        } while (numMonitoredProcesses >= 0 && !IsQuit(&g_config) && self->WaitingForProcessName == true);
+        // We keep iterating while we have processes to monitor (in case of -g <pgid>) or if process name has
+        // been specified (-w) in which case we keep monitoring until CTRL-C or finally if we have a quit signal. 
+        } while ((numMonitoredProcesses >= 0 || self->WaitingForProcessName == true) && !IsQuit(&g_config));
         
         // cleanup monitoring queue
         TAILQ_FOREACH(item, &configQueueHead, element) 
