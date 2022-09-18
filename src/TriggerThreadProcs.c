@@ -9,7 +9,6 @@
 
 #include "TriggerThreadProcs.h"
 extern long HZ;                                // clock ticks per second
-extern pthread_mutex_t ptrace_mutex;
 
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
@@ -178,7 +177,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     break;
                 }
 
-                pthread_mutex_lock(&ptrace_mutex);
+                pthread_mutex_lock(&config->ptrace_mutex);
 
                 // We are now in a signal-stop state
 
@@ -189,7 +188,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if(ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP) == -1)
                     {
                         Log(error, "Unable to PTRACE (DETACH) the target process");                        
-                        pthread_mutex_unlock(&ptrace_mutex);
+                        pthread_mutex_unlock(&config->ptrace_mutex);
                         break; 
                     }
 
@@ -203,7 +202,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     {
                         // If we are over the max number of dumps to collect, send the original signal we intercepted.
                         kill(config->ProcessId, signum);    
-                        pthread_mutex_unlock(&ptrace_mutex);                    
+                        pthread_mutex_unlock(&config->ptrace_mutex);                    
                         break;
                     }
 
@@ -213,17 +212,17 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
                     {
                         Log(error, "Unable to PTRACE the target process");
-                        pthread_mutex_unlock(&ptrace_mutex);
+                        pthread_mutex_unlock(&config->ptrace_mutex);
                         break;
                     }
 
-                    pthread_mutex_unlock(&ptrace_mutex);
+                    pthread_mutex_unlock(&config->ptrace_mutex);
                     continue;
                 }
 
                 // Resume execution of the target process
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
-                pthread_mutex_unlock(&ptrace_mutex);
+                pthread_mutex_unlock(&config->ptrace_mutex);
             }        
         }
     }

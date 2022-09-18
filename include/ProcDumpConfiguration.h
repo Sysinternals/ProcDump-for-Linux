@@ -51,6 +51,22 @@
 // Structs
 // -------------------
 
+enum TriggerType
+{
+    Processor,
+    Commit,
+    Timer,
+    Signal,
+    ThreadCount,
+    FileDescriptorCount
+};
+
+struct TriggerThread
+{
+    pthread_t thread;
+    enum TriggerType trigger; 
+};
+
 struct ProcDumpConfiguration {
     // Process and System info
     pid_t ProcessId;            // -p
@@ -93,8 +109,9 @@ struct ProcDumpConfiguration {
     // multithreading
     // set max number of concurrent dumps on init (default to 1)
     int nThreads;
-    pthread_t Threads[MAX_TRIGGERS];
+    struct TriggerThread Threads[MAX_TRIGGERS];
     struct Handle semAvailableDumpSlots; 
+    pthread_mutex_t ptrace_mutex;
 
     // Events
     // use these to mimic WaitForSingleObject/MultibleObjects from WinApi

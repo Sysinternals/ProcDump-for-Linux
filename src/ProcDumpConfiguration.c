@@ -12,14 +12,12 @@
 
 static sigset_t sig_set;
 static pthread_t sig_thread_id;
-static pthread_t sig_monitor_thread_id;
 extern pthread_mutex_t LoggerLock;
 long HZ;                                                        // clock ticks per second
 int MAXIMUM_CPU;                                                // maximum cpu usage percentage (# cores * 100)
 struct ProcDumpConfiguration g_config;                          // backbone of the program
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
 TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
-pthread_mutex_t ptrace_mutex;
 pthread_mutex_t queue_mutex;
 
 //--------------------------------------------------------------------
@@ -60,13 +58,19 @@ void *SignalThread(void *input)
             // break it out of waitpid call. 
             if(item->config->SignalNumber != -1)
             {
-                pthread_mutex_lock(&ptrace_mutex);
-                ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
-                pthread_mutex_unlock(&ptrace_mutex);
+                for(int i=0; i<item->config->nThreads; i++)
+                {
+                    if(item->config->Threads[i].trigger == Signal)
+                    {
+                        pthread_mutex_lock(&item->config->ptrace_mutex);
+                        ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
+                        pthread_mutex_unlock(&item->config->ptrace_mutex);
 
-                if ((rc = pthread_cancel(sig_monitor_thread_id)) != 0) {
-                    Log(error, "An error occurred while canceling SignalMonitorThread.\n");
-                    exit(-1);
+                        if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
+                            Log(error, "An error occurred while canceling SignalMonitorThread.\n");
+                            exit(-1);
+                        }
+                    }
                 }
             }
         }
@@ -99,7 +103,6 @@ void InitProcDump()
     }
     InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
-    pthread_mutex_init(&ptrace_mutex, NULL);
     pthread_mutex_init(&queue_mutex, NULL); 
 }
 
@@ -126,6 +129,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     HZ = sysconf(_SC_CLK_TCK);
 
     sysinfo(&(self->SystemInfo));
+
+    pthread_mutex_init(&self->ptrace_mutex, NULL);
 
     InitNamedEvent(&(self->evtCtrlHandlerCleanupComplete.event), true, false, "CtrlHandlerCleanupComplete");
     self->evtCtrlHandlerCleanupComplete.type = EVENT;
@@ -186,6 +191,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     DestroyEvent(&(self->evtQuit.event));
     DestroyEvent(&(self->evtStartMonitoring.event));
 
+    pthread_mutex_destroy(&self->ptrace_mutex);
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
     if(self->WaitingForProcessName){
@@ -1073,57 +1079,78 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     // create threads
     if (self->CpuUpperThreshold != -1 || self->CpuLowerThreshold != -1) {
         if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CpuMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create CpuThread.");
                 return rc;
             }
+
+            self->Threads[self->nThreads].trigger = Processor;
+            self->nThreads++;
+
         } else
             tooManyTriggers = true;
     }
 
     if (self->MemoryThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CommitMonitoringThread, (void *)self)) != 0) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CommitMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create CommitThread.");            
                 return rc;
             }
+
+            self->Threads[self->nThreads].trigger = Commit;
+            self->nThreads++;
+
         } else
             tooManyTriggers = true;
     }
 
     if (self->ThreadThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create ThreadThread.");            
                 return rc;
             }
+
+            self->Threads[self->nThreads].trigger = ThreadCount;
+            self->nThreads++;
+
         } else
             tooManyTriggers = true;
     }
 
     if (self->FileDescriptorThreshold != -1 && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");            
                 return rc;
             }
+
+            self->Threads[self->nThreads].trigger = FileDescriptorCount;
+            self->nThreads++;
         } else
             tooManyTriggers = true;
     }
 
     if (self->SignalNumber != -1 && !tooManyTriggers) {
-        if ((rc = pthread_create(&sig_monitor_thread_id, NULL, SignalMonitoringThread, (void *)self)) != 0) {
+        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, SignalMonitoringThread, (void *)self)) != 0) {
             Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");            
             return rc;
         }
+
+        self->Threads[self->nThreads].trigger = Signal;
+        self->nThreads++;
     }
 
     if (self->bTimerThreshold && !tooManyTriggers) {
         if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, TimerThread, (void *)self)) != 0) {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, TimerThread, (void *)self)) != 0) {
                 Trace("CreateTriggerThreads: failed to create TimerThread.");
                 return rc;
             }
+
+            self->Threads[self->nThreads].trigger = Timer;
+            self->nThreads++;
         } else
             tooManyTriggers = true;
     }
@@ -1208,21 +1235,12 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 int WaitForAllMonitoringThreadsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
-    if(self->SignalNumber != -1)
-    {
-        if ((rc = pthread_join(sig_monitor_thread_id, NULL)) != 0) {
-            Log(error, "An error occurred while joining SignalMonitorThread.\n");
+
+    // Wait for the other monitoring threads
+    for (int i = 0; i < self->nThreads; i++) {
+        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
+            Log(error, "An error occurred while joining threads\n");
             exit(-1);
-        }
-    }
-    else
-    {
-        // Wait for the other monitoring threads
-        for (int i = 0; i < self->nThreads; i++) {
-            if ((rc = pthread_join(self->Threads[i], NULL)) != 0) {
-                Log(error, "An error occurred while joining threads\n");
-                exit(-1);
-            }
         }
     }
 
