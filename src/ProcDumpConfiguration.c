@@ -20,6 +20,7 @@ struct ProcDumpConfiguration g_config;                          // backbone of t
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
 TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
 pthread_mutex_t ptrace_mutex;
+pthread_mutex_t queue_mutex;
 
 //--------------------------------------------------------------------
 //
@@ -28,8 +29,8 @@ pthread_mutex_t ptrace_mutex;
 //--------------------------------------------------------------------
 void *SignalThread(void *input)
 {
-    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)input;
     int sig_caught, rc;
+    struct ConfigQueueEntry * item;
 
     if ((rc = sigwait(&sig_set, &sig_caught)) != 0) {
         Log(error, "Failed to wait on signal");
@@ -39,40 +40,43 @@ void *SignalThread(void *input)
     switch (sig_caught)
     {
     case SIGINT:
-        if(!IsQuit(config)) SetQuit(config, 1);
-
-        // signal global config as well if we are monitoring pgid & process names
-        if(config->ProcessGroupId != NO_PID || config->WaitingForProcessName) {
-            SetQuit(&g_config, 1);
-        }
-
-        if(config->gcorePid != NO_PID) {
-            Log(info, "Shutting down gcore");
-            if((rc = kill(-config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
-                Log(error, "Failed to shutdown gcore.");
-            }
-        }
-
-        // Need to make sure we detach from ptrace (if not attached it will silently fail)
-        // To avoid situations where we have intercepted a signal and CTRL-C is hit, we synchronize
-        // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
-        // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
-        // break it out of waitpid call. 
-        if(config->SignalNumber != -1)
+        // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
+        pthread_mutex_lock(&queue_mutex);
+        TAILQ_FOREACH(item, &configQueueHead, element) 
         {
-            pthread_mutex_lock(&ptrace_mutex);
-            ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
-            pthread_mutex_unlock(&ptrace_mutex);
+            if(!IsQuit(item->config)) SetQuit(item->config, 1);
 
-            if ((rc = pthread_cancel(sig_monitor_thread_id)) != 0) {
-                Log(error, "An error occurred while canceling SignalMonitorThread.\n");
-                exit(-1);
+            if(item->config->gcorePid != NO_PID) {
+                Log(info, "Shutting down gcore");
+                if((rc = kill(-item->config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
+                    Log(error, "Failed to shutdown gcore.");
+                }
+            }
+
+            // Need to make sure we detach from ptrace (if not attached it will silently fail)
+            // To avoid situations where we have intercepted a signal and CTRL-C is hit, we synchronize
+            // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
+            // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
+            // break it out of waitpid call. 
+            if(item->config->SignalNumber != -1)
+            {
+                pthread_mutex_lock(&ptrace_mutex);
+                ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
+                pthread_mutex_unlock(&ptrace_mutex);
+
+                if ((rc = pthread_cancel(sig_monitor_thread_id)) != 0) {
+                    Log(error, "An error occurred while canceling SignalMonitorThread.\n");
+                    exit(-1);
+                }
             }
         }
 
         Log(info, "Quit");
+        SetQuit(&g_config, 1);                  // Make sure to signal the global config
+        pthread_mutex_unlock(&queue_mutex);
         break;
-    default:
+        
+        default:
         fprintf (stderr, "\nUnexpected signal %d\n", sig_caught);
         break;
     }
@@ -96,6 +100,7 @@ void InitProcDump()
     InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
     pthread_mutex_init(&ptrace_mutex, NULL);
+    pthread_mutex_init(&queue_mutex, NULL); 
 }
 
 //--------------------------------------------------------------------
@@ -582,7 +587,12 @@ bool LookupProcessByPgid(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
-// MonitorProcesses - Monitor Processes for PGID members or a name match.
+// MonitorProcesses 
+// MonitorProcess is the starting point of where the monitors get 
+// created. It uses a list to store all the monitors that are active.
+// All monitors must go on this list as there are other places (for 
+// example, SignalThread) that relies on all active monitors to be part
+// of the list. Any access to this list must be protected by queue_mutex.
 //
 //--------------------------------------------------------------------
 void MonitorProcesses(struct ProcDumpConfiguration *self)
@@ -606,9 +616,35 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
     bool monitoredProcessMap[maxPid];
 
+    // Create a signal handler thread where we handle shutdown as a result of SIGINT.
+    // Note: We only create ONE per instance of procdump rather than per monitor. 
+    if((pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
+    {
+        Log(error, INTERNAL_ERROR);        
+        Trace("CreateTriggerThreads: failed to create SignalThread.");
+        ExitProcDump();
+    }
+
+
     if(!g_config.WaitingForProcessName && g_config.ProcessGroupId == NO_PID)
     {
         // Monitoring single process (-p)
+        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+        item->config = CopyProcDumpConfiguration(self);
+
+        if(item->config == NULL) 
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("MonitorProcesses: failed to alloc struct for process.");
+            ExitProcDump();
+        }
+
+        // insert config into queue
+        pthread_mutex_lock(&queue_mutex);
+        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
+        monitoredProcessMap[item->config->ProcessId] = true;
+        pthread_mutex_unlock(&queue_mutex);
+
         if(CreateTriggerThreads(&g_config) != 0) 
         {
             Log(error, INTERNAL_ERROR);
@@ -627,6 +663,13 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         WaitForAllMonitoringThreadsToTerminate(&g_config);
         Log(info, "Stopping monitor for process %s (%d)", g_config.ProcessName, g_config.ProcessId);
         WaitForSignalThreadToTerminate(&g_config);
+
+        pthread_mutex_lock(&queue_mutex);
+        TAILQ_REMOVE(&configQueueHead, item, element);
+        monitoredProcessMap[item->config->ProcessId] = false;
+        pthread_mutex_unlock(&queue_mutex);        
+        FreeProcDumpConfiguration(item->config);
+        free(item);
     }
     else
     {
@@ -666,8 +709,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             item->config->ProcessName = GetProcessName(procPid);
 
                             // insert config into queue
+                            pthread_mutex_lock(&queue_mutex);
                             TAILQ_INSERT_HEAD(&configQueueHead, item, element);
                             monitoredProcessMap[item->config->ProcessId] = true;
+                            pthread_mutex_unlock(&queue_mutex);                            
 
                             // launch new monitor
                             if(CreateTriggerThreads(item->config) != 0) 
@@ -725,8 +770,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             item->config->ProcessName = strdup(nameForPid);
 
                             // insert config into queue
+                            pthread_mutex_lock(&queue_mutex);
                             TAILQ_INSERT_HEAD(&configQueueHead, item, element);
                             monitoredProcessMap[item->config->ProcessId] = true;
+                            pthread_mutex_unlock(&queue_mutex);
 
                             // launch new monitor
                             if(CreateTriggerThreads(item->config) != 0) 
@@ -761,6 +808,27 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             free(nameList);
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
+            pthread_mutex_lock(&queue_mutex);
+
+            // TALQ_FOREACH does not support changing the list while iterating. 
+            // We use a seperate delete list instead. 
+            int count = 0; 
+            TAILQ_FOREACH(item, &configQueueHead, element)
+            {
+                count++; 
+            }
+
+            struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
+            if(deleteList == NULL)
+            {
+                Log(error, INTERNAL_ERROR);
+                Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
+                ExitProcDump();
+            }
+
+            count = 0;
+
+            // Iterate over the queue and store the items to delete
             TAILQ_FOREACH(item, &configQueueHead, element)
             {
                 // is the current config in a quit state?
@@ -769,15 +837,22 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
                     WaitForAllMonitoringThreadsToTerminate(item->config);
 
-                    // free config entry
-                    FreeProcDumpConfiguration(item->config);
-                    free(item);
+                    deleteList[count++] = item;
 
-                    // remove current config from list
-                    TAILQ_REMOVE(&configQueueHead, item, element);
                     numMonitoredProcesses--;
                 }
             }
+
+            // Iterate over the delete list and actually delete the items from the queue
+            for(int i=0; i<count; i++)
+            {
+                // free config entry
+                FreeProcDumpConfiguration(deleteList[i]->config);
+                TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
+                free(deleteList[i]);
+            }
+            free(deleteList);
+            pthread_mutex_unlock(&queue_mutex);
 
             // Exit if we are monitoring PGID and there are no more processes to monitor.
             // If we are monitoring for processes based on a process name we keep monitoring
@@ -794,19 +869,44 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         } while ((numMonitoredProcesses >= 0 || self->WaitingForProcessName == true) && !IsQuit(&g_config));
         
         // cleanup monitoring queue
+        pthread_mutex_lock(&queue_mutex);
+        int count = 0; 
+        TAILQ_FOREACH(item, &configQueueHead, element)
+        {
+            count++; 
+        }        
+
+        struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
+        if(deleteList == NULL)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
+            ExitProcDump();
+        }
+
+        count = 0;
+
         TAILQ_FOREACH(item, &configQueueHead, element) 
         {
             SetQuit(item->config, 1);
             WaitForAllMonitoringThreadsToTerminate(item->config);
 
-            // free config entry
-            free(item->config);
-
-            // remove current config from list
-            TAILQ_REMOVE(&configQueueHead, item, element);
+            deleteList[count++] = item;
         }
 
+        // Iterate over the delete list and actually delete the items from the queue
+        for(int i=0; i<count; i++)
+        {
+            // free config entry
+            FreeProcDumpConfiguration(deleteList[i]->config);
+            TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
+            free(deleteList[i]);            
+        }
+        free(deleteList);
+        pthread_mutex_unlock(&queue_mutex);
+
         free(target_config);
+        
     }
 }
 
@@ -834,7 +934,6 @@ pid_t GetProcessPgid(pid_t pid){
     
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
-            Trace("Failed to read from %s.\n", procFilePath);
             fclose(procFile);
             return pgid;
         }
@@ -899,7 +998,6 @@ char * GetProcessName(pid_t pid){
                 Log(debug, "Empty cmdline.\n");
             }
             else{
-                Log(debug, "Failed to read from %s.\n", procFilePath);
 			}
 			return EMPTY_PROC_NAME;
 		}
@@ -936,7 +1034,6 @@ char * GetProcessName(pid_t pid){
 		}
 	}
 
-	Log(debug, "Failed to extract process name from /proc/PID/cmdline");
 	return EMPTY_PROC_NAME;
 }
 
@@ -977,7 +1074,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     if (self->CpuUpperThreshold != -1 || self->CpuLowerThreshold != -1) {
         if (self->nThreads < MAX_TRIGGERS) {
             if ((rc = pthread_create(&self->Threads[self->nThreads++], NULL, CpuMonitoringThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create CpuThread.");            
+                Trace("CreateTriggerThreads: failed to create CpuThread.");
                 return rc;
             }
         } else
@@ -1035,12 +1132,6 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     {
         Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
         return -1;
-    }
-
-    if((rc = pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
-    {
-        Trace("CreateTriggerThreads: failed to create SignalThread.");
-        return rc;
     }
 
     return 0;
