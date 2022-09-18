@@ -620,7 +620,13 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         return;
     }
 
-    bool monitoredProcessMap[maxPid];
+    struct MonitoredProcessMapEntry* monitoredProcessMap = (struct MonitoredProcessMapEntry*) calloc(maxPid, sizeof(struct MonitoredProcessMapEntry));
+    if(!monitoredProcessMap)
+    {
+        Log(error, INTERNAL_ERROR);        
+        Trace("CreateTriggerThreads: failed to allocate memory for monitorProcessMap.");
+        ExitProcDump();
+    }
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
     // Note: We only create ONE per instance of procdump rather than per monitor. 
@@ -628,6 +634,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     {
         Log(error, INTERNAL_ERROR);        
         Trace("CreateTriggerThreads: failed to create SignalThread.");
+        free(monitoredProcessMap);
         ExitProcDump();
     }
 
@@ -642,19 +649,21 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to alloc struct for process.");
+            free(monitoredProcessMap);
             ExitProcDump();
         }
 
         // insert config into queue
         pthread_mutex_lock(&queue_mutex);
         TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId] = true;
+        monitoredProcessMap[item->config->ProcessId].active = true;
         pthread_mutex_unlock(&queue_mutex);
 
         if(CreateTriggerThreads(&g_config) != 0) 
         {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to create trigger threads.");
+            free(monitoredProcessMap);
             ExitProcDump();
         }
 
@@ -662,6 +671,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to start monitoring.");
+            free(monitoredProcessMap);
             ExitProcDump();
         }
 
@@ -672,7 +682,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
         pthread_mutex_lock(&queue_mutex);
         TAILQ_REMOVE(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId] = false;
+        monitoredProcessMap[item->config->ProcessId].active = false;
         pthread_mutex_unlock(&queue_mutex);        
         FreeProcDumpConfiguration(item->config);
         free(item);
@@ -697,7 +707,11 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     pid_t pgid = GetProcessPgid(procPid);
                     if(pgid != NO_PID && pgid == self->ProcessGroupId)
                     {
-                        if(monitoredProcessMap[procPid] == false) 
+                        struct ProcessStat procStat; 
+                        bool ret = GetProcessStat(procPid, &procStat);
+
+                        // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
+                        if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
@@ -707,6 +721,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for process.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
 
@@ -717,7 +732,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             // insert config into queue
                             pthread_mutex_lock(&queue_mutex);
                             TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId] = true;
+                            monitoredProcessMap[item->config->ProcessId].active = true;
+                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
                             pthread_mutex_unlock(&queue_mutex);                            
 
                             // launch new monitor
@@ -725,6 +741,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to create trigger threads.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
 
@@ -732,6 +749,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to start monitoring.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
                             else 
@@ -758,16 +776,21 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                     // check to see if process name matches target
                     if (strcmp(nameForPid, self->ProcessName) == 0) 
                     {
-                        if(monitoredProcessMap[procPid] == false) 
+                        struct ProcessStat procStat; 
+                        bool ret = GetProcessStat(procPid, &procStat);
+
+                        // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
+                        if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
                             item->config = CopyProcDumpConfiguration(self);
 
-                            if(item->config == NULL) 
+                            if(item->config == NULL)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for named process.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
 
@@ -778,7 +801,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             // insert config into queue
                             pthread_mutex_lock(&queue_mutex);
                             TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId] = true;
+                            monitoredProcessMap[item->config->ProcessId].active = true;
+                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
                             pthread_mutex_unlock(&queue_mutex);
 
                             // launch new monitor
@@ -786,6 +810,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to create trigger threads.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
 
@@ -793,6 +818,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to start monitoring.");
+                                free(monitoredProcessMap);
                                 ExitProcDump();
                             }
                             else 
@@ -887,6 +913,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
+            free(monitoredProcessMap);
             ExitProcDump();
         }
 

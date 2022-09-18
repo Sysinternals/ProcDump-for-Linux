@@ -67,6 +67,12 @@ struct TriggerThread
     enum TriggerType trigger; 
 };
 
+struct MonitoredProcessMapEntry
+{
+    bool active;
+    long long starttime; 
+};
+
 struct ProcDumpConfiguration {
     // Process and System info
     pid_t ProcessId;            // -p
