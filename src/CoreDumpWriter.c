@@ -557,11 +557,13 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            if (gcoreStatus != 0)
-                exit(gcoreStatus);
-            if (pcloseStatus != 0)
-                exit(pcloseStatus);
-            exit(1);
+            if(self->Config->ProcessGroupId == NO_PID && !self->Config->WaitingForProcessName) {
+                if (gcoreStatus != 0)
+                    exit(gcoreStatus);
+                if (pcloseStatus != 0)
+                    exit(pcloseStatus);
+                exit(1);
+            }
         }
 
         for(int j = 0; j < i; j++) {
