@@ -37,8 +37,12 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold)) ||
                     (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold)))
                 {
-                    Log(info, "Trigger: Commit usage:%ld on process ID: %d", memUsage, config->ProcessId);
+                    Log(info, "Trigger: Commit usage:%ldMB on process ID: %d", memUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
+                    if(rc != 0)
+                    {
+                        SetQuit(config, 1);
+                    }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -78,6 +82,10 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                 {
                     Log(info, "Trigger: Thread count:%ld on process ID: %d", proc.num_threads, config->ProcessId);
                     rc = WriteCoreDump(writer);
+                    if(rc != 0)
+                    {
+                        SetQuit(config, 1);
+                    }                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -118,6 +126,10 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                 {
                     Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
                     rc = WriteCoreDump(writer);
+                    if(rc != 0)
+                    {
+                        SetQuit(config, 1);
+                    }                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -155,6 +167,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int wstatus;
     int signum=-1;
     int rc = 0;
+    int dumpStatus = 0;
     struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config); 
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
@@ -194,7 +207,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
                     // Write core dump
                     Log(info, "Trigger: Signal:%d on process ID: %d", signum, config->ProcessId);
-                    rc = WriteCoreDump(writer);
+                    dumpStatus = WriteCoreDump(writer);
+                    if(dumpStatus != 0)
+                    {
+                        SetQuit(config, 1);
+                    }                    
 
                     kill(config->ProcessId, SIGCONT);
 
@@ -223,6 +240,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 // Resume execution of the target process
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                 pthread_mutex_unlock(&config->ptrace_mutex);
+
+                if(dumpStatus != 0)
+                {
+                    break;
+                }                    
             }        
         }
     }
@@ -265,6 +287,10 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 {
                     Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
+                    if(rc != 0)
+                    {
+                        SetQuit(config, 1);
+                    }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -300,6 +326,10 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         {
             Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->PollingInterval/1000, config->ProcessId);
             rc = WriteCoreDump(writer);
+            if(rc != 0)
+            {
+                SetQuit(config, 1);
+            }
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
                 break;

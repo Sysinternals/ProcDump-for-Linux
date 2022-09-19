@@ -863,8 +863,11 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             // Iterate over the queue and store the items to delete
             TAILQ_FOREACH(item, &configQueueHead, element)
             {
-                // is the current config in a quit state?
-                if(item->config->bTerminated || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) 
+                // The conditions under which we stop monitoring a process are:
+                // 1. Process has been terminated
+                // 2. The monitoring thread has exited
+                // 3. The monitor has collected the required number of dumps
+                if(item->config->bTerminated || item->config->nQuit || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect) 
                 { 
                     Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
                     WaitForAllMonitoringThreadsToTerminate(item->config);

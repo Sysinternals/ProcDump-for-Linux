@@ -557,45 +557,41 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            if(self->Config->ProcessGroupId == NO_PID && !self->Config->WaitingForProcessName) {
-                if (gcoreStatus != 0)
-                    exit(gcoreStatus);
-                if (pcloseStatus != 0)
-                    exit(pcloseStatus);
-                exit(1);
-            }
+            rc = gcoreStatus;
         }
+        else
+        {
+            // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
+            sleep(1);
 
-        for(int j = 0; j < i; j++) {
-            free(outputBuffer[j]);
-        }
-        free(outputBuffer);
-
-        // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
-        sleep(1);
-
-        // validate that core dump file was generated
-        if(access(coreDumpFileName, F_OK) != -1) {
-            if(self->Config->nQuit){
-                // if we are in a quit state from interrupt delete partially generated core dump file
-                int ret = unlink(coreDumpFileName);
-                if (ret < 0 && errno != ENOENT) {
-                    Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
-                    exit(-1);
+            // validate that core dump file was generated
+            if(access(coreDumpFileName, F_OK) != -1) {
+                if(self->Config->nQuit){
+                    // if we are in a quit state from interrupt delete partially generated core dump file
+                    int ret = unlink(coreDumpFileName);
+                    if (ret < 0 && errno != ENOENT) {
+                        Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
+                        exit(-1);
+                    }
                 }
-            }
-            else{
-                // log out sucessful core dump generated
-                Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
+                else{
+                    // log out sucessful core dump generated
+                    Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
 
-                self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
-                if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect) {
-                    SetEvent(&self->Config->evtQuit.event); // shut it down, we're done here
-                    rc = 1;
+                    self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
+                    if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect) {
+                        SetEvent(&self->Config->evtQuit.event); // shut it down, we're done here
+                        rc = 1;
+                    }
                 }
             }
         }
     }
+
+    for(int j = 0; j < i; j++) {
+        free(outputBuffer[j]);
+    }
+    free(outputBuffer);
 
     free(name);
 
