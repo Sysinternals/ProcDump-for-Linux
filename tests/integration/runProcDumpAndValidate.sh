@@ -8,7 +8,7 @@ function runProcDumpAndValidate {
 
 	dumpParam=""
 	if [ "$#" -ge "6" -a -n "$6" ]; then
-		dumpParam="-o $dumpDir/$6"
+		dumpParam="$dumpDir/$6"
 	fi
 
 	if [ -z "$TESTPROGNAME" ]; then
@@ -28,16 +28,17 @@ function runProcDumpAndValidate {
 		childpid=$(echo $childrenpid | cut -d " " -f1)
 		echo "ChildPID: $childpid"
 
-		echo "$PROCDUMPPATH $2 $3 $dumpParam -p $childpid"
-		$PROCDUMPPATH $2 $3 $dumpParam -p $childpid
+		echo "$PROCDUMPPATH $2 $3 $childpid $dumpParam "
+		$PROCDUMPPATH $2 $3 $childpid $dumpParam
 	else
 		TESTPROGPATH=$(readlink -m "$DIR/../../bin/$TESTPROGNAME");
-		(sleep 2; $TESTPROGPATH "$TESTPROGMODE") &
+		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
+		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
-		echo "$PROCDUMPPATH $2 $3 $dumpParam -w $TESTPROGNAME"
-		$PROCDUMPPATH $2 $3 $dumpParam -w "$TESTPROGNAME"
+		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
+		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"
 	fi
 
 	if ps -p $pid > /dev/null

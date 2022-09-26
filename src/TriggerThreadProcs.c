@@ -10,6 +10,12 @@
 #include "TriggerThreadProcs.h"
 extern long HZ;                                // clock ticks per second
 
+
+//--------------------------------------------------------------------
+//
+// CommitMonitoringThread - Thread monitoring for memory consumption
+//
+//--------------------------------------------------------------------
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("CommitMonitoringThread: Starting Trigger Thread");
@@ -19,7 +25,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     unsigned long memUsage = 0;
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(COMMIT, config); 
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(COMMIT, config);
 
     pageSize_kb = sysconf(_SC_PAGESIZE) >> 10; // convert bytes to kilobytes (2^10)
 
@@ -54,7 +60,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             {
                 Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
-            }            
+            }
         }
     }
 
@@ -63,6 +69,11 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     pthread_exit(NULL);
 }
 
+//--------------------------------------------------------------------
+//
+// ThreadCountMonitoringThread - Thread monitoring for thread count
+//
+//--------------------------------------------------------------------
 void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("ThreadCountMonitoringThread: Starting Thread Thread");
@@ -70,7 +81,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
 
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(THREAD, config); 
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(THREAD, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -85,7 +96,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                     if(rc != 0)
                     {
                         SetQuit(config, 1);
-                    }                    
+                    }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -97,7 +108,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
             {
                 Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
-            }            
+            }
         }
     }
 
@@ -107,6 +118,12 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
 }
 
 
+//--------------------------------------------------------------------
+//
+// FileDescriptorCountMonitoringThread - Thread monitoring for file
+// descriptor count
+//
+//--------------------------------------------------------------------
 void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("FileDescriptorCountMonitoringThread: Starting Filedescriptor Thread");
@@ -114,7 +131,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
 
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(FILEDESC, config); 
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(FILEDESC, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -129,7 +146,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                     if(rc != 0)
                     {
                         SetQuit(config, 1);
-                    }                    
+                    }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -141,7 +158,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             {
                 Log(error, "An error occurred while parsing procfs\n");
                 exit(-1);
-            }            
+            }
         }
     }
 
@@ -150,13 +167,13 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     pthread_exit(NULL);
 }
 
-// 
+//
 // This thread monitors for a specific signal to be sent to target process.
-// It uses ptrace (PTRACE_SEIZE) and once the signal with the corresponding 
+// It uses ptrace (PTRACE_SEIZE) and once the signal with the corresponding
 // signal number is intercepted, it detaches from the target process in a stopped state
 // followed by invoking gcore to generate the dump. Once completed, a SIGCONT followed by the
 // original signal is sent to the target process. Signals of non-interest are simply forwarded
-// to the target process. 
+// to the target process.
 //
 // Polling interval has no meaning during signal monitoring.
 //
@@ -168,7 +185,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int signum=-1;
     int rc = 0;
     int dumpStatus = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config); 
+    struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -200,9 +217,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     // We have to detach in a STOP state so we can invoke gcore
                     if(ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP) == -1)
                     {
-                        Log(error, "Unable to PTRACE (DETACH) the target process");                        
+                        Log(error, "Unable to PTRACE (DETACH) the target process");
                         pthread_mutex_unlock(&config->ptrace_mutex);
-                        break; 
+                        break;
                     }
 
                     // Write core dump
@@ -211,15 +228,15 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if(dumpStatus != 0)
                     {
                         SetQuit(config, 1);
-                    }                    
+                    }
 
                     kill(config->ProcessId, SIGCONT);
 
                     if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
                     {
                         // If we are over the max number of dumps to collect, send the original signal we intercepted.
-                        kill(config->ProcessId, signum);    
-                        pthread_mutex_unlock(&config->ptrace_mutex);                    
+                        kill(config->ProcessId, signum);
+                        pthread_mutex_unlock(&config->ptrace_mutex);
                         break;
                     }
 
@@ -244,8 +261,8 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 if(dumpStatus != 0)
                 {
                     break;
-                }                    
-            }        
+                }
+            }
         }
     }
 
@@ -254,6 +271,11 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     pthread_exit(NULL);
 }
 
+//--------------------------------------------------------------------
+//
+// CpuMonitoringThread - Thread monitoring for CPU usage.
+//
+//--------------------------------------------------------------------
 void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("CpuMonitoringThread: Starting Trigger Thread");
@@ -282,8 +304,8 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                 cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
 
                 // CPU Trigger
-                if ((config->CpuUpperThreshold != -1 && (cpuUsage >= config->CpuUpperThreshold)) ||
-                    (config->CpuLowerThreshold != -1 && (cpuUsage < config->CpuLowerThreshold)))
+                if ((config->bCpuTriggerBelowValue && (cpuUsage < config->CpuThreshold)) ||
+                    (!config->bCpuTriggerBelowValue && (cpuUsage >= config->CpuThreshold)))
                 {
                     Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
@@ -295,7 +317,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
                         break;
-                    }       
+                    }
                 }
             }
             else
@@ -311,6 +333,12 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     pthread_exit(NULL);
 }
 
+//--------------------------------------------------------------------
+//
+// TimerThread - Thread that creates dumps based on specified timer
+// interval.
+//
+//--------------------------------------------------------------------
 void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("TimerThread: Starting Trigger Thread");
