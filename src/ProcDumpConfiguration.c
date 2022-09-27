@@ -394,7 +394,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "-sig" ))
         {
             if( i+1 >= argc || self->SignalNumber != -1 ) return PrintUsage();
-            self->SignalNumber = atoi(argv[i+1]);
+            if(!ConvertToInt(argv[i+1], &self->SignalNumber)) return PrintUsage();
             if(self->SignalNumber < 0)
             {
                 Log(error, "Invalid signal specified.");
@@ -655,7 +655,8 @@ bool LookupProcessByPgid(struct ProcDumpConfiguration *self)
 
         // evaluate all running processes
         for (int i = 0; i < numEntries; i++) {
-            pid_t procPid = atoi(nameList[i]->d_name);
+            pid_t procPid;
+            if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
             pid_t procPgid;
 
             procPgid = GetProcessPgid(procPid);
@@ -683,7 +684,8 @@ bool LookupProcessByName(struct ProcDumpConfiguration *self)
 
     // evaluate all running processes
     for (int i = 0; i < numEntries; i++) {
-        pid_t procPid = atoi(nameList[i]->d_name);
+        pid_t procPid;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
 
         char* processName = GetProcessName(procPid);
 
@@ -713,7 +715,8 @@ pid_t LookupProcessPidByName(const char* name)
 
     // evaluate all running processes
     for (int i = 0; i < numEntries; i++) {
-        pid_t procPid = atoi(nameList[i]->d_name);
+        pid_t procPid;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
 
         char* procName = GetProcessName(procPid);
         if(procName && strcasecmp(name, procName)==0)
@@ -901,7 +904,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
             for (int i = 0; i < numEntries; i++)
             {
-                pid_t procPid = atoi(nameList[i]->d_name);
+                pid_t procPid;
+                if(!ConvertToInt(nameList[i]->d_name, &procPid)) return;
 
                 if(self->bProcessGroup)
                 {
