@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 		}
 		else if (strcmp("sig", argv[1]) == 0)
 		{
-			sleep(2);
+			sleep(SLEEP_TIME);
 			raise(SIGUSR2);
 			sleep(SLEEP_TIME);
 		}

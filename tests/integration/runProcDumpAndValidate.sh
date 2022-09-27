@@ -20,7 +20,7 @@ function runProcDumpAndValidate {
 		pid=$!
 		echo "PID: $pid"
 
-		sleep 1s
+		sleep 2s
 
 		childrenpid=$(pidof -o $pid $(which stress-ng))
 			echo "ChildrenPID: $childrenpid"
@@ -37,7 +37,7 @@ function runProcDumpAndValidate {
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
-		sleep 1s
+		sleep 2s
 
 		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
 		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"
