@@ -1580,7 +1580,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         // Output directory and filename
         printf("%-40s%s\n", "Output directory:", self->CoreDumpPath);
         if (self->CoreDumpName != NULL) {
-            printf("\n%-40s%s_<counter>.<pid>\n", "Custom name for core dumps:", self->CoreDumpName);
+            printf("%-40s%s_<counter>.<pid>\n", "Custom name for core dumps:", self->CoreDumpName);
         }
 
         SetEvent(&self->evtConfigurationPrinted.event);

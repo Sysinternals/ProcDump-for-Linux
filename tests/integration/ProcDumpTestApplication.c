@@ -3,14 +3,14 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
+#include <limits.h>
 
 #define FILE_DESC_COUNT	500
 #define THREAD_COUNT	100
-#define SLEEP_TIME 5
 
 void* ThreadProc(void *input)
 {
-	sleep(SLEEP_TIME);
+	sleep(UINT_MAX);
 	return NULL;
 };
 
@@ -18,13 +18,16 @@ int main(int argc, char *argv[])
 {
 	if (argc > 1)
 	{
+		//
+		// To avoid timing differences, each test below should sleep indefinately once done.
+		// The process will be killed by the test harness once procdump has finished monitoring
+		//
 		if (strcmp("sleep", argv[1]) == 0)
 		{
-			sleep(SLEEP_TIME);
+			sleep(UINT_MAX);
 		}
 		else if (strcmp("burn", argv[1]) == 0)
 		{
-			alarm(SLEEP_TIME);
 			while(1);
 		}
 		else if (strcmp("fc", argv[1]) == 0)
@@ -34,13 +37,8 @@ int main(int argc, char *argv[])
 		  {
 			fd[i] = fopen(argv[0], "r");
 		  }
-
-   		  sleep(SLEEP_TIME);
-
-		  for(int i=0; i<FILE_DESC_COUNT; i++)
-		  {
-			fclose(fd[i]);
-		  }
+		  memset(fd, 0, FILE_DESC_COUNT*sizeof(FILE*));
+		  sleep(UINT_MAX);
 		}
 		else if (strcmp("tc", argv[1]) == 0)
 		{
@@ -49,17 +47,7 @@ int main(int argc, char *argv[])
 		  {
 			pthread_create(&threads[i], NULL, ThreadProc, NULL);
 		  }
-
-		  for(int i=0; i<THREAD_COUNT; i++)
-		  {
-			pthread_join(threads[i], NULL);
-		  }
-		}
-		else if (strcmp("sig", argv[1]) == 0)
-		{
-			sleep(SLEEP_TIME);
-			raise(SIGUSR2);
-			sleep(SLEEP_TIME);
+		  sleep(UINT_MAX);
 		}
 	}
 }
