@@ -6,7 +6,7 @@ TESTPROGMODE="sleep"
 source $runProcDumpAndValidate
 
 stressPercentage=10
-procDumpType="-c"
+procDumpType="-cl"
 procDumpTrigger=20
 shouldDump=true
 
