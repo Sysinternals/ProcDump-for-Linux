@@ -40,69 +40,66 @@ make && make rpm
 ## Usage
 ```
 Usage: procdump [OPTIONS...] TARGET
-   OPTIONS
-      -h          Prints this help screen
-      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)
-      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)
-      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)
-      -m          Trigger core dump generation when when memory commit is less than specified value (MB)
-      -T          Trigger when thread count exceeds or equals specified value.
-      -F          Trigger when file descriptor count exceeds or equals specified value.
-      -G          Trigger when signal with the specified value (numeric) is sent (uses PTRACE and will affect performance of target process).      
-      -I          Polling frequency in milliseconds (default is 1000)
-      -n          Number of core dumps to write before exiting (default is 1)
-      -s          Consecutive seconds before dump is written (default is 10)
-      -o          Path and/or filename prefix where the core dump is written to
-      -d          Writes diagnostic logs to syslog
-   TARGET must be exactly one of these:
-      -p          pid of the process
-      -g          pgid of the process group
-      -w          Name of the process executable
+   Options:
+      -n      Number of dumps to write before exiting.
+      -s      Consecutive seconds before dump is written (default is 10).
+      -c      CPU threshold above which to create a dump of the process.
+      -cl     CPU threshold below which to create a dump of the process.
+      -m      Memory commit threshold in MB at which to create a dump.
+      -ml     Trigger when memory commit drops below specified MB value.
+      -tc     Thread count threshold above which to create a dump of the process.
+      -fc     File descriptor count threshold above which to create a dump of the process.
+      -sig    Signal number to intercept to create a dump of the process.
+      -pf     Polling frequency.
+      -o      Overwrite existing dump file.
+      -log    Writes extended ProcDump tracing to syslog.
+      -w      Wait for the specified process to launch if it's not running.
+      -pgid   Process ID specified refers to a process group ID.
 ```
 ### Examples
 > The following examples all target a process with pid == 1234
 
 The following will create a core dump immediately.
 ```
-sudo procdump -p 1234
+sudo procdump 1234
 ```
 The following will create 3 core dumps 10 seconds apart.
 ```
-sudo procdump -n 3 -p 1234
+sudo procdump -n 3 1234
 ```
 The following will create 3 core dumps 5 seconds apart.
 ```
-sudo procdump -n 3 -s 5 -p 1234
+sudo procdump -n 3 -s 5 1234
 ```
 The following will create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 10 seconds between each dump.
 ```
-sudo procdump -C 65 -n 3 -p 1234
+sudo procdump -c 65 -n 3 1234
 ```
 The following will create a core dump each time the process has CPU usage >= 65%, up to 3 times, with at least 5 seconds between each dump.
 ```
-sudo procdump -C 65 -n 3 -s 5 -p 1234
+sudo procdump -c 65 -n 3 -s 5 1234
 ```
 The following will create a core dump when CPU usage is outside the range [10,65].
 ```
-sudo procdump -c 10 -C 65 -p 1234
+sudo procdump -cl 10 -c 65 1234
 ```
 The following will create a core dump when CPU usage is >= 65% or memory usage is >= 100 MB.
 ```
-sudo procdump -C 65 -M 100 -p 1234
+sudo procdump -c 65 -M 100 1234
 ```
 The following will create a core dump in the `/tmp` directory immediately.
 ```
-sudo procdump -o /tmp -p 1234
+sudo procdump 1234 /tmp
 ```
 The following will create a core dump in the current directory with the name dump_0.1234. If -n is used, the files will be named dump_0.1234, dump_1.1234 and so on.
 ```
-sudo procdump -o dump -p 1234
+sudo procdump 1234 dump
 ```
 The following will create a core dump when a SIGSEGV occurs.
 ```
-sudo procdump -G 11 -p 1234
+sudo procdump -sig 11 1234
 ```
-> All options can also be used with -w instead of -p. -w will wait for a process with the given name.
+> All options can also be used with `-w`, to wait for any process with the given name.
 
 The following waits for a process named `my_application` and creates a core dump immediately when it is found.
 ```
