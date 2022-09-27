@@ -49,12 +49,12 @@ struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDum
 
 //--------------------------------------------------------------------
 //
-// GetPath - Parses out the path from a full line read from 
+// GetPath - Parses out the path from a full line read from
 //           /proc/net/unix. Example line:
 //
 //           0000000000000000: 00000003 00000000 00000000 0001 03 20287 @/tmp/.X11-unix/X0
 //
-// Returns: path   - point to path if it exists, NULL otherwise. 
+// Returns: path   - point to path if it exists, NULL otherwise.
 //
 //--------------------------------------------------------------------
 char* GetPath(char* lineBuf)
@@ -64,9 +64,9 @@ char* GetPath(char* lineBuf)
     // example of /proc/net/unix line:
     // 0000000000000000: 00000003 00000000 00000000 0001 03 20287 @/tmp/.X11-unix/X0
     char *ptr = strtok(lineBuf, delim);
-    
+
     // Move to last column which contains the name of the file (/socket)
-    for(int i=0; i<7; i++) 
+    for(int i=0; i<7; i++)
     {
         ptr = strtok(NULL, delim);
     }
@@ -83,11 +83,11 @@ char* GetPath(char* lineBuf)
 //
 // IsCoreClrProcess - Checks to see whether the process is a .NET Core
 // process by checking the availability of a diagnostics server exposed
-// as a Unix domain socket. If the pipe is available, we assume its a 
+// as a Unix domain socket. If the pipe is available, we assume its a
 // .NET Core process
 //
 // Returns: true   - if the process is a .NET Core process,[out] socketName
-//                   will contain the full socket name. Caller owns the 
+//                   will contain the full socket name. Caller owns the
 //                   memory allocated for the socketName
 //          false  - if the process is NOT a .NET Core process,[out] socketName
 //                   will be NULL.
@@ -99,8 +99,8 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
     *socketName = NULL;
     FILE *procFile = NULL;
     char lineBuf[4096];
-    char tmpFolder[4096]; 
-    char* prefixTmpFolder = NULL; 
+    char tmpFolder[4096];
+    char* prefixTmpFolder = NULL;
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
@@ -113,7 +113,7 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
     {
         strncpy(tmpFolder, prefixTmpFolder, 4096);
     }
-    
+
     // Enumerate all open domain sockets exposed from the process. If one
     // exists by the following prefix, we assume its a .NET Core process:
     //    dotnet-diagnostic-{%d:PID}
@@ -121,12 +121,12 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
     procFile = fopen("/proc/net/unix", "r");
     if(procFile != NULL)
     {
-        fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers. 
+        fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers.
 
         while(fgets(lineBuf, 4096, procFile) != NULL)
         {
             char* ptr = GetPath(lineBuf);
-            if(ptr!=NULL)            
+            if(ptr!=NULL)
             {
                 if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
                 {
@@ -140,9 +140,9 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
                             Trace("CoreCLR diagnostics socket: %s", socketName);
                             bRet = true;
                         }
-                        break;                        
+                        break;
                     }
-                } 
+                }
             }
         }
     }
@@ -160,10 +160,10 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
     if(*socketName!=NULL && bRet==false)
     {
         free(*socketName);
-        *socketName = NULL; 
+        *socketName = NULL;
     }
 
-    return bRet; 
+    return bRet;
 }
 
 
@@ -171,7 +171,7 @@ bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName)
 //
 // WaitForQuit - Wait for Quit Event or just timeout
 //
-//      Timed wait with awareness of quit event  
+//      Timed wait with awareness of quit event
 //
 // Returns: 0   - Success
 //          -1  - Failure
@@ -198,7 +198,7 @@ int WriteCoreDump(struct CoreDumpWriter *self)
         case WAIT_OBJECT_0: // QUIT!  Time for cleanup, no dump
             break;
         case WAIT_OBJECT_0+1: // We got a dump slot!
-            { 
+            {
                 char* socketName = NULL;
                 IsCoreClrProcess(self, &socketName);
                 if ((rc = WriteCoreDumpInternal(self, socketName)) == 0) {
@@ -230,7 +230,7 @@ int WriteCoreDump(struct CoreDumpWriter *self)
 
 //--------------------------------------------------------------------
 //
-// GetUint16 - Quick and dirty conversion from char to uint16_t 
+// GetUint16 - Quick and dirty conversion from char to uint16_t
 //
 // Returns: uint16_t*   - if successfully converted, NULL otherwise.
 //                        Caller must free upon success
@@ -255,7 +255,7 @@ uint16_t* GetUint16(char* buffer)
 //--------------------------------------------------------------------
 //
 // GenerateCoreClrDump - Generates the .NET core dump using the
-// diagnostics server. 
+// diagnostics server.
 //
 // Returns: true   - if core dump was generated
 //          false  - otherwise
@@ -287,15 +287,15 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                 Trace("Failed to connect to socket for .NET Core dump generation.");
             }
             else
-            {   
+            {
                 unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));
                 int payloadSize = sizeof(dumpFileNameLen);
                 payloadSize += dumpFileNameLen*sizeof(wchar_t);
                 unsigned int dumpType = CORECLR_DUMPTYPE_FULL;
-                payloadSize += sizeof(dumpType);     
-                unsigned int diagnostics = CORECLR_DUMPLOGGING_OFF;       
-                payloadSize += sizeof(diagnostics);     
-                
+                payloadSize += sizeof(dumpType);
+                unsigned int diagnostics = CORECLR_DUMPLOGGING_OFF;
+                payloadSize += sizeof(diagnostics);
+
                 uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
 
                 // First initialize header
@@ -314,22 +314,22 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
                     void* temp_buffer_cur = temp_buffer;
 
-                    memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));     
+                    memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));
                     temp_buffer_cur += sizeof(struct IpcHeader);
 
-                    // Now we add the payload 
+                    // Now we add the payload
                     memcpy(temp_buffer_cur, &dumpFileNameLen, sizeof(dumpFileNameLen));
                     temp_buffer_cur += sizeof(dumpFileNameLen);
 
-                    memcpy(temp_buffer_cur, dumpFileNameW, dumpFileNameLen*sizeof(uint16_t));     
+                    memcpy(temp_buffer_cur, dumpFileNameW, dumpFileNameLen*sizeof(uint16_t));
                     temp_buffer_cur += dumpFileNameLen*sizeof(uint16_t);
 
                     // next, the dumpType
-                    memcpy(temp_buffer_cur, &dumpType, sizeof(unsigned int));     
+                    memcpy(temp_buffer_cur, &dumpType, sizeof(unsigned int));
                     temp_buffer_cur += sizeof(unsigned int);
 
                     // next, the diagnostics flag
-                    memcpy(temp_buffer_cur, &diagnostics, sizeof(unsigned int));     
+                    memcpy(temp_buffer_cur, &diagnostics, sizeof(unsigned int));
 
                     if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
                     {
@@ -338,7 +338,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                     else
                     {
                         // Lets get the header first
-                        struct IpcHeader retHeader; 
+                        struct IpcHeader retHeader;
                         if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
                         {
                             Trace("Failed receiving response header from diagnostics server [%d]", errno);
@@ -353,16 +353,16 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                             else
                             {
                                 // Next, get the payload which contains a single uint32 (hresult)
-                                int32_t res = -1; 
+                                int32_t res = -1;
                                 if(recv(fd, &res, sizeof(int32_t), 0)==-1)
                                 {
                                     Trace("Failed receiving result code from response payload from diagnostics server [%d]", errno);
                                 }
                                 else
                                 {
-                                    if(res==0) 
+                                    if(res==0)
                                     {
-                                        bRet = true; 
+                                        bRet = true;
                                     }
                                 }
                             }
@@ -385,7 +385,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
         close(fd);
         fd = 0;
     }
-    
+
     if(dumpFileNameW!=NULL)
     {
         free(dumpFileNameW);
@@ -471,6 +471,13 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         exit(-1);
     }
 
+    // If the file already exists and the overwrite flag has not been set we fail
+    if(access(coreDumpFileName, F_OK)==0 && !self->Config->bOverwriteExisting)
+    {
+        Log(info, "Dump file %s already exists and was not overwritten (use -o to overwrite)", coreDumpFileName);
+        return -1;
+    }
+
     // check if we're allowed to write into the target directory
     if(access(self->Config->CoreDumpPath, W_OK) < 0) {
         Log(error, INTERNAL_ERROR);
@@ -528,12 +535,12 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 exit(-1);
             }
         }
-        
+
         // After reading all input, wait for child process to end and get exit status for bash gcore command
         int stat;
         waitpid(gcorePid, &stat, 0);
         int gcoreStatus = WEXITSTATUS(stat);
-        
+
         // close pipe reading from gcore
         self->Config->gcorePid = NO_PID;                // reset gcore pid so that signal handler knows we aren't dumping
         int pcloseStatus = pclose(commandPipe);
@@ -557,43 +564,41 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-            if (gcoreStatus != 0)
-                exit(gcoreStatus);
-            if (pcloseStatus != 0)
-                exit(pcloseStatus);
-            exit(1);
+            rc = gcoreStatus;
         }
+        else
+        {
+            // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
+            sleep(1);
 
-        for(int j = 0; j < i; j++) {
-            free(outputBuffer[j]);
-        }
-        free(outputBuffer);
-
-        // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
-        sleep(1);
-
-        // validate that core dump file was generated
-        if(access(coreDumpFileName, F_OK) != -1) {
-            if(self->Config->nQuit){
-                // if we are in a quit state from interrupt delete partially generated core dump file
-                int ret = unlink(coreDumpFileName);
-                if (ret < 0 && errno != ENOENT) {
-                    Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
-                    exit(-1);
+            // validate that core dump file was generated
+            if(access(coreDumpFileName, F_OK) != -1) {
+                if(self->Config->nQuit){
+                    // if we are in a quit state from interrupt delete partially generated core dump file
+                    int ret = unlink(coreDumpFileName);
+                    if (ret < 0 && errno != ENOENT) {
+                        Trace("WriteCoreDumpInternal: Failed to remove partial core dump");
+                        exit(-1);
+                    }
                 }
-            }
-            else{
-                // log out sucessful core dump generated
-                Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
+                else{
+                    // log out sucessful core dump generated
+                    Log(info, "Core dump %d generated: %s", self->Config->NumberOfDumpsCollected, coreDumpFileName);
 
-                self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
-                if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect) {
-                    SetEvent(&self->Config->evtQuit.event); // shut it down, we're done here
-                    rc = 1;
+                    self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
+                    if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect) {
+                        SetEvent(&self->Config->evtQuit.event); // shut it down, we're done here
+                        rc = 1;
+                    }
                 }
             }
         }
     }
+
+    for(int j = 0; j < i; j++) {
+        free(outputBuffer[j]);
+    }
+    free(outputBuffer);
 
     free(name);
 

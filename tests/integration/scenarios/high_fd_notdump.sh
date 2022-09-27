@@ -4,11 +4,11 @@ runProcDumpAndValidate=$(readlink -m "$DIR/../runProcDumpAndValidate.sh");
 source $runProcDumpAndValidate
 
 TESTPROGNAME="ProcDumpTestApplication"
-TESTPROGMODE="burn"
+TESTPROGMODE="fc"
 
 stressPercentage=90
-procDumpType="-c"
-procDumpTrigger=50
-shouldDump=true
+procDumpType="-fc"
+procDumpTrigger=1000
+shouldDump=false
 
-runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "CPU"
+runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "FILEDESCCOUNT"

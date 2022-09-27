@@ -4,7 +4,7 @@ runProcDumpAndValidate=$(readlink -m "$DIR/../runProcDumpAndValidate.sh");
 source $runProcDumpAndValidate
 
 stressPercentage=90
-procDumpType="-C"
+procDumpType="-c"
 procDumpTrigger=80
 shouldDump=false
 customDumpFileName="missing_subdir/custom_dump_file"

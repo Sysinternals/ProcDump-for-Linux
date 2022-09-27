@@ -14,7 +14,7 @@ rootcheck () {
 rootcheck
 
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
+   echo "This script must be run as root"
    exit 1
 fi
 
@@ -27,6 +27,7 @@ fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 
 function runTest {
+        printf "\n========================================================================================\n"
         printf "\nStarting $(basename $1)\n"
 	$1
 

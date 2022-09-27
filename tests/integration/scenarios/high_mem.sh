@@ -4,7 +4,7 @@ runProcDumpAndValidate=$(readlink -m "$DIR/../runProcDumpAndValidate.sh");
 source $runProcDumpAndValidate
 
 stressPercentage=90M
-procDumpType="-M"
+procDumpType="-m"
 procDumpTrigger=80
 shouldDump=true
 
