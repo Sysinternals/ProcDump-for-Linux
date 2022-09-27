@@ -6,7 +6,7 @@
 
 #define FILE_DESC_COUNT	500
 #define THREAD_COUNT	100
-#define SLEEP_TIME 10
+#define SLEEP_TIME 5
 
 void* ThreadProc(void *input)
 {

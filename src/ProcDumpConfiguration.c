@@ -815,9 +815,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         ExitProcDump();
     }
 
-    // print config here
-    PrintConfiguration(&g_config);
-
     Log(info, "\n\nPress Ctrl-C to end monitoring without terminating the process(es).\n");
 
     if(!self->WaitingForProcessName && !self->bProcessGroup)
@@ -867,6 +864,9 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         monitoredProcessMap[item->config->ProcessId].active = true;
         pthread_mutex_unlock(&queue_mutex);
 
+        // print config here
+        PrintConfiguration(self);
+
         if(StartMonitor(self)!=0)
         {
             Log(error, INTERNAL_ERROR);
@@ -888,6 +888,9 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     }
     else
     {
+        // print config here
+        PrintConfiguration(self);
+
         do
         {
             // Multi process monitoring

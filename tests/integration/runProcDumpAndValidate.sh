@@ -37,6 +37,8 @@ function runProcDumpAndValidate {
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
+		sleep 1s
+
 		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
 		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"
 	fi
