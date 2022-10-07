@@ -12,6 +12,7 @@ function runProcDumpAndValidate {
 	fi
 
 	if [ -z "$TESTPROGNAME" ]; then
+  	    echo [`date +"%T.%3N"`] Starting stress-ng
 		if [ "$5" == "MEM" ]; then
 			stress-ng --vm 1 --vm-hang 0 --vm-bytes $1 --timeout 20s -q&
 		else
@@ -22,6 +23,7 @@ function runProcDumpAndValidate {
 
 	    # Give test app opportunity to start and get into scenario state
 		sleep 5s
+		echo [`date +"%T.%3N"`] Done waiting for stress-ng to start
 
 		childrenpid=$(pidof -o $pid $(which stress-ng))
 			echo "ChildrenPID: $childrenpid"
@@ -31,14 +33,18 @@ function runProcDumpAndValidate {
 
 		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $childpid $dumpParam "
+		echo [`date +"%T.%3N"`] Starting ProcDump
 		$PROCDUMPPATH $2 $3 $childpid $dumpParam&
 		pidPD=$!
+		echo "ProcDump PID: $pidPD"
 		sleep 10s
+		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
 		    kill $pidPD
 	    fi
 	else
+		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
 		TESTPROGPATH=$(readlink -m "$DIR/../../bin/$TESTPROGNAME");
 		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
@@ -47,12 +53,16 @@ function runProcDumpAndValidate {
 
 	    # Give test app opportunity to start and get into scenario state
 		sleep 5s
+		echo [`date +"%T.%3N"`] Done waiting for $TESTPROGNAME to start
 
 		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
+		echo [`date +"%T.%3N"`] Starting ProcDump
 		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"&
 		pidPD=$!
+		echo "ProcDump PID: $pidPD"
 		sleep 10s
+		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
 		    kill $pidPD
