@@ -54,6 +54,11 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Monday Sep 26 2022 Javid Habibi <jahabibi@microsoft.com> - 1.3
+- added process group trigger
+- BREAKING CHANGE: rework CLI interface to match that of Procdump for Windows
+- various small bug fixes
+
 * Tue Sep 14 2021 Javid Habibi <jahabibi@microsoft.com> - 1.2
 - added signal trigger
 - added custom filepath for memory dump generation

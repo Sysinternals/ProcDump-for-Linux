@@ -1,24 +1,37 @@
 .\" Manpage for procdump.
-.TH man 8 "04/03/2020" "1.2" "procdump manpage"
+.TH man 8 "09/26/2022" "1.3" "procdump manpage"
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
-procdump [OPTIONS...] TARGET
-      -h          Prints this help screen
-      -C          Trigger core dump generation when CPU exceeds or equals specified value (0 to 100 * nCPU)
-      -c          Trigger core dump generation when CPU is less than specified value (0 to 100 * nCPU)
-      -M          Trigger core dump generation when memory commit exceeds or equals specified value (MB)
-      -m          Trigger core dump generation when when memory commit is less than specified value (MB)
-      -T          Trigger when thread count exceeds or equals specified value.
-      -F          Trigger when filedescriptor count exceeds or equals specified value.
-      -G          Trigger when signal with the specified value (num) is sent (uses PTRACE and will affect performance of target process).
-      -I          Polling frequency in milliseconds (default is 1000)
-      -n          Number of core dumps to write before exiting (default is 1)
-      -s          Consecutive seconds before dump is written (default is 10)
-      -o          Path and/or filename prefix where the core dump is written to
-      -d          Writes diagnostic logs to syslog
-  TARGET must be exactly one of these:
-      -p   pid of the process
-      -w   Name of the process executable
+procdump [-n Count]
+        [-s Seconds]
+        [-c|-cl CPU_Usage]
+        [-m|-ml Commit_Usage]
+        [-tc Thread_Threshold]
+        [-fc FileDescriptor_Threshold]
+        [-sig Signal_Number]
+        [-pf Polling_Frequency]
+        [-o]
+        [-log]
+        {
+            {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+        }
+
+Options:
+   -n      Number of dumps to write before exiting.
+   -s      Consecutive seconds before dump is written (default is 10).
+   -c      CPU threshold above which to create a dump of the process.
+   -cl     CPU threshold below which to create a dump of the process.
+   -m      Memory commit threshold in MB at which to create a dump.
+   -ml     Trigger when memory commit drops below specified MB value.
+   -tc     Thread count threshold above which to create a dump of the process.
+   -fc     File descriptor count threshold above which to create a dump of the process.
+   -sig    Signal number to intercept to create a dump of the process.
+   -pf     Polling frequency.
+   -o      Overwrite existing dump file.
+   -log    Writes extended ProcDump tracing to syslog.
+   -w      Wait for the specified process to launch if it's not running.
+   -pgid   Process ID specified refers to a process group ID.
+
 .SH DESCRIPTION
 procdump is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
