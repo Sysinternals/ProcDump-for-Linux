@@ -39,22 +39,35 @@ make && make rpm
 
 ## Usage
 ```
-Usage: procdump [OPTIONS...] TARGET
-   Options:
-      -n      Number of dumps to write before exiting.
-      -s      Consecutive seconds before dump is written (default is 10).
-      -c      CPU threshold above which to create a dump of the process.
-      -cl     CPU threshold below which to create a dump of the process.
-      -m      Memory commit threshold in MB at which to create a dump.
-      -ml     Trigger when memory commit drops below specified MB value.
-      -tc     Thread count threshold above which to create a dump of the process.
-      -fc     File descriptor count threshold above which to create a dump of the process.
-      -sig    Signal number to intercept to create a dump of the process.
-      -pf     Polling frequency.
-      -o      Overwrite existing dump file.
-      -log    Writes extended ProcDump tracing to syslog.
-      -w      Wait for the specified process to launch if it's not running.
-      -pgid   Process ID specified refers to a process group ID.
+procdump [-n Count]
+        [-s Seconds]
+        [-c|-cl CPU_Usage]
+        [-m|-ml Commit_Usage]
+        [-tc Thread_Threshold]
+        [-fc FileDescriptor_Threshold]
+        [-sig Signal_Number]
+        [-pf Polling_Frequency]
+        [-o]
+        [-log]
+        {
+          {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+        }
+
+Options:
+   -n      Number of dumps to write before exiting.
+   -s      Consecutive seconds before dump is written (default is 10).
+   -c      CPU threshold above which to create a dump of the process.
+   -cl     CPU threshold below which to create a dump of the process.
+   -m      Memory commit threshold in MB at which to create a dump.
+   -ml     Trigger when memory commit drops below specified MB value.
+   -tc     Thread count threshold above which to create a dump of the process.
+   -fc     File descriptor count threshold above which to create a dump of the process.
+   -sig    Signal number to intercept to create a dump of the process.
+   -pf     Polling frequency.
+   -o      Overwrite existing dump file.
+   -log    Writes extended ProcDump tracing to syslog.
+   -w      Wait for the specified process to launch if it's not running.
+   -pgid   Process ID specified refers to a process group ID.
 ```
 ### Examples
 > The following examples all target a process with pid == 1234
@@ -85,7 +98,7 @@ sudo procdump -cl 10 -c 65 1234
 ```
 The following will create a core dump when CPU usage is >= 65% or memory usage is >= 100 MB.
 ```
-sudo procdump -c 65 -M 100 1234
+sudo procdump -c 65 -m 100 1234
 ```
 The following will create a core dump in the `/tmp` directory immediately.
 ```

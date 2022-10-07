@@ -3,22 +3,35 @@
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
-procdump [OPTIONS...] TARGET
-    Options:
-        -n      Number of dumps to write before exiting.
-        -s      Consecutive seconds before dump is written (default is 10).
-        -c      CPU threshold above which to create a dump of the process.
-        -cl     CPU threshold below which to create a dump of the process.
-        -m      Memory commit threshold in MB at which to create a dump.
-        -ml     Trigger when memory commit drops below specified MB value.
-        -tc     Thread count threshold above which to create a dump of the process.
-        -fc     File descriptor count threshold above which to create a dump of the process.
-        -sig    Signal number to intercept to create a dump of the process.
-        -pf     Polling frequency.
-        -o      Overwrite existing dump file.
-        -log    Writes extended ProcDump tracing to syslog.
-        -w      Wait for the specified process to launch if it's not running.
-        -pgid   Process ID specified refers to a process group ID.
+procdump [-n Count]
+        [-s Seconds]
+        [-c|-cl CPU_Usage]
+        [-m|-ml Commit_Usage]
+        [-tc Thread_Threshold]
+        [-fc FileDescriptor_Threshold]
+        [-sig Signal_Number]
+        [-pf Polling_Frequency]
+        [-o]
+        [-log]
+        {
+            {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+        }
+
+Options:
+   -n      Number of dumps to write before exiting.
+   -s      Consecutive seconds before dump is written (default is 10).
+   -c      CPU threshold above which to create a dump of the process.
+   -cl     CPU threshold below which to create a dump of the process.
+   -m      Memory commit threshold in MB at which to create a dump.
+   -ml     Trigger when memory commit drops below specified MB value.
+   -tc     Thread count threshold above which to create a dump of the process.
+   -fc     File descriptor count threshold above which to create a dump of the process.
+   -sig    Signal number to intercept to create a dump of the process.
+   -pf     Polling frequency.
+   -o      Overwrite existing dump file.
+   -log    Writes extended ProcDump tracing to syslog.
+   -w      Wait for the specified process to launch if it's not running.
+   -pgid   Process ID specified refers to a process group ID.
 
 .SH DESCRIPTION
 procdump is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
