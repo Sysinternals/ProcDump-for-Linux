@@ -20,7 +20,8 @@ function runProcDumpAndValidate {
 		pid=$!
 		echo "PID: $pid"
 
-		sleep 1s
+	    # Give test app opportunity to start and get into scenario state
+		sleep 5s
 
 		childrenpid=$(pidof -o $pid $(which stress-ng))
 			echo "ChildrenPID: $childrenpid"
@@ -28,8 +29,15 @@ function runProcDumpAndValidate {
 		childpid=$(echo $childrenpid | cut -d " " -f1)
 		echo "ChildPID: $childpid"
 
+		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $childpid $dumpParam "
-		$PROCDUMPPATH $2 $3 $childpid $dumpParam
+		$PROCDUMPPATH $2 $3 $childpid $dumpParam&
+		pidPD=$!
+		sleep 10s
+	    if ps -p $pidPD > /dev/null
+	    then
+		    kill $pidPD
+	    fi
 	else
 		TESTPROGPATH=$(readlink -m "$DIR/../../bin/$TESTPROGNAME");
 		($TESTPROGPATH "$TESTPROGMODE") &
@@ -37,8 +45,18 @@ function runProcDumpAndValidate {
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
+	    # Give test app opportunity to start and get into scenario state
+		sleep 5s
+
+		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
-		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"
+		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"&
+		pidPD=$!
+		sleep 10s
+	    if ps -p $pidPD > /dev/null
+	    then
+		    kill $pidPD
+	    fi
 	fi
 
 	if ps -p $pid > /dev/null
