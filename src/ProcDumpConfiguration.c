@@ -1717,7 +1717,7 @@ int GetMaximumPID()
 void PrintBanner()
 {
     printf("\nProcDump v1.3 - Sysinternals process dump utility\n");
-    printf("Copyright (C) 2020 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
+    printf("Copyright (C) 2022 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
 
