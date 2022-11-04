@@ -3,7 +3,7 @@ Version:        @PKG_VERSION@
 Release:        %_Revision
 Summary:        Sysinternals process dump utility
 
-%if %{_vendor} == "debbuild"
+%if "%{_vendor}" == "debbuild"
 Group:          devel
 %else
 Group:          Development/Tools%{?suse_version:/Other}
@@ -17,7 +17,7 @@ Source0:        %{url}/releases/download/%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  gcc, make
 
-%if %{_vendor} == "debbuild"
+%if "%{_vendor}" == "debbuild"
 BuildRequires:  zlib1g-dev
 %else
 BuildRequires:  zlib-devel
