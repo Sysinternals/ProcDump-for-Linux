@@ -20,6 +20,8 @@ struct ProcDumpConfiguration * target_config;                   // list of confi
 TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
 pthread_mutex_t queue_mutex;
 
+extern char _binary_obj_ProcDumpProfiler_so_end[];
+extern char _binary_obj_ProcDumpProfiler_so_start[];
 
 //--------------------------------------------------------------------
 //
@@ -59,8 +61,6 @@ void ApplyDefaults(struct ProcDumpConfiguration *self)
     {
         self->PollingInterval = MIN_POLLING_INTERVAL;
     }
-
-
 }
 
 //--------------------------------------------------------------------
@@ -218,6 +218,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->CoreDumpPath =                NULL;
     self->CoreDumpName =                NULL;
     self->nQuit =                       0;
+    self->bDumpOnException =            false;
+    self->bDumpOnException =            NULL;
 }
 
 
@@ -238,8 +240,14 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     pthread_mutex_destroy(&self->ptrace_mutex);
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    if(self->WaitingForProcessName){
+    if(self->WaitingForProcessName)
+    {
         free(self->ProcessName);
+    }
+
+    if(self->bDumpOnException)
+    {
+        free(self->ExceptionFilter);
     }
 
     free(self->CoreDumpPath);
@@ -292,6 +300,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->PollingInterval = self->PollingInterval;
         copy->CoreDumpPath = self->CoreDumpPath == NULL ? NULL : strdup(self->CoreDumpPath);
         copy->CoreDumpName = self->CoreDumpName == NULL ? NULL : strdup(self->CoreDumpName);
+        copy->ExceptionFilter = self->ExceptionFilter == NULL ? NULL : strdup(self->ExceptionFilter);
 
         return copy;
     }
@@ -447,6 +456,19 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         {
             self->DiagnosticsLoggingEnabled = true;
         }
+        else if( 0 == strcasecmp( argv[i], "/e" ) ||
+                    0 == strcasecmp( argv[i], "-e" ))
+        {
+            self->bDumpOnException = true;
+        }
+        else if( 0 == strcasecmp( argv[i], "/f" ) ||
+                   0 == strcasecmp( argv[i], "-f" ))
+        {
+            if( i+1 >= argc ) return PrintUsage();
+
+            self->ExceptionFilter = strdup(argv[i+1]);
+        }
+
         else if( 0 == strcasecmp( argv[i], "/o" ) ||
                     0 == strcasecmp( argv[i], "-o" ))
         {
@@ -566,16 +588,16 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     }
 
     // Signal trigger can only be specified alone
-    if(self->SignalNumber != -1)
+    if(self->SignalNumber != -1 || self->bDumpOnException)
     {
         if(self->CpuThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != -1)
         {
-            Log(error, "Signal trigger must be the only trigger specified.");
+            Log(error, "Signal/Exception trigger must be the only trigger specified.");
             return PrintUsage();
         }
         if(self->PollingInterval != -1)
         {
-            Log(error, "Polling interval has no meaning during signal monitoring.");
+            Log(error, "Polling interval has no meaning during Signal/Exception monitoring.");
             return PrintUsage();
         }
 
@@ -740,26 +762,164 @@ pid_t LookupProcessPidByName(const char* name)
 
 //--------------------------------------------------------------------
 //
+// createDir
+//
+// Create specified directory with specified permissions.
+//
+//--------------------------------------------------------------------
+bool createDir(const char *dir, mode_t perms)
+{
+    if (dir == NULL) {
+        fprintf(stderr, "createDir invalid params\n");
+        return false;
+    }
+
+    struct stat st;
+
+    if (stat(dir, &st) < 0) {
+        if (mkdir(dir, perms) < 0) {
+            return false;
+        }
+    } else {
+        if (!S_ISDIR(st.st_mode)) {
+            return false;
+        }
+        chmod(dir, perms);
+    }
+    return true;
+}
+
+//--------------------------------------------------------------------
+//
+// ExtractProfiler
+//
+// The profiler so is embedded into the ProcDump binary. This function
+// extracts the profiler so and places it into /opt/procdump
+//
+//--------------------------------------------------------------------
+int ExtractProfiler()
+{
+    if (!createDir(PROCDUMP_DIR, S_IRWXU))
+    {
+        Trace("ExtractProfiler: failed to create /opt/procdump.");
+        return -1;
+    }
+
+    unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    int destfd = creat(PROCDUMP_DIR "/" PROFILER_FILE_NAME, S_IRWXU);
+    if (destfd < 0)
+    {
+        return -1;
+    }
+
+    size_t written = 0;
+    ssize_t writeRet;
+    size_t size = _binary_obj_ProcDumpProfiler_so_end - _binary_obj_ProcDumpProfiler_so_start;
+
+    while (written < size)
+    {
+        writeRet = write(destfd, _binary_obj_ProcDumpProfiler_so_start + written, size - written);
+        if (writeRet < 0)
+        {
+            close(destfd);
+            return 1;
+        }
+        written += writeRet;
+    }
+
+    close(destfd);
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// LoadProfiler
+//
+// This function sends a command to the diagnostics pipe of the target
+// process instructing the runtime to load the profiler.
+//
+//--------------------------------------------------------------------
+int LoadProfiler(struct ProcDumpConfiguration* monitorConfig)
+{
+
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// InjectProfiler
+//
+// Injects the profiler into the target process by:
+//
+// 1. Extracting the profiler binary from the procdump binary and placing in
+//    /opt/procdump. This location is by default protected by sudo.
+// 2. Send a command to the target process diagnostics pipe with the location
+//    of the profiler (passing in any relevant data such as exception filter and
+//    dump count). The profiler opens an IPC pipe that ProcDump will communicate with
+//    to get status
+//
+//--------------------------------------------------------------------
+int InjectProfiler(struct ProcDumpConfiguration* monitorConfig)
+{
+    int ret = ExtractProfiler();
+    if(ret != 0)
+    {
+        Log(error, "Failed to extract profiler. Please make sure you are running elevated.");
+        Trace("InjectProfiler: failed to extract profiler into target process.");
+        return ret;
+    }
+
+    ret = LoadProfiler(monitorConfig);
+    if(ret != 0)
+    {
+        Log(error, "Failed to load profiler. Please make sure you are running elevated.");
+        Trace("InjectProfiler: failed to extract profiler into target process.");
+        return ret;
+    }
+
+    return 0;
+}
+
+
+
+//--------------------------------------------------------------------
+//
 // StartMonitor
 // Creates the monitoring threads and begins the monitor based on
-// the configuration passed in.
+// the configuration passed in. In the case of exception monitoring
+// we inject the monitor into the target process.
 //
 //--------------------------------------------------------------------
 int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
 {
     int ret = 0;
 
-    if(CreateTriggerThreads(monitorConfig) != 0)
+    if(monitorConfig->bDumpOnException)
     {
-        Log(error, INTERNAL_ERROR);
-        Trace("MonitorProcesses: failed to create trigger threads.");
-        ret = -1;
+        // Inject the profiler into the target process
+        if(InjectProfiler(monitorConfig)!=0)
+        {
+            Log(error, "Failed to inject profiler into target process. Please make sure the target process is a .NET process");
+            Trace("StartMonitor: failed to inject profiler into target process.");
+            ret = -1;
+        }
+    }
+    else
+    {
+        if(CreateTriggerThreads(monitorConfig) != 0)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("StartMonitor: failed to create trigger threads.");
+            ret = -1;
+        }
     }
 
     if(BeginMonitoring(monitorConfig) == false)
     {
         Log(error, INTERNAL_ERROR);
-        Trace("MonitorProcesses: failed to start monitoring.");
+        Trace("StartMonitor: failed to start monitoring.");
         ret = -1;
     }
 
@@ -875,7 +1035,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             ExitProcDump();
         }
 
-        WaitForAllMonitoringThreadsToTerminate(self);
+        WaitForAllMonitorsToTerminate(self);
         Log(info, "Stopping monitor for process %s (%d)", self->ProcessName, self->ProcessId);
         WaitForSignalThreadToTerminate(self);
 
@@ -1046,7 +1206,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 if(item->config->bTerminated || item->config->nQuit || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect)
                 {
                     Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
-                    WaitForAllMonitoringThreadsToTerminate(item->config);
+                    WaitForAllMonitorsToTerminate(item->config);
 
                     deleteList[count++] = item;
 
@@ -1101,7 +1261,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         TAILQ_FOREACH(item, &configQueueHead, element)
         {
             SetQuit(item->config, 1);
-            WaitForAllMonitoringThreadsToTerminate(item->config);
+            WaitForAllMonitorsToTerminate(item->config);
 
             deleteList[count++] = item;
         }
@@ -1435,18 +1595,28 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 
 //--------------------------------------------------------------------
 //
-// WaitForAllMonitoringThreadsToTerminate - Wait for all trigger threads to terminate
+// WaitForAllMonitorsToTerminate - Wait for all monitors to terminate
 //
 //--------------------------------------------------------------------
-int WaitForAllMonitoringThreadsToTerminate(struct ProcDumpConfiguration *self)
+int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
 
-    // Wait for the other monitoring threads
-    for (int i = 0; i < self->nThreads; i++) {
-        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
-            Log(error, "An error occurred while joining threads\n");
-            exit(-1);
+    if(self->bDumpOnException)
+    {
+        // If we are monitoring for exceptions, we don't have any threads per se,
+        // rather we wait for the profiler to let us know once done.
+
+        // TODO: WAIT FOR PROFILER
+    }
+    else
+    {
+        // Wait for the other monitoring threads
+        for (int i = 0; i < self->nThreads; i++) {
+            if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
+                Log(error, "An error occurred while joining threads\n");
+                exit(-1);
+            }
         }
     }
 
@@ -1741,6 +1911,8 @@ int PrintUsage()
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
+    printf("            [-e]\n");
+    printf("            [-f <Exception_Name>\n");
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
     printf("            [-log]\n");
@@ -1758,6 +1930,8 @@ int PrintUsage()
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");
+    printf("   -e      [.NET] Create dump when the process encounters an exception\n");
+    printf("   -f      [.NET] Filter on the name of the exception.\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to syslog.\n");

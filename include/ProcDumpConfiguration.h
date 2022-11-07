@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/queue.h>
+#include <fcntl.h>
 
 #include "Handle.h"
 #include "TriggerThreadProcs.h"
@@ -47,6 +48,9 @@
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
 #define PID_MAX_KERNEL_CONFIG "/proc/sys/kernel/pid_max"
+
+#define PROCDUMP_DIR       "/opt/procdump"
+#define PROFILER_FILE_NAME "procdumpprofiler.so"
 
 // -------------------
 // Structs
@@ -115,6 +119,8 @@ struct ProcDumpConfiguration {
     char *CoreDumpPath;             //
     char *CoreDumpName;             //
     bool bOverwriteExisting;        // -o
+    bool bDumpOnException;          // -e
+    char *ExceptionFilter;          // -f
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)
@@ -154,7 +160,7 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self);
 int StartMonitor(struct ProcDumpConfiguration* monitorConfig);
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
 int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle, int milliseconds);
-int WaitForAllMonitoringThreadsToTerminate(struct ProcDumpConfiguration *self);
+int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self);
 int WaitForSignalThreadToTerminate(struct ProcDumpConfiguration *self);
 bool IsQuit(struct ProcDumpConfiguration *self);
 int SetQuit(struct ProcDumpConfiguration *self, int quit);
@@ -162,6 +168,9 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self);
 bool ContinueMonitoring(struct ProcDumpConfiguration *self);
 bool BeginMonitoring(struct ProcDumpConfiguration *self);
 void ApplyDefaults(struct ProcDumpConfiguration *self);  // Call this after GetOptions has been called to set default values
+int InjectProfiler(struct ProcDumpConfiguration* monitorConfig);
+int LoadProfiler(struct ProcDumpConfiguration* monitorConfig);
+int ExtractProfiler();
 
 void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self);
 struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfiguration *self);

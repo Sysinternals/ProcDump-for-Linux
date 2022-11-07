@@ -35,3 +35,4 @@
 bin/
 release/
 pkgbuild/
+obj/
