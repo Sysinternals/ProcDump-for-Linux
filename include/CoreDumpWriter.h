@@ -37,6 +37,16 @@ struct MagicVersion
     uint8_t Magic[14];
 };
 
+
+// CLSID struct
+struct CLSID
+{
+    uint32_t Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char Data4[8];
+};
+
 // The header to be associated with every command and response
 // to/from the diagnostics server
 struct IpcHeader

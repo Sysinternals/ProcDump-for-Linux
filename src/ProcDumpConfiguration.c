@@ -23,6 +23,9 @@ pthread_mutex_t queue_mutex;
 extern char _binary_obj_ProcDumpProfiler_so_end[];
 extern char _binary_obj_ProcDumpProfiler_so_start[];
 
+extern bool IsCoreClrProcess(struct CoreDumpWriter *self, char** socketName);
+extern uint16_t* GetUint16(char* buffer);
+
 //--------------------------------------------------------------------
 //
 // ConvertToInt - Helper to convert from a char* to int
@@ -245,13 +248,15 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         free(self->ProcessName);
     }
 
-    if(self->bDumpOnException)
+    /* TODO: Crash
+    if(self->ExceptionFilter)
     {
         free(self->ExceptionFilter);
     }
 
     free(self->CoreDumpPath);
     free(self->CoreDumpName);
+    */
 }
 
 
@@ -467,6 +472,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             if( i+1 >= argc ) return PrintUsage();
 
             self->ExceptionFilter = strdup(argv[i+1]);
+            i++;
         }
 
         else if( 0 == strcasecmp( argv[i], "/o" ) ||
@@ -759,6 +765,106 @@ pid_t LookupProcessPidByName(const char* name)
     return NO_PID;
 }
 
+//--------------------------------------------------------------------
+//
+// GetHex
+//
+// Gets hex value of specified string
+//
+//--------------------------------------------------------------------
+int GetHex(char* szStr, int size, void* pResult)
+{
+    int         count = size * 2;       // # of bytes to take from string.
+    unsigned int Result = 0;           // Result value.
+    char          ch;
+
+    while (count-- && (ch = *szStr++) != '\0')
+    {
+        switch (ch)
+        {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+            Result = 16 * Result + (ch - '0');
+            break;
+
+            case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+            Result = 16 * Result + 10 + (ch - 'A');
+            break;
+
+            case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+            Result = 16 * Result + 10 + (ch - 'a');
+            break;
+
+            default:
+            return -1;
+        }
+    }
+
+    // Set the output.
+    switch (size)
+    {
+        case 1:
+        *((unsigned char*) pResult) = (unsigned char) Result;
+        break;
+
+        case 2:
+        *((short*) pResult) = (short) Result;
+        break;
+
+        case 4:
+        *((int*) pResult) = Result;
+        break;
+
+        default:
+        break;
+    }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// StringToGuid
+//
+// Convert string representation of GUID to a GUID
+//
+//--------------------------------------------------------------------
+int StringToGuid(char* szGuid, struct CLSID* pGuid)
+{
+    int i;
+
+    // Verify the surrounding syntax.
+    if (strlen(szGuid) != 38 || szGuid[0] != '{' || szGuid[9] != '-' ||
+        szGuid[14] != '-' || szGuid[19] != '-' || szGuid[24] != '-' || szGuid[37] != '}')
+    {
+        return -1;
+    }
+
+    // Parse the first 3 fields.
+    if (GetHex(szGuid + 1, 4, &pGuid->Data1))
+        return -1;
+    if (GetHex(szGuid + 10, 2, &pGuid->Data2))
+        return -1;
+    if (GetHex(szGuid + 15, 2, &pGuid->Data3))
+        return -1;
+
+    // Get the last two fields (which are byte arrays).
+    for (i = 0; i < 2; ++i)
+    {
+        if (GetHex(szGuid + 20 + (i * 2), 1, &pGuid->Data4[i]))
+        {
+            return -1;
+        }
+    }
+    for (i=0; i < 6; ++i)
+    {
+        if (GetHex(szGuid + 25 + (i * 2), 1, &pGuid->Data4[i+2]))
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 //--------------------------------------------------------------------
 //
@@ -799,14 +905,10 @@ bool createDir(const char *dir, mode_t perms)
 //--------------------------------------------------------------------
 int ExtractProfiler()
 {
-    if (!createDir(PROCDUMP_DIR, S_IRWXU))
-    {
-        Trace("ExtractProfiler: failed to create /opt/procdump.");
-        return -1;
-    }
-
+    // Try to delete the profiler lib in case it was left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
-    int destfd = creat(PROCDUMP_DIR "/" PROFILER_FILE_NAME, S_IRWXU);
+
+    int destfd = creat(PROCDUMP_DIR "/" PROFILER_FILE_NAME, S_IRWXU|S_IROTH);
     if (destfd < 0)
     {
         return -1;
@@ -842,8 +944,171 @@ int ExtractProfiler()
 //--------------------------------------------------------------------
 int LoadProfiler(struct ProcDumpConfiguration* monitorConfig)
 {
+    int fd = 0;
+    struct sockaddr_un addr = {0};
+    void* temp_buffer = NULL;
+    uint32_t attachTimeout = 5000;
+    struct CLSID profilerGuid = {0};
+    uint16_t* profilerPathW = NULL;
+    unsigned int clientDataSize = 0;
+    char* socketName = NULL;
+    struct CoreDumpWriter dumpTemp = {0};
 
+    dumpTemp.Config = monitorConfig;
+    dumpTemp.Type = MANUAL;
 
+    if(!IsCoreClrProcess(&dumpTemp, &socketName))
+    {
+        Trace("LoadProfiler: Unable to find .NET diagnostics endpoint for targeted process.");
+        return -1;
+    }
+
+    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+    {
+        Trace("Failed to create socket for .NET Core dump generation.");
+        return -1;
+    }
+
+    // Create socket to diagnostics server
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, socketName, sizeof(addr.sun_path)-1);
+
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
+    {
+        Trace("Failed to connect to socket for .NET Core dump generation.");
+        return -1;
+    }
+
+    // Calculate header and payload size
+
+    // profile attach timeout
+    unsigned int payloadSize = sizeof(attachTimeout);
+
+    // profiler guid
+    StringToGuid(PROFILER_GUID, &profilerGuid);
+    payloadSize += sizeof(profilerGuid);
+
+    // profiler path
+    //profilerPathW = GetUint16(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    //printf(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    //printf("\n");
+    //unsigned int profilerPathLen = (strlen(PROCDUMP_DIR "/" PROFILER_FILE_NAME)+1);
+
+    profilerPathW = GetUint16("/home/marioh/profiler/profiler/procdumpprofiler.so");
+    unsigned int profilerPathLen = (strlen("/home/marioh/profiler/profiler/procdumpprofiler.so")+1);
+
+    payloadSize += sizeof(profilerPathLen);
+    payloadSize += profilerPathLen*sizeof(uint16_t);
+
+    // client data
+    if(monitorConfig->ExceptionFilter)
+    {
+        clientDataSize = strlen(monitorConfig->ExceptionFilter);
+    }
+    else
+    {
+        clientDataSize = 0;
+    }
+    payloadSize += sizeof(clientDataSize);
+    payloadSize += clientDataSize*sizeof(char);
+
+    uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
+
+    // First initialize header
+    temp_buffer = malloc(totalPacketSize);
+    if(temp_buffer==NULL)
+    {
+        Trace("Failed allocating memory");
+        return -1;
+    }
+
+    memset(temp_buffer, 0, totalPacketSize);
+    struct IpcHeader dumpHeader =
+    {
+        { {"DOTNET_IPC_V1"} },
+        (uint16_t)totalPacketSize,
+        (uint8_t)0x03,
+        (uint8_t)0x01,
+        (uint16_t)0x0000
+    };
+
+    void* temp_buffer_cur = temp_buffer;
+
+    memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));
+    temp_buffer_cur += sizeof(struct IpcHeader);
+
+    memcpy(temp_buffer_cur, &attachTimeout, sizeof(attachTimeout));
+    temp_buffer_cur += sizeof(attachTimeout);
+
+    memcpy(temp_buffer_cur, &profilerGuid, sizeof(profilerGuid));
+    temp_buffer_cur += sizeof(profilerGuid);
+
+    memcpy(temp_buffer_cur, &profilerPathLen, sizeof(profilerPathLen));
+    temp_buffer_cur += sizeof(profilerPathLen);
+
+    memcpy(temp_buffer_cur, profilerPathW, profilerPathLen*sizeof(uint16_t));
+    temp_buffer_cur += profilerPathLen*sizeof(uint16_t);
+
+    memcpy(temp_buffer_cur, &clientDataSize, sizeof(unsigned int));
+    temp_buffer_cur += sizeof(unsigned int);
+
+    if(clientDataSize>0)
+    {
+        memcpy(temp_buffer_cur, monitorConfig->ExceptionFilter, clientDataSize);
+        temp_buffer_cur += clientDataSize;
+    }
+
+    // Send the payload
+    if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
+    {
+        Trace("Failed sending packet to diagnostics server [%d]", errno);
+        free(profilerPathW);
+        free(temp_buffer);
+        return -1;
+    }
+
+    // Get response
+    struct IpcHeader retHeader;
+    if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
+    {
+        Trace("Failed receiving response header from diagnostics server [%d]", errno);
+        free(profilerPathW);
+        free(temp_buffer);
+        return -1;
+    }
+
+    // Check the header to make sure its the right size
+    if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
+    {
+        Trace("Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
+        free(profilerPathW);
+        free(temp_buffer);
+        return -1;
+    }
+
+    int32_t res = -1;
+    if(recv(fd, &res, sizeof(int32_t), 0)==-1)
+    {
+        Trace("Failed receiving result code from response payload from diagnostics server [%d]", errno);
+        free(profilerPathW);
+        free(temp_buffer);
+        return -1;
+    }
+    else
+    {
+        if(res!=0)
+        {
+            Trace("Error returned from diagnostics server [%d]", res);
+            Log(error, "Error returned from diagnostics server [%d]", res);
+            free(profilerPathW);
+            free(temp_buffer);
+            return -1;
+        }
+    }
+
+    free(profilerPathW);
+    free(temp_buffer);
     return 0;
 }
 
@@ -867,15 +1132,15 @@ int InjectProfiler(struct ProcDumpConfiguration* monitorConfig)
     if(ret != 0)
     {
         Log(error, "Failed to extract profiler. Please make sure you are running elevated.");
-        Trace("InjectProfiler: failed to extract profiler into target process.");
+        Trace("InjectProfiler: failed to extract profiler.");
         return ret;
     }
 
     ret = LoadProfiler(monitorConfig);
     if(ret != 0)
     {
-        Log(error, "Failed to load profiler. Please make sure you are running elevated.");
-        Trace("InjectProfiler: failed to extract profiler into target process.");
+        Log(error, "Failed to load profiler. Please make sure you are running elevated and targetting a .NET process.");
+        Trace("InjectProfiler: failed to load profiler into target process.");
         return ret;
     }
 
@@ -903,7 +1168,7 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
         {
             Log(error, "Failed to inject profiler into target process. Please make sure the target process is a .NET process");
             Trace("StartMonitor: failed to inject profiler into target process.");
-            ret = -1;
+            return -1;
         }
     }
     else
@@ -912,7 +1177,7 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
         {
             Log(error, INTERNAL_ERROR);
             Trace("StartMonitor: failed to create trigger threads.");
-            ret = -1;
+            return -1;
         }
     }
 
@@ -920,7 +1185,7 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
     {
         Log(error, INTERNAL_ERROR);
         Trace("StartMonitor: failed to start monitoring.");
-        ret = -1;
+        return -1;
     }
 
     Log(info, "Starting monitor for process %s (%d)", monitorConfig->ProcessName, monitorConfig->ProcessId);
@@ -963,6 +1228,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         Log(error, INTERNAL_ERROR);
         Trace("CreateTriggerThreads: failed to allocate memory for monitorProcessMap.");
         ExitProcDump();
+        return;
     }
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
@@ -973,6 +1239,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         Trace("CreateTriggerThreads: failed to create SignalThread.");
         free(monitoredProcessMap);
         ExitProcDump();
+        return;
     }
 
     Log(info, "\n\nPress Ctrl-C to end monitoring without terminating the process(es).\n");
@@ -1016,6 +1283,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Trace("MonitorProcesses: failed to alloc struct for process.");
             free(monitoredProcessMap);
             ExitProcDump();
+            return;
         }
 
         // insert config into queue
@@ -1033,6 +1301,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Trace("MonitorProcesses: Failed to start the monitor.");
             free(monitoredProcessMap);
             ExitProcDump();
+            return;
         }
 
         WaitForAllMonitorsToTerminate(self);
@@ -1092,6 +1361,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Trace("MonitorProcesses: failed to alloc struct for process.");
                                 free(monitoredProcessMap);
                                 ExitProcDump();
+                                return;
                             }
 
                             // populate fields for this target
@@ -1111,6 +1381,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Trace("MonitorProcesses: Failed to start the monitor.");
                                 free(monitoredProcessMap);
                                 ExitProcDump();
+                                return;
                             }
 
                             numMonitoredProcesses++;
@@ -1141,6 +1412,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Trace("MonitorProcesses: failed to alloc struct for named process.");
                                 free(monitoredProcessMap);
                                 ExitProcDump();
+                                return;
                             }
 
                             // populate fields for this target
@@ -1160,6 +1432,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Trace("MonitorProcesses: Failed to start the monitor.");
                                 free(monitoredProcessMap);
                                 ExitProcDump();
+                                return;
                             }
 
                             numMonitoredProcesses++;
@@ -1192,6 +1465,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                 Log(error, INTERNAL_ERROR);
                 Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
                 ExitProcDump();
+                return;
             }
 
             count = 0;
@@ -1254,6 +1528,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
             free(monitoredProcessMap);
             ExitProcDump();
+            return;
         }
 
         count = 0;
@@ -1912,7 +2187,7 @@ int PrintUsage()
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
     printf("            [-e]\n");
-    printf("            [-f <Exception_Name>\n");
+    printf("            [-f <Exception_Name>]\n");
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
     printf("            [-log]\n");

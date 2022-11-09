@@ -37,6 +37,7 @@
 #include "TriggerThreadProcs.h"
 #include "Process.h"
 #include "Logging.h"
+#include "CoreDumpWriter.h"
 
 #define MAX_TRIGGERS 10
 #define NO_PID INT_MAX
@@ -49,8 +50,9 @@
 
 #define PID_MAX_KERNEL_CONFIG "/proc/sys/kernel/pid_max"
 
-#define PROCDUMP_DIR       "/opt/procdump"
-#define PROFILER_FILE_NAME "procdumpprofiler.so"
+#define PROCDUMP_DIR        "/usr/local/bin"
+#define PROFILER_FILE_NAME  "procdumpprofiler.so"
+#define PROFILER_GUID       "{cf0d821e-299b-5307-a3d8-b283c03916dd}"
 
 // -------------------
 // Structs

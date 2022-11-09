@@ -11,6 +11,27 @@
 #include "Procdump.h"
 extern struct ProcDumpConfiguration g_config;
 
+//--------------------------------------------------------------------
+//
+// OnExit
+//
+// Invoked when ProcDump exits.
+//
+//--------------------------------------------------------------------
+void OnExit()
+{
+    // Try to delete the profiler lib in case it was left over...
+    unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+}
+
+
+//--------------------------------------------------------------------
+//
+// main
+//
+// main ProcDump function
+//
+//--------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     // print banner and begin intialization
@@ -30,6 +51,9 @@ int main(int argc, char *argv[])
             Trace("main: failed to parse command line arguments");
             exit(-1);
         }
+
+        // Register exit handler
+        atexit(OnExit);
 
         // monitor for all specified processes
         MonitorProcesses(&g_config);

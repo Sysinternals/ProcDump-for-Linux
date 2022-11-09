@@ -421,14 +421,6 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     char *name = sanitize(self->Config->ProcessName);
     pid_t pid = self->Config->ProcessId;
 
-    // allocate output buffer
-    outputBuffer = (char**)malloc(sizeof(char*) * MAX_LINES);
-    if(outputBuffer == NULL){
-        Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed gcore output buffer allocation");
-        exit(-1);
-    }
-
     // get time for current dump generated
     rawTime = time(NULL);
     if((timerInfo = localtime(&rawTime)) == NULL){
@@ -504,11 +496,17 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 rc = 1;
             }
         }
-
-        free(outputBuffer);
     }
     else
     {
+        // allocate output buffer
+        outputBuffer = (char**)malloc(sizeof(char*) * MAX_LINES);
+        if(outputBuffer == NULL){
+            Log(error, INTERNAL_ERROR);
+            Trace("WriteCoreDumpInternal: failed gcore output buffer allocation");
+            exit(-1);
+        }
+
         // Oterwise, we use gcore dump generation   TODO: We might consider adding a forcegcore flag in cases where
         // someone wants to use gcore even for .NET Core 3.x+ processes.
         commandPipe = popen2(command, "r", &gcorePid);
@@ -564,6 +562,12 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
+
+            for(int j = 0; j < i; j++) {
+                free(outputBuffer[j]);
+            }
+            free(outputBuffer);
+
             rc = gcoreStatus;
         }
         else
@@ -594,11 +598,6 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             }
         }
     }
-
-    for(int j = 0; j < i; j++) {
-        free(outputBuffer[j]);
-    }
-    free(outputBuffer);
 
     free(name);
 
