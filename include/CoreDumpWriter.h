@@ -20,9 +20,6 @@
 #include <sys/un.h>
 #include <stdint.h>
 
-#include "Handle.h"
-#include "ProcDumpConfiguration.h"
-
 #define DATE_LENGTH 26
 #define MAX_LINES 15
 #define BUFFER_LENGTH 1024
@@ -80,7 +77,7 @@ struct CoreDumpWriter {
 };
 
 struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDumpConfiguration *config);
-
+int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName);
 int WriteCoreDump(struct CoreDumpWriter *self);
 
 #endif // CORE_DUMP_WRITER_H

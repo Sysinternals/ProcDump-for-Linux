@@ -6,8 +6,7 @@
 // Generalization of Events and Semaphores (Critical Sections)
 //
 //--------------------------------------------------------------------
-
-#include "Handle.h"
+#include "Includes.h"
 
 //--------------------------------------------------------------------
 //
@@ -60,15 +59,15 @@ int WaitForSingleObject(struct Handle *Handle, int Milliseconds)
             pthread_mutex_unlock(&(Handle->event.mutex));
         }
 
-        
+
         break;
 
     case SEMAPHORE:
-        rc = (Milliseconds == INFINITE_WAIT) ? 
+        rc = (Milliseconds == INFINITE_WAIT) ?
             sem_wait(&(Handle->semaphore)) :
             sem_timedwait(&(Handle->semaphore), &ts);
         break;
-    
+
     default:
         rc = -1;
         break;
@@ -174,7 +173,7 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
 {
     struct coordinator *coordinator;
     struct thread_result *results;
-    
+
     pthread_t *threads;
     struct thread_args **thread_args;
 
@@ -229,13 +228,13 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
         if (rc) {
             // uh oh :(
             printf("ERROR: pthread_create failed in %s with error %d\n",__FILE__,rc);
-            exit(-1);       
+            exit(-1);
         }
     }
 
     coordinator->nWaiters = Count;
     SetEvent(&(coordinator->evtStartWaiting.event));
-    
+
     // listen to our threads in no particular order
     while (((WaitAll && coordinator->numberTriggered < Count) ||
            (!WaitAll && coordinator->numberTriggered == 0)) &&
@@ -251,11 +250,11 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
         }
         // A handle fired.  Check if we need to kep listening or head to return
     }
-    
-    
+
+
     coordinator->stopIssued = 1;
     pthread_mutex_unlock(&coordinator->mutexEventTriggered);
-    
+
     // cleanup threads
     for (t = 0; t < Count; t++) {
         pthread_detach(threads[t]);
@@ -263,10 +262,10 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
 
     // free everything!
     SetEvent(&(coordinator->evtCanCleanUp.event));
-    
+
     free(threads); // we don't need handles on those threads anymore
     free(thread_args); // each thread has already got their copy and is in charge of freeing it
-    
+
     // rc will be non-zero if we timed/errored out
     // retVal will be <wait code> + threadIndex that fired first (e.g., WAIT_OBJECT_0 + 1, WAIT_ABANDONED + 2)
     if (rc) {

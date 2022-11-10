@@ -19,9 +19,6 @@
 #include <signal.h>
 #include <zconf.h>
 
-#include "ProcDumpConfiguration.h"
-#include "Logging.h"
-
 #define MIN_CPU 0                           // minimum CPU value
 #define DEFAULT_NUMBER_OF_DUMPS 1           // default number of core dumps taken
 #define DEFAULT_DELTA_TIME 10               // default delta time in seconds between core dumps

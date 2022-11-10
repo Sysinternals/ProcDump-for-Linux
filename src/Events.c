@@ -6,10 +6,7 @@
 // Quick events implementation
 //
 //--------------------------------------------------------------------
-
-#include "Events.h"
-#include "Logging.h"
-
+#include "Includes.h"
 
 //--------------------------------------------------------------------
 //
@@ -21,7 +18,7 @@ struct Event *CreateEvent(bool IsManualReset, bool InitialState)
     struct Event *event = (struct Event *)malloc(sizeof(struct Event));
     if(event == NULL){
         Log(error, "INTERNAL_ERROR");
-        Trace("CreateEvent: failed memory allocation.");        
+        Trace("CreateEvent: failed memory allocation.");
         exit(-1);
     }
     InitEvent(event, IsManualReset, InitialState);
@@ -40,7 +37,7 @@ struct Event *CreateNamedEvent(bool IsManualReset, bool InitialState, char *Name
     struct Event *event = (struct Event *)malloc(sizeof(struct Event));
     if(event == NULL){
         Log(error, INTERNAL_ERROR);
-        Trace("CreateNamedEvent: failed memory allocation.");        
+        Trace("CreateNamedEvent: failed memory allocation.");
         exit(-1);
     }
 
@@ -101,12 +98,12 @@ void DestroyEvent(struct Event *Event)
     // destroy mutex and cond
     if(pthread_cond_destroy(&(Event->cond)) != 0){
         Log(error, INTERNAL_ERROR);
-        Trace("DestroyEvent: failed pthread_cond_destroy.");        
+        Trace("DestroyEvent: failed pthread_cond_destroy.");
         exit(-1);
     }
     if(pthread_mutex_destroy(&(Event->mutex)) != 0){
         Log(error, INTERNAL_ERROR);
-        Trace("DestroyEvent: failed pthread_mutex_destroy.");        
+        Trace("DestroyEvent: failed pthread_mutex_destroy.");
         exit(-1);
     }
 }
@@ -122,7 +119,7 @@ bool SetEvent(struct Event *Event)
 {
     int success = 0;
 
-    if ((success = pthread_mutex_lock(&(Event->mutex))) == 0) {     
+    if ((success = pthread_mutex_lock(&(Event->mutex))) == 0) {
         Event->bTriggered = true;
         Event->bManualReset ? // Are we a manual-reset?
             pthread_cond_broadcast(&(Event->cond)) :    // signal everyone!
@@ -132,7 +129,7 @@ bool SetEvent(struct Event *Event)
     else
     {
         Log(error, INTERNAL_ERROR);
-        Trace("SetEvent: failed pthread_mutex_lock.");        
+        Trace("SetEvent: failed pthread_mutex_lock.");
         exit(-1);
     }
 
@@ -154,14 +151,14 @@ bool ResetEvent(struct Event *Event)
         Event->bTriggered = false;
         if(pthread_mutex_unlock(&(Event->mutex)) != 0){
             Log(error, INTERNAL_ERROR);
-            Trace("ResetEvent: failed pthread_mutex_unlock.");        
-            exit(-1);        
+            Trace("ResetEvent: failed pthread_mutex_unlock.");
+            exit(-1);
         }
     }
     else{
         Log(error, INTERNAL_ERROR);
-        Trace("ResetEvent: failed pthread_mutex_lock.");        
-        exit(-1);        
+        Trace("ResetEvent: failed pthread_mutex_lock.");
+        exit(-1);
     }
 
     return (success == 0);

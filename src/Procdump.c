@@ -7,8 +7,8 @@
 // in response to various triggers
 //
 //--------------------------------------------------------------------
+#include "Includes.h"
 
-#include "Procdump.h"
 extern struct ProcDumpConfiguration g_config;
 
 //--------------------------------------------------------------------

@@ -12,7 +12,6 @@
 
 #include <stdbool.h>
 #include <sys/sysinfo.h>
-#include <sys/utsname.h>
 #include <zconf.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +20,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <strings.h>
-#include <signal.h>
 #include <syslog.h>
 #include <limits.h>
 #include <dirent.h>
@@ -33,22 +31,11 @@
 #include <sys/queue.h>
 #include <fcntl.h>
 
-#include "Handle.h"
-#include "TriggerThreadProcs.h"
-#include "Process.h"
-#include "Logging.h"
-#include "CoreDumpWriter.h"
-
 #define MAX_TRIGGERS 10
 #define NO_PID INT_MAX
-#define MAX_CMDLINE_LEN 4096+1
 #define EMPTY_PROC_NAME "(null)"
-#define MIN_KERNEL_VERSION 3
-#define MIN_KERNEL_PATCH 5
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
-
-#define PID_MAX_KERNEL_CONFIG "/proc/sys/kernel/pid_max"
 
 #define PROCDUMP_DIR        "/usr/local/bin"
 #define PROFILER_FILE_NAME  "procdumpprofiler.so"
@@ -150,25 +137,7 @@ struct ConfigQueueEntry {
 };
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
-char * GetProcessName(pid_t pid);
-pid_t GetProcessPgid(pid_t pid);
-bool LookupProcessByPid(struct ProcDumpConfiguration *self);
-bool LookupProcessByPgid(struct ProcDumpConfiguration *self);
-bool LookupProcessByName(struct ProcDumpConfiguration *self);
-pid_t LookupProcessPidByName(const char* name);
-void MonitorProcesses(struct ProcDumpConfiguration *self);
-int CreateProcessViaDebugThreadAndWaitUntilLaunched(struct ProcDumpConfiguration *self);
-int CreateTriggerThreads(struct ProcDumpConfiguration *self);
-int StartMonitor(struct ProcDumpConfiguration* monitorConfig);
-int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
-int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle, int milliseconds);
-int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self);
-int WaitForSignalThreadToTerminate(struct ProcDumpConfiguration *self);
-bool IsQuit(struct ProcDumpConfiguration *self);
-int SetQuit(struct ProcDumpConfiguration *self, int quit);
 bool PrintConfiguration(struct ProcDumpConfiguration *self);
-bool ContinueMonitoring(struct ProcDumpConfiguration *self);
-bool BeginMonitoring(struct ProcDumpConfiguration *self);
 void ApplyDefaults(struct ProcDumpConfiguration *self);  // Call this after GetOptions has been called to set default values
 int InjectProfiler(struct ProcDumpConfiguration* monitorConfig);
 int LoadProfiler(struct ProcDumpConfiguration* monitorConfig);
@@ -182,10 +151,6 @@ void ExitProcDump();
 
 void PrintBanner();
 int PrintUsage();
-bool IsValidNumberArg(const char *arg);
-bool CheckKernelVersion();
-int GetMaximumPID();
 
-bool ConvertToInt(const char* src, int* conv);
 
 #endif // PROCDUMPCONFIGURATION_H
