@@ -1,42 +1,49 @@
 // Copyright (c) .NET Foundation and contributors. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-#include "CorProfiler.h"
+#include "ProcDumpProfiler.h"
 #include "corhlpr.h"
 #include "CComPtr.h"
 #include "profiler_pal.h"
 #include <string>
 #include <stdio.h>
 
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo(nullptr), log(NULL)
+INITIALIZE_EASYLOGGINGPP
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::CorProfiler
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo(nullptr)
 {
-    log = fopen("/home/marioh/profilerlog", "a");
+    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
+    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
+
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::~CorProfiler
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 CorProfiler::~CorProfiler()
 {
-    if (this->corProfilerInfo8 != nullptr)
-    {
-        this->corProfilerInfo8->Release();
-        this->corProfilerInfo8 = nullptr;
-    }
-    if (this->corProfilerInfo != nullptr)
-    {
-        this->corProfilerInfo->Release();
-        this->corProfilerInfo = nullptr;
-    }
-
-    if(log)
-    {
-        fclose(log);
-        log=NULL;
-    }
+    Shutdown();
 }
 
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::InitializeForAttach
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfilerInfoUnk, void *pvClientData, UINT cbClientData)
 {
-    Log("Enter: CorProfiler::InitializeForAttach\n");
+    LOG(TRACE) << "Enter: CorProfiler::InitializeForAttach";
+
+    char* filter = (char*) pvClientData;
+    filter[cbClientData]='\0';
+
+    // Convert to WCHAR
+    WCHAR* fW = (WCHAR*) malloc((strlen(filter)+1)*sizeof(uint16_t));
+    for(int i=0; i<(strlen(filter)+1); i++)
+    {
+        fW[i] = (uint16_t) filter[i];
+    }
 
     HRESULT queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo8), reinterpret_cast<void **>(&this->corProfilerInfo8));
     if (FAILED(queryInterfaceResult))
@@ -57,18 +64,74 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         return E_FAIL;
     }
 
-    Log("Exit: CorProfiler::InitializeForAttach\n");
+    ParseExceptionList(fW);
+
+    LOG(TRACE) << "Exit: CorProfiler::InitializeForAttach";
     return S_OK;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::ParseExceptionList
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::ParseExceptionList(WCHAR* filter)
+{
+    String filterW(filter);
+    std::wstringstream exceptionFilter(filterW.ToCStr());
 
+    std::wstring segment;
+    std::vector<std::wstring> exclist;
+
+    while(std::getline(exceptionFilter, segment, L';'))
+    {
+        exclist.push_back(segment);
+    }
+
+    std::vector<std::wstring> exceptionList;
+    for(std::wstring exception : exclist)
+    {
+        std::wstring segment2;
+        std::wstringstream stream(exception);
+        ExceptionMonitorEntry entry;
+        std::getline(stream, segment2, L':');
+
+        entry.exception = (WCHAR*) malloc(segment2.length()*sizeof(uint16_t)+1);
+        wchar_t* t = (wchar_t*) segment2.c_str();
+
+        for(int i=0; i<segment2.length(); i++)
+        {
+            entry.exception[i] = segment2[i];
+        }
+        entry.exception[segment2.length()] = '\0';
+
+        std::getline(stream, segment2, L':');
+        entry.dumpsToCollect = std::stoi(segment2);
+
+        exceptionMonitorList.push_back(entry);
+    }
+
+    for (auto & element : exceptionMonitorList)
+    {
+        String str(element.exception);
+        LOG(TRACE) << "Exception filter " << str.ToCStr() << " with dump count set to " << std::to_wstring(element.dumpsToCollect);
+    }
+
+    return true;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::Initialize
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk)
 {
     return S_OK;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::Shutdown
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 {
+    LOG(TRACE) << "Enter: CorProfiler::Shutdown";
     if (this->corProfilerInfo8 != nullptr)
     {
         this->corProfilerInfo8->Release();
@@ -81,25 +144,42 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
         this->corProfilerInfo = nullptr;
     }
 
+    LOG(TRACE) << "Exit: CorProfiler::Shutdown";
     return S_OK;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::ExceptionThrown
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 {
-    Log("Enter: CorProfiler::ExceptionThrown\n");
+    LOG(TRACE) << "Enter: CorProfiler::ExceptionThrown";
 
     String exceptionName = GetExceptionName(thrownObjectId);
-    if(exceptionName==WCHAR("System.Exception"))
+
+    LOG(TRACE) << "Enter: CorProfiler::ExceptionThrown: " << exceptionName.ToCStr();
+
+    // Check to see if we have any matches on exceptions
+    for (auto & element : exceptionMonitorList)
     {
-        Log("CorProfiler::ExceptionThrown::System.Exception\n");
+        String exc(element.exception);
+        if(exceptionName==exc)
+        {
+            LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
+        }
     }
 
-    Log("Leave: CorProfiler::ExceptionThrown\n");
+    LOG(TRACE) << "Exit: CorProfiler::ExceptionThrown";
     return S_OK;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetExceptionName
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 String CorProfiler::GetExceptionName(ObjectID objectId)
 {
+    LOG(TRACE) << "Enter: CorProfiler::GetExceptionName, objectId =" << objectId;
+
     String name;
     ClassID classId;
     ModuleID moduleId;
@@ -110,18 +190,21 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     HRESULT hRes = corProfilerInfo->GetClassFromObject(objectId, &classId);
     if(FAILED(hRes))
     {
+        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetClassFromObject";
         return WCHAR("Failed_GetClassFromObject");
     }
 
     hRes = corProfilerInfo->GetClassIDInfo(classId, &moduleId, &typeDefToken);
     if(FAILED(hRes))
     {
+        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetClassIDInfo";
         return WCHAR("Failed_GetClassIDInfo");
     }
 
     hRes = corProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**)&metadata);
     if(FAILED(hRes))
     {
+        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetModuleMetaData";
         return WCHAR("Failed_GetModuleMetaData");
     }
 
@@ -129,6 +212,7 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     hRes = metadata->GetTypeDefProps(typeDefToken, funcName, 1024, &read, NULL, NULL);
     if(FAILED(hRes))
     {
+        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetTypeDefProps";
         metadata->Release();
         return WCHAR("Failed_GetTypeDefProps");
     }

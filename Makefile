@@ -53,7 +53,7 @@ install:
 	mkdir -p $(DESTDIR)$(MANDIR)
 	cp procdump.1 $(DESTDIR)$(MANDIR)
 
-$(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/ProcDumpProfiler.cpp $(PROFSRCDIR)/dllmain.cpp $(PROFSRCDIR)/corprof_i.cpp | $(OBJDIR)
+$(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/ProcDumpProfiler.cpp $(PROFSRCDIR)/dllmain.cpp $(PROFSRCDIR)/corprof_i.cpp $(PROFSRCDIR)/easylogging++.cc | $(OBJDIR)
 	$(PROFCLANG) -shared -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
 	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 

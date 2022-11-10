@@ -217,3 +217,133 @@ char *sanitize(char * processName)
     }
     return sanitizedProcessName;
 }
+
+//--------------------------------------------------------------------
+//
+// StringToGuid
+//
+// Convert string representation of GUID to a GUID
+//
+//--------------------------------------------------------------------
+int StringToGuid(char* szGuid, struct CLSID* pGuid)
+{
+    int i;
+
+    // Verify the surrounding syntax.
+    if (strlen(szGuid) != 38 || szGuid[0] != '{' || szGuid[9] != '-' ||
+        szGuid[14] != '-' || szGuid[19] != '-' || szGuid[24] != '-' || szGuid[37] != '}')
+    {
+        return -1;
+    }
+
+    // Parse the first 3 fields.
+    if (GetHex(szGuid + 1, 4, &pGuid->Data1))
+        return -1;
+    if (GetHex(szGuid + 10, 2, &pGuid->Data2))
+        return -1;
+    if (GetHex(szGuid + 15, 2, &pGuid->Data3))
+        return -1;
+
+    // Get the last two fields (which are byte arrays).
+    for (i = 0; i < 2; ++i)
+    {
+        if (GetHex(szGuid + 20 + (i * 2), 1, &pGuid->Data4[i]))
+        {
+            return -1;
+        }
+    }
+    for (i=0; i < 6; ++i)
+    {
+        if (GetHex(szGuid + 25 + (i * 2), 1, &pGuid->Data4[i+2]))
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// GetHex
+//
+// Gets hex value of specified string
+//
+//--------------------------------------------------------------------
+int GetHex(char* szStr, int size, void* pResult)
+{
+    int         count = size * 2;       // # of bytes to take from string.
+    unsigned int Result = 0;           // Result value.
+    char          ch;
+
+    while (count-- && (ch = *szStr++) != '\0')
+    {
+        switch (ch)
+        {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+            Result = 16 * Result + (ch - '0');
+            break;
+
+            case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+            Result = 16 * Result + 10 + (ch - 'A');
+            break;
+
+            case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+            Result = 16 * Result + 10 + (ch - 'a');
+            break;
+
+            default:
+            return -1;
+        }
+    }
+
+    // Set the output.
+    switch (size)
+    {
+        case 1:
+        *((unsigned char*) pResult) = (unsigned char) Result;
+        break;
+
+        case 2:
+        *((short*) pResult) = (short) Result;
+        break;
+
+        case 4:
+        *((int*) pResult) = Result;
+        break;
+
+        default:
+        break;
+    }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// createDir
+//
+// Create specified directory with specified permissions.
+//
+//--------------------------------------------------------------------
+bool createDir(const char *dir, mode_t perms)
+{
+    if (dir == NULL) {
+        fprintf(stderr, "createDir invalid params\n");
+        return false;
+    }
+
+    struct stat st;
+
+    if (stat(dir, &st) < 0) {
+        if (mkdir(dir, perms) < 0) {
+            return false;
+        }
+    } else {
+        if (!S_ISDIR(st.st_mode)) {
+            return false;
+        }
+        chmod(dir, perms);
+    }
+    return true;
+}

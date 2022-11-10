@@ -189,8 +189,8 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
         if(StartMonitor(self)!=0)
         {
-            Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: Failed to start the monitor.");
+            Log(error, "MonitorProcesses: Failed to start the monitor.");
             free(monitoredProcessMap);
             ExitProcDump();
             return;
@@ -582,14 +582,22 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
 {
     int ret = 0;
+    char* exceptionFilter = NULL;
 
     if(monitorConfig->bDumpOnException)
     {
-        // Inject the profiler into the target process
-        if(InjectProfiler(monitorConfig)!=0)
+        if(monitorConfig->ExceptionFilter)
         {
-            Log(error, "Failed to inject profiler into target process. Please make sure the target process is a .NET process");
-            Trace("StartMonitor: failed to inject profiler into target process.");
+            exceptionFilter = GetEncodedExceptionFilter(monitorConfig->ExceptionFilter, monitorConfig->NumberOfDumpsToCollect);
+        }
+
+        // Inject the profiler into the target process
+        if(InjectProfiler(monitorConfig->ProcessId, exceptionFilter)!=0)
+        {
+            if(exceptionFilter)
+            {
+                free(exceptionFilter);
+            }
             return -1;
         }
     }
@@ -607,10 +615,20 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
     {
         Log(error, INTERNAL_ERROR);
         Trace("StartMonitor: failed to start monitoring.");
+        if(exceptionFilter)
+        {
+            free(exceptionFilter);
+        }
+
         return -1;
     }
 
     Log(info, "Starting monitor for process %s (%d)", monitorConfig->ProcessName, monitorConfig->ProcessId);
+
+    if(exceptionFilter)
+    {
+        free(exceptionFilter);
+    }
 
     return ret;
 }

@@ -4,20 +4,38 @@
 #pragma once
 
 #include <atomic>
+#include <syslog.h>
+#include <iostream>
+#include <string>
+#include <string>
+#include <vector>
+#include <sstream>
+
 #include "cor.h"
 #include "corprof.h"
 #include "profilerstring.h"
+#include "easylogging++.h"
 
+#define LOG_FILE    "/var/tmp/procdumpprofiler.log"
+#define MAX_LOG_FILE_SIZE    "1000000"
 
 class CorProfiler : public ICorProfilerCallback8
 {
 private:
+
+    struct ExceptionMonitorEntry
+    {
+        WCHAR* exception;
+        int dumpsToCollect;
+    };
+
     std::atomic<int> refCount;
     ICorProfilerInfo8* corProfilerInfo8;
     ICorProfilerInfo* corProfilerInfo;
-    FILE* log;
+    std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
 
     String GetExceptionName(ObjectID objectId);
+    bool ParseExceptionList(WCHAR* fw);
 
 public:
     CorProfiler();
@@ -151,14 +169,5 @@ public:
         }
 
         return count;
-    }
-
-    void Log(char* sz)
-    {
-        if(log)
-        {
-            fprintf(log, sz);
-            fflush(log);
-        }
     }
 };

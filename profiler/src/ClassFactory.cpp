@@ -2,7 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 #include "ClassFactory.h"
-#include "CorProfiler.h"
+#include "ProcDumpProfiler.h"
 
 ClassFactory::ClassFactory() : refCount(0)
 {

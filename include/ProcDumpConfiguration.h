@@ -37,10 +37,6 @@
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
 
-#define PROCDUMP_DIR        "/usr/local/bin"
-#define PROFILER_FILE_NAME  "procdumpprofiler.so"
-#define PROFILER_GUID       "{cf0d821e-299b-5307-a3d8-b283c03916dd}"
-
 // -------------------
 // Structs
 // -------------------
@@ -139,9 +135,6 @@ struct ConfigQueueEntry {
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 bool PrintConfiguration(struct ProcDumpConfiguration *self);
 void ApplyDefaults(struct ProcDumpConfiguration *self);  // Call this after GetOptions has been called to set default values
-int InjectProfiler(struct ProcDumpConfiguration* monitorConfig);
-int LoadProfiler(struct ProcDumpConfiguration* monitorConfig);
-int ExtractProfiler();
 
 void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self);
 struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfiguration *self);
