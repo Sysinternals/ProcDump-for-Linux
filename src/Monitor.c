@@ -9,13 +9,13 @@
 #include "Includes.h"
 
 static pthread_t sig_thread_id;
-static sigset_t sig_set;
 
 TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
 pthread_mutex_t queue_mutex;
 
 extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
+extern sigset_t sig_set;
 
 //--------------------------------------------------------------------
 //
@@ -70,6 +70,12 @@ void *SignalThread(void *input)
                     }
                 }
             }
+
+            // If we are monitoring for .NET exceptions we need to cancel/unload the profiler in the target
+            if(item->config->bDumpOnException)
+            {
+                CancelProfiler(item->config->ProcessId);
+            }
         }
 
         Log(info, "Quit");
@@ -82,7 +88,7 @@ void *SignalThread(void *input)
         break;
     }
 
-    pthread_exit(NULL);
+    exit(0);
 }
 
 //--------------------------------------------------------------------
@@ -461,28 +467,6 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
     self->nThreads = 0;
     bool tooManyTriggers = false;
 
-    if((rc=sigemptyset (&sig_set)) < 0)
-    {
-        Trace("CreateTriggerThreads: sigemptyset failed.");
-        return rc;
-    }
-    if((rc=sigaddset (&sig_set, SIGINT)) < 0)
-    {
-        Trace("CreateTriggerThreads: sigaddset failed.");
-        return rc;
-    }
-    if((rc=sigaddset (&sig_set, SIGTERM)) < 0)
-    {
-        Trace("CreateTriggerThreads: sigaddset failed.");
-        return rc;
-    }
-
-    if((rc = pthread_sigmask (SIG_BLOCK, &sig_set, NULL)) != 0)
-    {
-        Trace("CreateTriggerThreads: pthread_sigmask failed.");
-        return rc;
-    }
-
     // create threads
     if (self->CpuThreshold != -1) {
         if (self->nThreads < MAX_TRIGGERS) {
@@ -599,6 +583,11 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
                 free(exceptionFilter);
             }
             return -1;
+        }
+
+        while(true)
+        {
+            sleep(1);
         }
     }
     else

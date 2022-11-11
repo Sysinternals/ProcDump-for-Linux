@@ -318,3 +318,59 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     free(cpy);
     return exceptionFilter;
 }
+
+//--------------------------------------------------------------------
+//
+// CancelProfiler
+//
+// Sends a message over socket (procdump-cancel-<target_pid>) to
+// indicate that the user has cancelled the procdump session and the
+// profiler has to be unloaded.
+//
+//--------------------------------------------------------------------
+int CancelProfiler(pid_t pid)
+{
+    int s, len;
+    struct sockaddr_un remote;
+    char tmpFolder[FILENAME_MAX+1];
+    char* prefixTmpFolder = NULL;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump-cancel-%d", pid);
+    }
+    else
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
+    }
+
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
+    {
+        printf("Failed to create socket\n");
+        return -1;
+    }
+
+    printf("Trying to connect...\n");
+
+    remote.sun_family = AF_UNIX;
+    strcpy(remote.sun_path, tmpFolder);
+    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+    if(connect(s, (struct sockaddr *)&remote, len)==-1)
+    {
+        printf("Failed to connect\n");
+        return -1;
+    }
+
+    printf("Connected...\n");
+
+    bool cancel=true;
+    if(send(s, &cancel, 1, 0)==-1)
+    {
+        printf("Failed to send cancellation\n");
+        return -1;
+    }
+
+    return 0;
+}

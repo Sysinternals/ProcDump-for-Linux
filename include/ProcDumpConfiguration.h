@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <sys/queue.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_TRIGGERS 10
 #define NO_PID INT_MAX

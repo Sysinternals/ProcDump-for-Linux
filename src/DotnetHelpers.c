@@ -40,7 +40,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     }
     else
     {
-        strncpy(tmpFolder, prefixTmpFolder, 4096);
+        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
     }
 
     // Enumerate all open domain sockets exposed from the process. If one

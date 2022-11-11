@@ -16,6 +16,8 @@
 
 #include "ProcDumpConfiguration.h"
 
+
+
 // Monitor functions
 void MonitorProcesses(struct ProcDumpConfiguration*self);
 int CreateTriggerThreads(struct ProcDumpConfiguration *self);

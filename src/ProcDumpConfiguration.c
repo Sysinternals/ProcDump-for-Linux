@@ -15,6 +15,9 @@ struct ProcDumpConfiguration g_config;                          // backbone of t
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
 extern pthread_mutex_t queue_mutex;
 
+sigset_t sig_set;
+
+
 //--------------------------------------------------------------------
 //
 // ApplyDefaults - Apply default values to configuration
@@ -54,6 +57,11 @@ void InitProcDump()
     InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
     pthread_mutex_init(&queue_mutex, NULL);
+
+    sigemptyset (&sig_set);
+    sigaddset (&sig_set, SIGINT);
+    sigaddset (&sig_set, SIGTERM);
+    pthread_sigmask (SIG_BLOCK, &sig_set, NULL);
 }
 
 //--------------------------------------------------------------------
@@ -210,6 +218,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->CoreDumpPath = self->CoreDumpPath == NULL ? NULL : strdup(self->CoreDumpPath);
         copy->CoreDumpName = self->CoreDumpName == NULL ? NULL : strdup(self->CoreDumpName);
         copy->ExceptionFilter = self->ExceptionFilter == NULL ? NULL : strdup(self->ExceptionFilter);
+        copy->bDumpOnException = self->bDumpOnException;
 
         return copy;
     }

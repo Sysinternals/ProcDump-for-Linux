@@ -18,6 +18,7 @@ int InjectProfiler(pid_t pid, char* filter);
 int LoadProfiler(pid_t pid, char* filter);
 int ExtractProfiler();
 char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDumps);
+int CancelProfiler();
 
 #endif // PROFILERHELPERS_H
 

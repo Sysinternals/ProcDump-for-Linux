@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include "cor.h"
 #include "corprof.h"
@@ -18,6 +21,8 @@
 
 #define LOG_FILE    "/var/tmp/procdumpprofiler.log"
 #define MAX_LOG_FILE_SIZE    "1000000"
+
+void* CancelThread(void* args);
 
 class CorProfiler : public ICorProfilerCallback8
 {
@@ -30,14 +35,18 @@ private:
     };
 
     std::atomic<int> refCount;
-    ICorProfilerInfo8* corProfilerInfo8;
     ICorProfilerInfo* corProfilerInfo;
+    ICorProfilerInfo8* corProfilerInfo8;
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
+    pthread_t ipcThread;
+    std::wstring socketPath;
 
     String GetExceptionName(ObjectID objectId);
-    bool ParseExceptionList(WCHAR* fw);
+    bool ParseClientData(WCHAR* fw);
 
 public:
+    ICorProfilerInfo3* corProfilerInfo3;
+
     CorProfiler();
     virtual ~CorProfiler();
     HRESULT STDMETHODCALLTYPE Initialize(IUnknown* pICorProfilerInfoUnk) override;

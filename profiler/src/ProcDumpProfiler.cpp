@@ -11,13 +11,83 @@
 INITIALIZE_EASYLOGGINGPP
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CancelThread - Waits for cancellation notification from ProcDump (in case of CTRL-C)
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+void* CancelThread(void* args)
+{
+    LOG(TRACE) << "Enter: CancelThread";
+    unsigned int s, t, s2;
+    struct sockaddr_un local, remote;
+    int len;
+    char tmpFolder[FILENAME_MAX+1];
+    char* prefixTmpFolder = NULL;
+
+    CorProfiler* profiler = (CorProfiler*) args;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump-cancel-%d", getpid());
+    }
+    else
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
+    }
+
+    s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
+
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, tmpFolder);
+    unlink(local.sun_path);
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
+    bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
+
+    listen(s, 1);       // Only allow one client to connect
+
+    while(true)
+    {
+        bool res=false;
+        LOG(TRACE) << "CancelThread:Waiting for cancellation";
+
+        t = sizeof(remote);
+        s2 = accept(s, (struct sockaddr *)&remote, &t);
+
+
+        LOG(INFO) << "CancelThread:Connected to cancellation request";
+
+        recv(s2, &res, sizeof(bool), 0);
+        if(res==true)
+        {
+            LOG(INFO) << "CancelThread:Unloading profiler";
+
+            // The detach timeout is set to 30s but the runtime will continue trying with
+            // larger timeouts if 30s is not enough. In most cases, 30s is overkill but in the cases where
+            // it's in the process of writing a large dump it can take some time
+            profiler->corProfilerInfo3->RequestProfilerDetach(30000);
+
+            close(s2);
+            break;
+        }
+
+        close(s2);
+    }
+
+    return NULL;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo(nullptr)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr)
 {
+    // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
+    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
 
+    // Create IPC threads
+    pthread_create(&ipcThread, NULL, CancelThread, this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -48,12 +118,21 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
     HRESULT queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo8), reinterpret_cast<void **>(&this->corProfilerInfo8));
     if (FAILED(queryInterfaceResult))
     {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo8";
+        return E_FAIL;
+    }
+
+    queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo3), reinterpret_cast<void **>(&this->corProfilerInfo3));
+    if (FAILED(queryInterfaceResult))
+    {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo3";
         return E_FAIL;
     }
 
     queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo), reinterpret_cast<void **>(&this->corProfilerInfo));
     if (FAILED(queryInterfaceResult))
     {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo";
         return E_FAIL;
     }
 
@@ -64,7 +143,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         return E_FAIL;
     }
 
-    ParseExceptionList(fW);
+    ParseClientData(fW);
 
     LOG(TRACE) << "Exit: CorProfiler::InitializeForAttach";
     return S_OK;
@@ -72,14 +151,19 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ParseExceptionList
+//
+// Syntax of client data: <exception>:<numdumps>;<exception>:<numdumps>,...
+//
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-bool CorProfiler::ParseExceptionList(WCHAR* filter)
+bool CorProfiler::ParseClientData(WCHAR* filter)
 {
+    LOG(TRACE) << "Enter: CorProfiler::ParseClientData";
     String filterW(filter);
     std::wstringstream exceptionFilter(filterW.ToCStr());
-
     std::wstring segment;
     std::vector<std::wstring> exclist;
+
+    LOG(TRACE) << "CorProfiler::ParseClientData " << exceptionFilter;
 
     while(std::getline(exceptionFilter, segment, L';'))
     {
@@ -89,6 +173,7 @@ bool CorProfiler::ParseExceptionList(WCHAR* filter)
     std::vector<std::wstring> exceptionList;
     for(std::wstring exception : exclist)
     {
+        // exception filter
         std::wstring segment2;
         std::wstringstream stream(exception);
         ExceptionMonitorEntry entry;
@@ -112,9 +197,10 @@ bool CorProfiler::ParseExceptionList(WCHAR* filter)
     for (auto & element : exceptionMonitorList)
     {
         String str(element.exception);
-        LOG(TRACE) << "Exception filter " << str.ToCStr() << " with dump count set to " << std::to_wstring(element.dumpsToCollect);
+        LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << str.ToCStr() << " with dump count set to " << std::to_wstring(element.dumpsToCollect);
     }
 
+    LOG(TRACE) << "Exit: CorProfiler::ParseClientData";
     return true;
 }
 
@@ -136,6 +222,12 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
     {
         this->corProfilerInfo8->Release();
         this->corProfilerInfo8 = nullptr;
+    }
+
+    if (this->corProfilerInfo3 != nullptr)
+    {
+        this->corProfilerInfo3->Release();
+        this->corProfilerInfo3 = nullptr;
     }
 
     if (this->corProfilerInfo != nullptr)
