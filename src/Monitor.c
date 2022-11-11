@@ -584,11 +584,6 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
             }
             return -1;
         }
-
-        while(true)
-        {
-            sleep(1);
-        }
     }
     else
     {
@@ -695,8 +690,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
     {
         // If we are monitoring for exceptions, we don't have any threads per se,
         // rather we wait for the profiler to let us know once done.
-
-        // TODO: WAIT FOR PROFILER
+        WaitForProfilerCompletion(self->ProcessId);
     }
     else
     {

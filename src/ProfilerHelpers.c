@@ -11,6 +11,8 @@
 extern char _binary_obj_ProcDumpProfiler_so_end[];
 extern char _binary_obj_ProcDumpProfiler_so_start[];
 
+extern char* socketPath;
+
 //--------------------------------------------------------------------
 //
 // ExtractProfiler
@@ -68,6 +70,7 @@ int LoadProfiler(pid_t pid, char* filter)
     uint16_t* profilerPathW = NULL;
     unsigned int clientDataSize = 0;
     char* socketName = NULL;
+    char* clientData = NULL;
 
     if(!IsCoreClrProcess(pid, &socketName))
     {
@@ -88,7 +91,7 @@ int LoadProfiler(pid_t pid, char* filter)
 
     if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
     {
-        Trace("Failed to connect to socket for .NET Core dump generation.");
+        Trace("Failed to connect to socket for .NET Core profiler load.");
         return -1;
     }
 
@@ -114,7 +117,9 @@ int LoadProfiler(pid_t pid, char* filter)
     // client data
     if(filter)
     {
-        clientDataSize = (strlen(filter)+1);
+        clientDataSize = snprintf(NULL, 0, "%d;%s", getpid(), filter) + 1;
+        clientData = malloc(clientDataSize);
+        sprintf(clientData, "%d;%s", getpid(), filter);
     }
     else
     {
@@ -122,6 +127,8 @@ int LoadProfiler(pid_t pid, char* filter)
     }
     payloadSize += sizeof(clientDataSize);
     payloadSize += clientDataSize*sizeof(unsigned char);
+
+    Trace("LoadProfiler: Exception list: %s", clientData);
 
     uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
 
@@ -165,7 +172,7 @@ int LoadProfiler(pid_t pid, char* filter)
 
     if(clientDataSize>0)
     {
-        memcpy(temp_buffer_cur, filter, clientDataSize);
+        memcpy(temp_buffer_cur, clientData, clientDataSize);
         temp_buffer_cur += clientDataSize;
     }
 
@@ -272,7 +279,7 @@ int InjectProfiler(pid_t pid, char* filter)
 // GetEncodedExceptionFilter
 //
 // Create the exception filter string which goes like this:
-//    Exception[;Exception...]
+//    <procdump_pid>;<full_dump_path>;Exception[;Exception...]
 // Where Exception is:
 //    Name_of_Exception:num_dumps
 // The exception filter passed in from the command line:
@@ -332,45 +339,97 @@ int CancelProfiler(pid_t pid)
 {
     int s, len;
     struct sockaddr_un remote;
-    char tmpFolder[FILENAME_MAX+1];
-    char* prefixTmpFolder = NULL;
+    char* tmpFolder = NULL;
 
-    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
-    prefixTmpFolder = getenv("TMPDIR");
-    if(prefixTmpFolder==NULL)
-    {
-        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump-cancel-%d", pid);
-    }
-    else
-    {
-        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
-    }
+    tmpFolder = GetSocketPath("procdump/procdump-cancel-", pid);
 
     if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
     {
-        printf("Failed to create socket\n");
+        Trace("Failed to create socket\n");
         return -1;
     }
 
-    printf("Trying to connect...\n");
+    Trace("Trying to connect...\n");
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, tmpFolder);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if(connect(s, (struct sockaddr *)&remote, len)==-1)
     {
-        printf("Failed to connect\n");
+        Trace("Failed to connect\n");
         return -1;
     }
 
-    printf("Connected...\n");
+    Trace("Connected...\n");
 
     bool cancel=true;
     if(send(s, &cancel, 1, 0)==-1)
     {
-        printf("Failed to send cancellation\n");
+        Trace("Failed to send cancellation\n");
         return -1;
     }
 
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// WaitForProfilerCompletion
+//
+// Waits for profiler to send a completed status (bool=true) on
+// <prefix>/procdump-status-<pid>
+//
+//--------------------------------------------------------------------
+int WaitForProfilerCompletion(pid_t pid)
+{
+    unsigned int s, t, s2;
+    struct sockaddr_un local, remote;
+    int len;
+    char* tmpFolder = NULL;
+
+    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid());
+    socketPath = tmpFolder;
+    Trace("Status socket path: %s", tmpFolder);
+
+    s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
+
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, tmpFolder);
+    unlink(local.sun_path);
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
+    bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
+    chmod(tmpFolder, 0777);
+
+    listen(s, 1);       // Only allow one client to connect
+
+    while(true)
+    {
+        bool res=false;
+        Trace("CancelThread:Waiting for status");
+
+        t = sizeof(remote);
+        s2 = accept(s, (struct sockaddr *)&remote, &t);
+
+        Trace("CancelThread:Connected to status");
+
+        recv(s2, &res, sizeof(bool), 0);
+        if(res==true)
+        {
+            Trace("Profiler reported that it's done");
+
+            close(s2);
+            break;
+        }
+
+        close(s2);
+    }
+
+    unlink(tmpFolder);
+    socketPath = NULL;
+
+    if(tmpFolder)
+    {
+        free(tmpFolder);
+    }
     return 0;
 }

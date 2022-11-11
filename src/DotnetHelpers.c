@@ -28,20 +28,11 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     *socketName = NULL;
     FILE *procFile = NULL;
     char lineBuf[4096];
-    char tmpFolder[4096];
-    char* prefixTmpFolder = NULL;
+    char* tmpFolder = NULL;
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
-    prefixTmpFolder = getenv("TMPDIR");
-    if(prefixTmpFolder==NULL)
-    {
-        snprintf(tmpFolder, 4096, "/tmp/dotnet-diagnostic-%d", pid);
-    }
-    else
-    {
-        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
-    }
+    tmpFolder = GetSocketPath("dotnet-diagnostic-", pid);
 
     // Enumerate all open domain sockets exposed from the process. If one
     // exists by the following prefix, we assume its a .NET Core process:
@@ -90,6 +81,12 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     {
         free(*socketName);
         *socketName = NULL;
+    }
+
+    if(tmpFolder != NULL)
+    {
+        free(tmpFolder);
+        tmpFolder = NULL;
     }
 
     return bRet;

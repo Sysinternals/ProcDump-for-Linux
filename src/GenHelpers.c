@@ -347,3 +347,34 @@ bool createDir(const char *dir, mode_t perms)
     }
     return true;
 }
+
+//--------------------------------------------------------------------
+//
+// GetTmpFolder
+//
+// Gets the temporary folder of the system and appends the prefix and
+// pid.
+//
+//--------------------------------------------------------------------
+char* GetSocketPath(char* prefix, pid_t pid)
+{
+    char* prefixTmpFolder = NULL;
+    char* t = NULL;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
+        t = malloc(len+1);
+        sprintf(t, "/tmp/%s%d", prefix, pid);
+    }
+    else
+    {
+        int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        t = malloc(len+1);
+        sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
+    }
+
+    return t;
+}

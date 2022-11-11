@@ -10,6 +10,8 @@
 
 INITIALIZE_EASYLOGGINGPP
 
+char cancelSocketPath[FILENAME_MAX+1];
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CancelThread - Waits for cancellation notification from ProcDump (in case of CTRL-C)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -19,7 +21,6 @@ void* CancelThread(void* args)
     unsigned int s, t, s2;
     struct sockaddr_un local, remote;
     int len;
-    char tmpFolder[FILENAME_MAX+1];
     char* prefixTmpFolder = NULL;
 
     CorProfiler* profiler = (CorProfiler*) args;
@@ -28,17 +29,17 @@ void* CancelThread(void* args)
     prefixTmpFolder = getenv("TMPDIR");
     if(prefixTmpFolder==NULL)
     {
-        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump-cancel-%d", getpid());
+        snprintf(cancelSocketPath, FILENAME_MAX, "/tmp/procdump/procdump-cancel-%d", getpid());
     }
     else
     {
-        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump-cancel-%d", prefixTmpFolder, getpid());
+        snprintf(cancelSocketPath, FILENAME_MAX, "%s/procdump/procdump-cancel-%d", prefixTmpFolder, getpid());
     }
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
 
     local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, tmpFolder);
+    strcpy(local.sun_path, cancelSocketPath);
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
     bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
@@ -73,13 +74,14 @@ void* CancelThread(void* args)
         close(s2);
     }
 
+    unlink(cancelSocketPath);
     return NULL;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -152,7 +154,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ParseExceptionList
 //
-// Syntax of client data: <exception>:<numdumps>;<exception>:<numdumps>,...
+// Syntax of client data: <pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(WCHAR* filter)
@@ -163,20 +165,31 @@ bool CorProfiler::ParseClientData(WCHAR* filter)
     std::wstring segment;
     std::vector<std::wstring> exclist;
 
-    LOG(TRACE) << "CorProfiler::ParseClientData " << exceptionFilter;
-
     while(std::getline(exceptionFilter, segment, L';'))
     {
         exclist.push_back(segment);
     }
 
     std::vector<std::wstring> exceptionList;
+    int i=0;
     for(std::wstring exception : exclist)
     {
+        if(i==0)
+        {
+            //
+            // First part of the exception list is always the procdump pid.
+            // we we need this to communicate back status to procdump
+            //
+            procDumpPid = std::stoi(exception);
+            LOG(TRACE) << "CorProfiler::ParseClientData: ProcDump PID = " << procDumpPid;
+            i=1;
+            continue;
+        }
         // exception filter
         std::wstring segment2;
         std::wstringstream stream(exception);
         ExceptionMonitorEntry entry;
+        entry.collectedDumps = 0;
         std::getline(stream, segment2, L':');
 
         entry.exception = (WCHAR*) malloc(segment2.length()*sizeof(uint16_t)+1);
@@ -241,6 +254,59 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::SendCompletedStatus
+// Sends a completed status to ProcDump
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+int CorProfiler::SendCompletedStatus()
+{
+    int s, len;
+    struct sockaddr_un remote;
+    char tmpFolder[FILENAME_MAX+1];
+    char* prefixTmpFolder = NULL;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump/procdump-status-%d", procDumpPid);
+    }
+    else
+    {
+        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump/procdump-status-%d", prefixTmpFolder, procDumpPid);
+    }
+
+    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Socket path: " << tmpFolder;
+
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
+    {
+        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to create socket: " << errno;
+        return -1;
+    }
+
+    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Trying to connect...";
+
+    remote.sun_family = AF_UNIX;
+    strcpy(remote.sun_path, tmpFolder);
+    len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+    if(connect(s, (struct sockaddr *)&remote, len)==-1)
+    {
+        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to connect: " << errno;
+        return -1;
+    }
+
+    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Connected";
+
+    bool cancel=true;
+    if(send(s, &cancel, 1, 0)==-1)
+    {
+        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to send completion status";
+        return -1;
+    }
+
+    return 0;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ExceptionThrown
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
@@ -258,6 +324,18 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
         if(exceptionName==exc)
         {
             LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
+
+            element.collectedDumps++;
+            if(element.collectedDumps == element.dumpsToCollect)
+            {
+                //
+                // Profiler is done, send message to procdump, cancel cancellation thread, detach and delete socket
+                //
+                SendCompletedStatus();
+                pthread_cancel(ipcThread);
+                unlink(cancelSocketPath);
+                corProfilerInfo3->RequestProfilerDetach(30000);
+            }
         }
     }
 

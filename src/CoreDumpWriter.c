@@ -93,12 +93,13 @@ int WriteCoreDump(struct CoreDumpWriter *self)
     return rc;
 }
 
-
-/// CRITICAL SECTION
-/// Should only ever have <max number of dump slots> running concurrently
-/// The default value of which is 1 (hard coded) and is set in
-/// ProcDumpConfiguration.semAvailableDumpSlots
-/// Returns 1 if we trigger quit in the crit section, 0 otherwise
+// --------------------------------------------------------------------------------------
+// CRITICAL SECTION
+// Should only ever have <max number of dump slots> running concurrently
+// The default value of which is 1 (hard coded) and is set in
+// ProcDumpConfiguration.semAvailableDumpSlots
+// Returns 1 if we trigger quit in the crit section, 0 otherwise
+// --------------------------------------------------------------------------------------
 int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 {
     char date[DATE_LENGTH];

@@ -16,7 +16,7 @@ struct ProcDumpConfiguration * target_config;                   // list of confi
 extern pthread_mutex_t queue_mutex;
 
 sigset_t sig_set;
-
+char* socketPath;
 
 //--------------------------------------------------------------------
 //
@@ -62,6 +62,26 @@ void InitProcDump()
     sigaddset (&sig_set, SIGINT);
     sigaddset (&sig_set, SIGTERM);
     pthread_sigmask (SIG_BLOCK, &sig_set, NULL);
+
+    char* prefixTmpFolder = NULL;
+
+    // Create the directories where our sockets will be stored
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        createDir("/tmp/procdump", 0777);
+    }
+    else
+    {
+        int len = strlen(prefixTmpFolder) + strlen("/procdump") + 1;
+        char* t = malloc(len);
+        sprintf(t, "%s%s", prefixTmpFolder, "/procdump");
+        createDir(t, 0777);
+        free(t);
+    }
+
+    socketPath = NULL;
 }
 
 //--------------------------------------------------------------------
@@ -74,6 +94,14 @@ void ExitProcDump()
     pthread_mutex_destroy(&LoggerLock);
     closelog();
     FreeProcDumpConfiguration(&g_config);
+
+    // Try to delete the profiler lib in case it was left over...
+    unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    if(socketPath)
+    {
+        unlink(socketPath);
+        socketPath = NULL;
+    }
 }
 
 //--------------------------------------------------------------------

@@ -136,13 +136,11 @@ struct ConfigQueueEntry {
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);
 bool PrintConfiguration(struct ProcDumpConfiguration *self);
 void ApplyDefaults(struct ProcDumpConfiguration *self);  // Call this after GetOptions has been called to set default values
-
 void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self);
 struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfiguration *self);
 void InitProcDumpConfiguration(struct ProcDumpConfiguration *self);
 void InitProcDump();
 void ExitProcDump();
-
 void PrintBanner();
 int PrintUsage();
 

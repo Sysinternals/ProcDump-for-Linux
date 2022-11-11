@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
 
 #include "cor.h"
 #include "corprof.h"
@@ -32,6 +33,7 @@ private:
     {
         WCHAR* exception;
         int dumpsToCollect;
+        int collectedDumps;
     };
 
     std::atomic<int> refCount;
@@ -39,10 +41,11 @@ private:
     ICorProfilerInfo8* corProfilerInfo8;
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
     pthread_t ipcThread;
-    std::wstring socketPath;
+    pid_t procDumpPid;
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(WCHAR* fw);
+    int SendCompletedStatus();
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;

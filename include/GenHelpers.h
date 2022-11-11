@@ -33,6 +33,7 @@ char *sanitize(char *processName);
 int StringToGuid(char* szGuid, struct CLSID* pGuid);
 int GetHex(char* szStr, int size, void* pResult);
 bool createDir(const char *dir, mode_t perms);
+char* GetSocketPath(char* prefix, pid_t pid);
 
 #endif // GENHELPERS_H
 

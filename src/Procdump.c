@@ -20,8 +20,7 @@ extern struct ProcDumpConfiguration g_config;
 //--------------------------------------------------------------------
 void OnExit()
 {
-    // Try to delete the profiler lib in case it was left over...
-    unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    ExitProcDump();
 }
 
 
