@@ -352,11 +352,11 @@ bool createDir(const char *dir, mode_t perms)
 //
 // GetTmpFolder
 //
-// Gets the temporary folder of the system and appends the prefix and
-// pid.
+// Gets the temporary folder of the system and appends the prefix,
+// procdump pid and target pid
 //
 //--------------------------------------------------------------------
-char* GetSocketPath(char* prefix, pid_t pid)
+char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
 {
     char* prefixTmpFolder = NULL;
     char* t = NULL;
@@ -365,15 +365,33 @@ char* GetSocketPath(char* prefix, pid_t pid)
     prefixTmpFolder = getenv("TMPDIR");
     if(prefixTmpFolder==NULL)
     {
-        int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
-        t = malloc(len+1);
-        sprintf(t, "/tmp/%s%d", prefix, pid);
+        if(targetPid)
+        {
+            int len = snprintf(NULL, 0, "/tmp/%s%d-%d", prefix, pid, targetPid);
+            t = malloc(len+1);
+            sprintf(t, "/tmp/%s%d-%d", prefix, pid, targetPid);
+        }
+        else
+        {
+            int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
+            t = malloc(len+1);
+            sprintf(t, "/tmp/%s%d", prefix, pid);
+        }
     }
     else
     {
-        int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
-        t = malloc(len+1);
-        sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        if(targetPid)
+        {
+            int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+            t = malloc(len+1);
+            sprintf(t, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+        }
+        else
+        {
+            int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
+            t = malloc(len+1);
+            sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        }
     }
 
     return t;

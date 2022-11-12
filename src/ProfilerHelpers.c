@@ -11,8 +11,6 @@
 extern char _binary_obj_ProcDumpProfiler_so_end[];
 extern char _binary_obj_ProcDumpProfiler_so_start[];
 
-extern char* socketPath;
-
 //--------------------------------------------------------------------
 //
 // ExtractProfiler
@@ -341,7 +339,7 @@ int CancelProfiler(pid_t pid)
     struct sockaddr_un remote;
     char* tmpFolder = NULL;
 
-    tmpFolder = GetSocketPath("procdump/procdump-cancel-", pid);
+    tmpFolder = GetSocketPath("procdump/procdump-cancel-", pid, 0);
 
     if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
     {
@@ -382,16 +380,18 @@ int CancelProfiler(pid_t pid)
 // specified they wanted 3 dumps on System.InvalidOperationException, we will get three
 // status (bool==true) before we return.
 //
+// The socket created is in the form: <socket_path>/procdump-status-<procdumpPid>-<targetPid>
+//
 //-------------------------------------------------------------------------------------
-int WaitForProfilerCompletion(pid_t pid, int dumpCount)
+int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
 {
     unsigned int s, t, s2;
     struct sockaddr_un local, remote;
     int len;
     char* tmpFolder = NULL;
 
-    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid());
-    socketPath = tmpFolder;
+    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
+    config->socketPath = tmpFolder;
     Trace("Status socket path: %s", tmpFolder);
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
@@ -421,7 +421,7 @@ int WaitForProfilerCompletion(pid_t pid, int dumpCount)
         if(res==true)
         {
             dumpsGenerated++;
-            if(dumpsGenerated == dumpCount)
+            if(dumpsGenerated == config->NumberOfDumpsToCollect)
             {
                 Trace("Total dump count has been reached: %d", dumpsGenerated);
                 close(s2);
@@ -433,7 +433,7 @@ int WaitForProfilerCompletion(pid_t pid, int dumpCount)
     }
 
     unlink(tmpFolder);
-    socketPath = NULL;
+    config->socketPath = NULL;
 
     if(tmpFolder)
     {

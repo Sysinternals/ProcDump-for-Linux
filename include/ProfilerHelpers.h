@@ -19,7 +19,7 @@ int LoadProfiler(pid_t pid, char* filter);
 int ExtractProfiler();
 char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDumps);
 int CancelProfiler();
-int WaitForProfilerCompletion(pid_t pid, int dumpCount);
+int WaitForProfilerCompletion(struct ProcDumpConfiguration* config);
 
 #endif // PROFILERHELPERS_H
 

@@ -20,7 +20,7 @@
 
 // Monitor functions
 void MonitorProcesses(struct ProcDumpConfiguration*self);
-int CreateTriggerThreads(struct ProcDumpConfiguration *self);
+int CreateMonitorThreads(struct ProcDumpConfiguration *self);
 int StartMonitor(struct ProcDumpConfiguration* monitorConfig);
 int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
 int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle, int milliseconds);
@@ -38,5 +38,6 @@ void *ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
 void *FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 
 #endif // MONITOR_H

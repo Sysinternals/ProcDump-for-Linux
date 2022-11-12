@@ -268,11 +268,11 @@ int CorProfiler::SendDumpCompletedStatus()
     prefixTmpFolder = getenv("TMPDIR");
     if(prefixTmpFolder==NULL)
     {
-        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump/procdump-status-%d", procDumpPid);
+        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump/procdump-status-%d-%d", procDumpPid, getpid());
     }
     else
     {
-        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump/procdump-status-%d", prefixTmpFolder, procDumpPid);
+        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump/procdump-status-%d-%d", prefixTmpFolder, procDumpPid, getpid());
     }
 
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Socket path: " << tmpFolder;

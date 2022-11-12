@@ -75,6 +75,11 @@ void *SignalThread(void *input)
             if(item->config->bDumpOnException)
             {
                 CancelProfiler(item->config->ProcessId);
+                if(item->config->socketPath)
+                {
+                    unlink(item->config->socketPath);
+                    item->config->socketPath = NULL;
+                }
             }
         }
 
@@ -124,7 +129,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     if(!monitoredProcessMap)
     {
         Log(error, INTERNAL_ERROR);
-        Trace("CreateTriggerThreads: failed to allocate memory for monitorProcessMap.");
+        Trace("CreateMonitorThreads: failed to allocate memory for monitorProcessMap.");
         ExitProcDump();
         return;
     }
@@ -134,7 +139,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     if((pthread_create(&sig_thread_id, NULL, SignalThread, (void *)self))!= 0)
     {
         Log(error, INTERNAL_ERROR);
-        Trace("CreateTriggerThreads: failed to create SignalThread.");
+        Trace("CreateMonitorThreads: failed to create SignalThread.");
         free(monitoredProcessMap);
         ExitProcDump();
         return;
@@ -458,74 +463,120 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
-// CreateTriggerThreads - Create each of the threads that will be running as a trigger
+// CreateMonitorThreads - Create each of the threads that will be running as a trigger
 //
 //--------------------------------------------------------------------
-int CreateTriggerThreads(struct ProcDumpConfiguration *self)
+int CreateMonitorThreads(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
     self->nThreads = 0;
     bool tooManyTriggers = false;
 
     // create threads
-    if (self->CpuThreshold != -1) {
-        if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CpuMonitoringThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create CpuThread.");
+    if (self->bDumpOnException)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ExceptionMonitoringThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create ExceptionMonitoringThread.");
+                return rc;
+            }
+
+            self->Threads[self->nThreads].trigger = Exception;
+            self->nThreads++;
+
+        }
+        else
+        {
+            tooManyTriggers = true;
+        }
+    }
+
+    if (self->CpuThreshold != -1)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CpuMonitoringThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create CpuThread.");
                 return rc;
             }
 
             self->Threads[self->nThreads].trigger = Processor;
             self->nThreads++;
 
-        } else
+        }
+        else
+        {
             tooManyTriggers = true;
+            }
     }
 
-    if (self->MemoryThreshold != -1 && !tooManyTriggers) {
-        if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CommitMonitoringThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create CommitThread.");
+    if (self->MemoryThreshold != -1 && !tooManyTriggers)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CommitMonitoringThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create CommitThread.");
                 return rc;
             }
 
             self->Threads[self->nThreads].trigger = Commit;
             self->nThreads++;
 
-        } else
+        }
+        else
+        {
             tooManyTriggers = true;
+        }
     }
 
-    if (self->ThreadThreshold != -1 && !tooManyTriggers) {
-        if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ThreadCountMonitoringThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create ThreadThread.");
+    if (self->ThreadThreshold != -1 && !tooManyTriggers)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ThreadCountMonitoringThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create ThreadThread.");
                 return rc;
             }
 
             self->Threads[self->nThreads].trigger = ThreadCount;
             self->nThreads++;
 
-        } else
+        }
+        else
+        {
             tooManyTriggers = true;
+        }
     }
 
-    if (self->FileDescriptorThreshold != -1 && !tooManyTriggers) {
-        if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create FileDescriptorThread.");
+    if (self->FileDescriptorThreshold != -1 && !tooManyTriggers)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create FileDescriptorThread.");
                 return rc;
             }
 
             self->Threads[self->nThreads].trigger = FileDescriptorCount;
             self->nThreads++;
-        } else
+        }
+        else
+        {
             tooManyTriggers = true;
+        }
     }
 
-    if (self->SignalNumber != -1 && !tooManyTriggers) {
-        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, SignalMonitoringThread, (void *)self)) != 0) {
-            Trace("CreateTriggerThreads: failed to create SignalMonitoringThread.");
+    if (self->SignalNumber != -1 && !tooManyTriggers)
+    {
+        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, SignalMonitoringThread, (void *)self)) != 0)
+        {
+            Trace("CreateMonitorThreads: failed to create SignalMonitoringThread.");
             return rc;
         }
 
@@ -533,17 +584,23 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
         self->nThreads++;
     }
 
-    if (self->bTimerThreshold && !tooManyTriggers) {
-        if (self->nThreads < MAX_TRIGGERS) {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, TimerThread, (void *)self)) != 0) {
-                Trace("CreateTriggerThreads: failed to create TimerThread.");
+    if (self->bTimerThreshold && !tooManyTriggers)
+    {
+        if (self->nThreads < MAX_TRIGGERS)
+        {
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, TimerThread, (void *)self)) != 0)
+            {
+                Trace("CreateMonitorThreads: failed to create TimerThread.");
                 return rc;
             }
 
             self->Threads[self->nThreads].trigger = Timer;
             self->nThreads++;
-        } else
+        }
+        else
+        {
             tooManyTriggers = true;
+        }
     }
 
     if (tooManyTriggers)
@@ -566,53 +623,22 @@ int CreateTriggerThreads(struct ProcDumpConfiguration *self)
 int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
 {
     int ret = 0;
-    char* exceptionFilter = NULL;
 
-    if(monitorConfig->bDumpOnException)
+    if(CreateMonitorThreads(monitorConfig) != 0)
     {
-        if(monitorConfig->ExceptionFilter)
-        {
-            exceptionFilter = GetEncodedExceptionFilter(monitorConfig->ExceptionFilter, monitorConfig->NumberOfDumpsToCollect);
-        }
-
-        // Inject the profiler into the target process
-        if(InjectProfiler(monitorConfig->ProcessId, exceptionFilter)!=0)
-        {
-            if(exceptionFilter)
-            {
-                free(exceptionFilter);
-            }
-            return -1;
-        }
-    }
-    else
-    {
-        if(CreateTriggerThreads(monitorConfig) != 0)
-        {
-            Log(error, INTERNAL_ERROR);
-            Trace("StartMonitor: failed to create trigger threads.");
-            return -1;
-        }
+        Log(error, INTERNAL_ERROR);
+        Trace("StartMonitor: failed to create trigger threads.");
+        return -1;
     }
 
     if(BeginMonitoring(monitorConfig) == false)
     {
         Log(error, INTERNAL_ERROR);
         Trace("StartMonitor: failed to start monitoring.");
-        if(exceptionFilter)
-        {
-            free(exceptionFilter);
-        }
-
         return -1;
     }
 
     Log(info, "Starting monitor for process %s (%d)", monitorConfig->ProcessName, monitorConfig->ProcessId);
-
-    if(exceptionFilter)
-    {
-        free(exceptionFilter);
-    }
 
     return ret;
 }
@@ -686,20 +712,11 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
 
-    if(self->bDumpOnException)
-    {
-        // If we are monitoring for exceptions, we don't have any threads per se,
-        // rather we wait for the profiler to let us know once done.
-        WaitForProfilerCompletion(self->ProcessId, self->NumberOfDumpsToCollect);
-    }
-    else
-    {
-        // Wait for the other monitoring threads
-        for (int i = 0; i < self->nThreads; i++) {
-            if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
-                Log(error, "An error occurred while joining threads\n");
-                exit(-1);
-            }
+    // Wait for the other monitoring threads
+    for (int i = 0; i < self->nThreads; i++) {
+        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
+            Log(error, "An error occurred while joining threads\n");
+            exit(-1);
         }
     }
 
@@ -1158,5 +1175,46 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     free(writer);
     Trace("TimerThread: Exiting Trigger Thread");
+    pthread_exit(NULL);
+}
+
+//--------------------------------------------------------------------
+//
+// ExceptionMonitoringThread - Thread that creates dumps based on
+// exception filter. NOTE: .NET only.
+//
+//--------------------------------------------------------------------
+void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("ExceptionMonitoring: Starting ExceptionMonitoring Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    char* exceptionFilter = NULL;
+
+    int rc = 0;
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        if(config->ExceptionFilter)
+        {
+            exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
+        }
+
+        // Inject the profiler into the target process
+        if(InjectProfiler(config->ProcessId, exceptionFilter)==0)
+        {
+            WaitForProfilerCompletion(config);
+        }
+        else
+        {
+            Trace("ExceptionMonitoring: Failed to inject the profiler.");
+        }
+    }
+
+    if(exceptionFilter)
+    {
+        free(exceptionFilter);
+    }
+
+    Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
     pthread_exit(NULL);
 }

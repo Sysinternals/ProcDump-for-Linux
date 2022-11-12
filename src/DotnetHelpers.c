@@ -32,7 +32,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
-    tmpFolder = GetSocketPath("dotnet-diagnostic-", pid);
+    tmpFolder = GetSocketPath("dotnet-diagnostic-", pid, 0);
 
     // Enumerate all open domain sockets exposed from the process. If one
     // exists by the following prefix, we assume its a .NET Core process:

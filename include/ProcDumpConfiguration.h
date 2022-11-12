@@ -49,7 +49,8 @@ enum TriggerType
     Timer,
     Signal,
     ThreadCount,
-    FileDescriptorCount
+    FileDescriptorCount,
+    Exception
 };
 
 struct TriggerThread
@@ -77,6 +78,7 @@ struct ProcDumpConfiguration {
     int NumberOfDumpsCollecting; // Number of dumps we're collecting
     int NumberOfDumpsCollected; // Number of dumps we have collected
     bool bTerminated; // Do we know whether the process has terminated and subsequently whether we are terminating?
+    char* socketPath;
 
     // Quit
     int nQuit; // if not 0, then quit

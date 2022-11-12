@@ -16,7 +16,6 @@ struct ProcDumpConfiguration * target_config;                   // list of confi
 extern pthread_mutex_t queue_mutex;
 
 sigset_t sig_set;
-char* socketPath;
 
 //--------------------------------------------------------------------
 //
@@ -80,8 +79,6 @@ void InitProcDump()
         createDir(t, 0777);
         free(t);
     }
-
-    socketPath = NULL;
 }
 
 //--------------------------------------------------------------------
@@ -97,11 +94,6 @@ void ExitProcDump()
 
     // Try to delete the profiler lib in case it was left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
-    if(socketPath)
-    {
-        unlink(socketPath);
-        socketPath = NULL;
-    }
 }
 
 //--------------------------------------------------------------------
@@ -163,6 +155,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->nQuit =                       0;
     self->bDumpOnException =            false;
     self->bDumpOnException =            NULL;
+
+    self->socketPath =                  NULL;
 }
 
 
@@ -186,6 +180,12 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     if(self->WaitingForProcessName)
     {
         free(self->ProcessName);
+    }
+
+    if(self->socketPath)
+    {
+        free(self->socketPath);
+        self->socketPath = NULL;
     }
 
     /* TODO: Crash
@@ -246,6 +246,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->CoreDumpPath = self->CoreDumpPath == NULL ? NULL : strdup(self->CoreDumpPath);
         copy->CoreDumpName = self->CoreDumpName == NULL ? NULL : strdup(self->CoreDumpName);
         copy->ExceptionFilter = self->ExceptionFilter == NULL ? NULL : strdup(self->ExceptionFilter);
+        copy->socketPath = self->socketPath == NULL ? NULL : strdup(self->socketPath);
         copy->bDumpOnException = self->bDumpOnException;
 
         return copy;
@@ -635,6 +636,14 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         else {
             printf("%-40s%s\n", "Signal:", "n/a");
         }
+        // Signal
+        if (self->bDumpOnException) {
+            printf("%-40s%s\n", "Exception monitor", "On");
+            printf("%-40s%s\n", "Exception filter", self->ExceptionFilter);
+        }
+        else {
+            printf("%-40s%s\n", "Exception monitor", "Off");
+        }
 
         // Polling inverval
         printf("%-40s%d\n", "Polling Interval (ms):", self->PollingInterval);
@@ -664,7 +673,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v1.3 - Sysinternals process dump utility\n");
+    printf("\nProcDump v1.4 - Sysinternals process dump utility\n");
     printf("Copyright (C) 2022 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
