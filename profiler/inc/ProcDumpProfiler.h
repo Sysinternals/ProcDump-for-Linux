@@ -45,7 +45,7 @@ private:
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(WCHAR* fw);
-    int SendCompletedStatus();
+    int SendDumpCompletedStatus();
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;

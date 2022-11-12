@@ -690,7 +690,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
     {
         // If we are monitoring for exceptions, we don't have any threads per se,
         // rather we wait for the profiler to let us know once done.
-        WaitForProfilerCompletion(self->ProcessId);
+        WaitForProfilerCompletion(self->ProcessId, self->NumberOfDumpsToCollect);
     }
     else
     {

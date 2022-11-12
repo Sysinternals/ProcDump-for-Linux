@@ -372,15 +372,18 @@ int CancelProfiler(pid_t pid)
     return 0;
 }
 
-//--------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
 //
 // WaitForProfilerCompletion
 //
-// Waits for profiler to send a completed status (bool=true) on
-// <prefix>/procdump-status-<pid>
+// Waits for profiler to send a status (bool=true) on (<prefix>/procdump-status-<pid>)
+// that indicates that a dump was generated. We wait here until the dump condition
+// (number of dumps) has been satisfied until we return. For example, if the user
+// specified they wanted 3 dumps on System.InvalidOperationException, we will get three
+// status (bool==true) before we return.
 //
-//--------------------------------------------------------------------
-int WaitForProfilerCompletion(pid_t pid)
+//-------------------------------------------------------------------------------------
+int WaitForProfilerCompletion(pid_t pid, int dumpCount)
 {
     unsigned int s, t, s2;
     struct sockaddr_un local, remote;
@@ -402,6 +405,8 @@ int WaitForProfilerCompletion(pid_t pid)
 
     listen(s, 1);       // Only allow one client to connect
 
+    int dumpsGenerated = 0;
+
     while(true)
     {
         bool res=false;
@@ -415,10 +420,13 @@ int WaitForProfilerCompletion(pid_t pid)
         recv(s2, &res, sizeof(bool), 0);
         if(res==true)
         {
-            Trace("Profiler reported that it's done");
-
-            close(s2);
-            break;
+            dumpsGenerated++;
+            if(dumpsGenerated == dumpCount)
+            {
+                Trace("Total dump count has been reached: %d", dumpsGenerated);
+                close(s2);
+                break;
+            }
         }
 
         close(s2);

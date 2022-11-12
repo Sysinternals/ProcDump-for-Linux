@@ -254,10 +254,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// CorProfiler::SendCompletedStatus
-// Sends a completed status to ProcDump
+// CorProfiler::SendDumpCompletedStatus
+// Sends a notification to procdump that a dump was written
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-int CorProfiler::SendCompletedStatus()
+int CorProfiler::SendDumpCompletedStatus()
 {
     int s, len;
     struct sockaddr_un remote;
@@ -275,31 +275,31 @@ int CorProfiler::SendCompletedStatus()
         snprintf(tmpFolder, FILENAME_MAX, "%s/procdump/procdump-status-%d", prefixTmpFolder, procDumpPid);
     }
 
-    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Socket path: " << tmpFolder;
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Socket path: " << tmpFolder;
 
     if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
     {
-        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to create socket: " << errno;
+        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to create socket: " << errno;
         return -1;
     }
 
-    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Trying to connect...";
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Trying to connect...";
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, tmpFolder);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if(connect(s, (struct sockaddr *)&remote, len)==-1)
     {
-        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to connect: " << errno;
+        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to connect: " << errno;
         return -1;
     }
 
-    LOG(TRACE) << "CorProfiler::SendCompletedStatus: Connected";
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Connected";
 
     bool cancel=true;
     if(send(s, &cancel, 1, 0)==-1)
     {
-        LOG(TRACE) << "CorProfiler::SendCompletedStatus: Failed to send completion status";
+        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to send completion status";
         return -1;
     }
 
@@ -325,13 +325,15 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
         {
             LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
+            // Notify procdump that a dump was generated
+            SendDumpCompletedStatus();
             element.collectedDumps++;
+
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 //
                 // Profiler is done, send message to procdump, cancel cancellation thread, detach and delete socket
                 //
-                SendCompletedStatus();
                 pthread_cancel(ipcThread);
                 unlink(cancelSocketPath);
                 corProfilerInfo3->RequestProfilerDetach(30000);
