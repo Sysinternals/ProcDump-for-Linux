@@ -145,7 +145,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         return;
     }
 
-    Log(info, "\n\nPress Ctrl-C to end monitoring without terminating the process(es).\n");
+    Log(info, "Press Ctrl-C to end monitoring without terminating the process(es).");
 
     if(!self->WaitingForProcessName && !self->bProcessGroup)
     {
@@ -833,7 +833,9 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     unsigned long memUsage = 0;
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(COMMIT, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(COMMIT, config);
 
     pageSize_kb = sysconf(_SC_PAGESIZE) >> 10; // convert bytes to kilobytes (2^10)
 
@@ -872,7 +874,6 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         }
     }
 
-    free(writer);
     Trace("CommitMonitoringThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
@@ -889,7 +890,9 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
 
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(THREAD, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(THREAD, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -920,7 +923,6 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
         }
     }
 
-    free(writer);
     Trace("ThreadCountMonitoringThread: Exiting Thread trigger Thread");
     pthread_exit(NULL);
 }
@@ -939,7 +941,9 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
 
     struct ProcessStat proc = {0};
     int rc = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(FILEDESC, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(FILEDESC, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -970,7 +974,6 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
         }
     }
 
-    free(writer);
     Trace("FileDescriptorCountMonitoringThread: Exiting Filedescriptor trigger Thread");
     pthread_exit(NULL);
 }
@@ -993,7 +996,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int signum=-1;
     int rc = 0;
     int dumpStatus = 0;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(SIGNAL, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(SIGNAL, config);
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -1074,7 +1079,6 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         }
     }
 
-    free(writer);
     Trace("SignalMonitoringThread: Exiting SignalMonitoring Thread");
     pthread_exit(NULL);
 }
@@ -1093,7 +1097,9 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     unsigned long elapsedTime = 0;
     struct sysinfo sysInfo;
     int cpuUsage;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(CPU, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(CPU, config);
 
     int rc = 0;
     struct ProcessStat proc = {0};
@@ -1136,7 +1142,6 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
         }
     }
 
-    free(writer);
     Trace("CpuTCpuMonitoringThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
@@ -1152,7 +1157,9 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("TimerThread: Starting Trigger Thread");
 
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    struct CoreDumpWriter *writer = NewCoreDumpWriter(TIME, config);
+    auto_free struct CoreDumpWriter *writer = NULL;
+
+    writer = NewCoreDumpWriter(TIME, config);
 
     int rc = 0;
 
@@ -1173,7 +1180,6 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         }
     }
 
-    free(writer);
     Trace("TimerThread: Exiting Trigger Thread");
     pthread_exit(NULL);
 }
@@ -1188,7 +1194,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
 {
     Trace("ExceptionMonitoring: Starting ExceptionMonitoring Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    char* exceptionFilter = NULL;
+    auto_free char* exceptionFilter = NULL;
 
     int rc = 0;
 
@@ -1208,11 +1214,6 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         {
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
         }
-    }
-
-    if(exceptionFilter)
-    {
-        free(exceptionFilter);
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");

@@ -21,10 +21,12 @@ extern char _binary_obj_ProcDumpProfiler_so_start[];
 //--------------------------------------------------------------------
 int ExtractProfiler()
 {
+    auto_free_fd int destfd = -1;
+
     // Try to delete the profiler lib in case it was left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
 
-    int destfd = creat(PROCDUMP_DIR "/" PROFILER_FILE_NAME, S_IRWXU|S_IROTH);
+    destfd = creat(PROCDUMP_DIR "/" PROFILER_FILE_NAME, S_IRWXU|S_IROTH);
     if (destfd < 0)
     {
         return -1;
@@ -39,13 +41,10 @@ int ExtractProfiler()
         writeRet = write(destfd, _binary_obj_ProcDumpProfiler_so_start + written, size - written);
         if (writeRet < 0)
         {
-            close(destfd);
             return 1;
         }
         written += writeRet;
     }
-
-    close(destfd);
 
     return 0;
 }
@@ -60,15 +59,16 @@ int ExtractProfiler()
 //--------------------------------------------------------------------
 int LoadProfiler(pid_t pid, char* filter)
 {
-    int fd = 0;
     struct sockaddr_un addr = {0};
-    void* temp_buffer = NULL;
     uint32_t attachTimeout = 5000;
     struct CLSID profilerGuid = {0};
-    uint16_t* profilerPathW = NULL;
     unsigned int clientDataSize = 0;
-    char* socketName = NULL;
-    char* clientData = NULL;
+
+    auto_free_fd int fd = 0;
+    auto_free char* socketName = NULL;
+    auto_free char* clientData = NULL;
+    auto_free uint16_t* profilerPathW = NULL;
+    auto_free void* temp_buffer = NULL;
 
     if(!IsCoreClrProcess(pid, &socketName))
     {
@@ -178,8 +178,6 @@ int LoadProfiler(pid_t pid, char* filter)
     if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
     {
         Trace("Failed sending packet to diagnostics server [%d]", errno);
-        free(profilerPathW);
-        free(temp_buffer);
         return -1;
     }
 
@@ -188,8 +186,6 @@ int LoadProfiler(pid_t pid, char* filter)
     if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
     {
         Trace("Failed receiving response header from diagnostics server [%d]", errno);
-        free(profilerPathW);
-        free(temp_buffer);
         return -1;
     }
 
@@ -197,8 +193,6 @@ int LoadProfiler(pid_t pid, char* filter)
     if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
     {
         Trace("Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
-        free(profilerPathW);
-        free(temp_buffer);
         return -1;
     }
 
@@ -206,8 +200,6 @@ int LoadProfiler(pid_t pid, char* filter)
     if(recv(fd, &res, sizeof(int32_t), 0)==-1)
     {
         Trace("Failed receiving result code from response payload from diagnostics server [%d]", errno);
-        free(profilerPathW);
-        free(temp_buffer);
         return -1;
     }
     else
@@ -226,14 +218,10 @@ int LoadProfiler(pid_t pid, char* filter)
                 Log(error, "Error returned from diagnostics server [0x%x]", res);
             }
 
-            free(profilerPathW);
-            free(temp_buffer);
             return -1;
         }
     }
 
-    free(profilerPathW);
-    free(temp_buffer);
     return 0;
 }
 
@@ -289,8 +277,8 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     unsigned int totalExceptionNameLen = 0;
     unsigned int numberOfDumpsLen = 0;
     unsigned int numExceptions = 0;
-    char* exceptionFilterCur = NULL;
     char* exceptionFilter = NULL;
+    char* exceptionFilterCur = NULL;
     char tmp[10];
 
     char* cpy = strdup(exceptionFilterCmdLine);
@@ -337,7 +325,7 @@ int CancelProfiler(pid_t pid)
 {
     int s, len;
     struct sockaddr_un remote;
-    char* tmpFolder = NULL;
+    auto_free char* tmpFolder = NULL;
 
     tmpFolder = GetSocketPath("procdump/procdump-cancel-", pid, 0);
 
@@ -385,10 +373,12 @@ int CancelProfiler(pid_t pid)
 //-------------------------------------------------------------------------------------
 int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
 {
-    unsigned int s, t, s2;
+    unsigned int t, s2;
     struct sockaddr_un local, remote;
     int len;
-    char* tmpFolder = NULL;
+
+    auto_free char* tmpFolder = NULL;
+    auto_free_fd int s=-1;
 
     tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
     config->socketPath = tmpFolder;
@@ -424,20 +414,13 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             if(dumpsGenerated == config->NumberOfDumpsToCollect)
             {
                 Trace("Total dump count has been reached: %d", dumpsGenerated);
-                close(s2);
                 break;
             }
         }
-
-        close(s2);
     }
 
     unlink(tmpFolder);
     config->socketPath = NULL;
 
-    if(tmpFolder)
-    {
-        free(tmpFolder);
-    }
     return 0;
 }

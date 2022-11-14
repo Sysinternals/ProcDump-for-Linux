@@ -19,9 +19,50 @@
 #include <stdio.h>
 #include <sys/utsname.h>
 #include <errno.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #define MIN_KERNEL_VERSION 3
 #define MIN_KERNEL_PATCH 5
+
+//-------------------------------------------------------------------------------------
+// Auto clean up of memory using free (void)
+//-------------------------------------------------------------------------------------
+static inline void cleanup_void(void* val)
+{
+    void **ppVal = (void**)val;
+    free(*ppVal);
+}
+
+//-------------------------------------------------------------------------------------
+// Auto clean up of file descriptors using close
+//-------------------------------------------------------------------------------------
+static inline void cleanup_fd(int* val)
+{
+    close(*val);
+}
+
+//-------------------------------------------------------------------------------------
+// Auto clean up of dir using closedir
+//-------------------------------------------------------------------------------------
+static inline void cleanup_dir(DIR** val)
+{
+    closedir(*val);
+}
+
+//-------------------------------------------------------------------------------------
+// Auto clean up of FILE using fclose
+//-------------------------------------------------------------------------------------
+static inline void cleanup_file(FILE** val)
+{
+    fclose(*val);
+}
+
+#define auto_free __attribute__ ((__cleanup__(cleanup_void)))
+#define auto_free_fd __attribute__ ((__cleanup__(cleanup_fd)))
+#define auto_free_dir __attribute__ ((__cleanup__(cleanup_dir)))
+#define auto_free_file __attribute__ ((__cleanup__(cleanup_file)))
 
 bool ConvertToInt(const char* src, int* conv);
 bool IsValidNumberArg(const char *arg);

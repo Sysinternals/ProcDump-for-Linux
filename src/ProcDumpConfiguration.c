@@ -62,7 +62,7 @@ void InitProcDump()
     sigaddset (&sig_set, SIGTERM);
     pthread_sigmask (SIG_BLOCK, &sig_set, NULL);
 
-    char* prefixTmpFolder = NULL;
+    auto_free char* prefixTmpFolder = NULL;
 
     // Create the directories where our sockets will be stored
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
@@ -678,7 +678,7 @@ void PrintBanner()
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
 
-    printf("Monitors a process and writes a core dump file when the process exceeds the\n");
+    printf("Monitors one or more processes and writes a core dump file when the processes exceeds the\n");
     printf("specified criteria.\n\n");
 }
 

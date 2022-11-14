@@ -26,9 +26,9 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
 {
     bool bRet = false;
     *socketName = NULL;
-    FILE *procFile = NULL;
+    auto_free_file FILE *procFile = NULL;
     char lineBuf[4096];
-    char* tmpFolder = NULL;
+    auto_free char* tmpFolder = NULL;
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
@@ -71,22 +71,10 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
         Trace("Failed to open /proc/net/unix [%d].", errno);
     }
 
-    if(procFile!=NULL)
-    {
-        fclose(procFile);
-        procFile = NULL;
-    }
-
     if(*socketName!=NULL && bRet==false)
     {
         free(*socketName);
         *socketName = NULL;
-    }
-
-    if(tmpFolder != NULL)
-    {
-        free(tmpFolder);
-        tmpFolder = NULL;
     }
 
     return bRet;
@@ -105,9 +93,9 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 {
     bool bRet = false;
     struct sockaddr_un addr = {0};
-    int fd = 0;
-    uint16_t* dumpFileNameW = NULL;
-    void* temp_buffer = NULL;
+    auto_free_fd int fd = 0;
+    auto_free uint16_t* dumpFileNameW = NULL;
+    auto_free void* temp_buffer = NULL;
 
     if( (dumpFileNameW = GetUint16(dumpFileName))!=NULL)
     {
@@ -211,25 +199,6 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                 }
             }
         }
-    }
-
-
-    if(temp_buffer!=NULL)
-    {
-        free(temp_buffer);
-        temp_buffer = NULL;
-    }
-
-    if(fd!=0)
-    {
-        close(fd);
-        fd = 0;
-    }
-
-    if(dumpFileNameW!=NULL)
-    {
-        free(dumpFileNameW);
-        dumpFileNameW = NULL;
     }
 
     return bRet;

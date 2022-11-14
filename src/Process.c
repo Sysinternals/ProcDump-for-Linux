@@ -18,10 +18,10 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     char fileBuffer[1024];
     char *token;
     char *savePtr = NULL;
-
-    FILE *procFile = NULL;
-    DIR* fddir = NULL;
     struct dirent* entry = NULL;
+
+    auto_free_file FILE *procFile = NULL;
+    auto_free_dir DIR* fddir = NULL;
 
     // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
     if(sprintf(procFilePath, "/proc/%d/fdinfo", pid) < 0){
@@ -36,8 +36,6 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         {
             proc->num_filedescriptors++;
         }
-
-        closedir(fddir);
     }
     else
     {
@@ -58,12 +56,8 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
             Log(error, "Failed to read from %s. Exiting...", procFilePath);
-            fclose(procFile);
             return false;
         }
-
-        // close file after reading this iteration of stats
-        fclose(procFile);
     }
     else{
         Log(error, "Failed to open %s.", procFilePath);
@@ -537,7 +531,7 @@ char * GetProcessName(pid_t pid){
 	int	itr = 0;
 	char * stringItr;
 	char * processName;
-	FILE * procFile;
+	auto_free_file FILE * procFile = NULL;
 
 
     if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0) {
@@ -548,7 +542,6 @@ char * GetProcessName(pid_t pid){
 
 	if(procFile != NULL) {
 		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
-            fclose(procFile);
 
             if(strlen(fileBuffer) == 0) {
                 Log(debug, "Empty cmdline.\n");
@@ -557,9 +550,6 @@ char * GetProcessName(pid_t pid){
 			}
 			return NULL;
 		}
-
-		// close file
-		fclose(procFile);
 	}
 	else {
 		Log(debug, "Failed to open %s.\n", procFilePath);
@@ -607,7 +597,7 @@ pid_t GetProcessPgid(pid_t pid){
     char *token;
     char *savePtr = NULL;
 
-    FILE *procFile = NULL;
+    auto_free_file FILE *procFile = NULL;
 
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
@@ -617,12 +607,8 @@ pid_t GetProcessPgid(pid_t pid){
 
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
-            fclose(procFile);
             return pgid;
         }
-
-        // close file after reading this iteration of stats
-        fclose(procFile);
     }
     else{
         Trace("GetProcessPgid: Cannot open %s to check PGID", procFilePath);
@@ -659,6 +645,7 @@ pid_t GetProcessPgid(pid_t pid){
 bool LookupProcessByPid(pid_t pid)
 {
     char statFilePath[32];
+    auto_free_file FILE *fd = NULL;
 
     if(pid == NO_PID)
     {
@@ -670,13 +657,11 @@ bool LookupProcessByPid(pid_t pid)
         sprintf(statFilePath, "/proc/%d/stat", pid);
     }
 
-    FILE *fd = fopen(statFilePath, "r");
+    fd = fopen(statFilePath, "r");
     if (fd == NULL) {
         return false;
     }
 
-    // close file pointer this is a valid process
-    fclose(fd);
     return true;
 }
 
@@ -769,6 +754,8 @@ pid_t LookupProcessPidByName(const char* name)
 
             return stat.pid;
         }
+
+        if(procName) free(procName);
     }
 
     // if we have ran through all the running processes then supplied name is not found
@@ -783,15 +770,13 @@ pid_t LookupProcessPidByName(const char* name)
 //--------------------------------------------------------------------
 int GetMaximumPID()
 {
-    FILE * pidMaxFile;
+    auto_free_file FILE * pidMaxFile = NULL;
     int maxPIDs;
 
     pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
 
     if(pidMaxFile != NULL){
         fscanf(pidMaxFile, "%d", &maxPIDs);
-        fclose(pidMaxFile);
-
         return maxPIDs;
     }
     else {
