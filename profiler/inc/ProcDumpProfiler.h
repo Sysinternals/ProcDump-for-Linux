@@ -25,6 +25,32 @@
 #define MAX_LOG_FILE_SIZE    "1000000"
 #define DATE_LENGTH 26
 
+#define CORECLR_DUMPTYPE_FULL 4
+#define CORECLR_DUMPLOGGING_OFF 0
+#define CORECLR_DIAG_IPCHEADER_SIZE 24
+
+// Magic version for the IpcHeader struct
+struct MagicVersion
+{
+    uint8_t Magic[14];
+};
+
+// The header to be associated with every command and response
+// to/from the diagnostics server
+struct IpcHeader
+{
+    union
+    {
+        struct MagicVersion _magic;
+        uint8_t  Magic[14];  // Magic Version number
+    };
+
+    uint16_t Size;       // The size of the incoming packet, size = header + payload size
+    uint8_t  CommandSet; // The scope of the Command.
+    uint8_t  CommandId;  // The command being sent
+    uint16_t Reserved;   // reserved for future use
+};
+
 void* CancelThread(void* args);
 
 class CorProfiler : public ICorProfilerCallback8
@@ -51,8 +77,12 @@ private:
     bool ParseClientData(char* fw);
     int SendDumpCompletedStatus();
     WCHAR* GetUint16(char* buffer);
-    WCHAR* GetDumpName(uint16_t dumpCount);
+    std::string GetDumpName(uint16_t dumpCount);
     char* GetProcessName();
+    bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
+    bool IsCoreClrProcess(pid_t pid, char** socketName);
+    char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
+    char* GetPath(char* lineBuf);
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;

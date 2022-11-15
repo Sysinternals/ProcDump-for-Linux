@@ -407,7 +407,7 @@ char* CorProfiler::GetProcessName()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ExceptionThrown
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-WCHAR* CorProfiler::GetDumpName(u_int16_t dumpCount)
+std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
 {
     //
     // If the path ends in '/' it means we have a base path and need to create the full path according to:
@@ -426,16 +426,15 @@ WCHAR* CorProfiler::GetDumpName(u_int16_t dumpCount)
         if((timerInfo = localtime(&rawTime)) == NULL)
         {
             LOG(TRACE) << "CorProfiler::GetDumpName: Failed to get localtime.";
-            return NULL;
+            return "";
         }
         strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
         LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
 
         std::ostringstream tmp;
         tmp << fullDumpPath << processName.c_str() << "_exception_" << date;
-        std::string name = tmp.str();
-        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << name;
-        return GetUint16((char*)name.c_str());
+        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
+        return tmp.str();
     }
     else
     {
@@ -446,9 +445,8 @@ WCHAR* CorProfiler::GetDumpName(u_int16_t dumpCount)
 
         std::ostringstream tmp;
         tmp << fullDumpPath << "_" << dumpCount;
-        std::string name = tmp.str();
-        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << name;
-        return GetUint16((char*)name.c_str());
+        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
+        return tmp.str();
     }
 }
 
@@ -472,12 +470,26 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
         {
             LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
-            WCHAR* dumpName = GetDumpName(element.collectedDumps);
+            std::string dump = GetDumpName(element.collectedDumps);
+            WCHAR* dumpName = GetUint16((char*)dump.c_str());
 
             // Invoke coreclr dump generation
+            char* socketName = NULL;
+            if(IsCoreClrProcess(getpid(), &socketName))
+            {
+                LOG(TRACE) << "Target is .NET process";
+                if(GenerateCoreClrDump(socketName, (char*) dump.c_str()))
+                {
+                    LOG(TRACE) << "Success generating core dump ";
+                }
+                else
+                {
+                    LOG(TRACE) << "Failed generating core dump";
+                }
 
+                free(socketName);
+            }
 
-            free(exception);
             free(dumpName);
 
             // Notify procdump that a dump was generated
@@ -494,6 +506,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
                 corProfilerInfo3->RequestProfilerDetach(30000);
             }
         }
+
+        free(exception);
     }
 
     LOG(TRACE) << "Exit: CorProfiler::ExceptionThrown";
@@ -549,6 +563,283 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     metadata->Release();
     return name;
 }
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// IsCoreClrProcess
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
+{
+    bool bRet = false;
+    *socketName = NULL;
+    FILE *procFile = NULL;
+    char lineBuf[4096];
+    char* tmpFolder = NULL;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
+    tmpFolder = GetSocketPath("dotnet-diagnostic-", pid, 0);
+
+    // Enumerate all open domain sockets exposed from the process. If one
+    // exists by the following prefix, we assume its a .NET Core process:
+    //    dotnet-diagnostic-{%d:PID}
+    // The sockets are found in /proc/net/unix
+    procFile = fopen("/proc/net/unix", "r");
+    if(procFile != NULL)
+    {
+        fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers.
+
+        while(fgets(lineBuf, 4096, procFile) != NULL)
+        {
+            char* ptr = GetPath(lineBuf);
+            if(ptr!=NULL)
+            {
+                if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
+                {
+                    // Found the correct socket...copy the name to the out param
+                    *socketName = (char*) malloc(sizeof(char)*strlen(ptr)+1);
+                    if(*socketName!=NULL)
+                    {
+                        memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
+                        if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
+                        {
+                            LOG(TRACE) << "CoreCLR diagnostics socket: " << (*socketName);
+                            bRet = true;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        fclose(procFile);
+    }
+    else
+    {
+        LOG(TRACE) << "Failed to open /proc/net/unix: " << errno;
+    }
+
+    if(tmpFolder)
+    {
+        free(tmpFolder);
+    }
+
+    if(*socketName!=NULL && bRet==false)
+    {
+        free(*socketName);
+        *socketName = NULL;
+    }
+
+    return bRet;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GenerateCoreClrDump
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
+{
+    bool bRet = false;
+    struct sockaddr_un addr = {0};
+    int fd = 0;
+    WCHAR* dumpFileNameW = NULL;
+    char* temp_buffer = NULL;
+
+    if( (dumpFileNameW = GetUint16(dumpFileName))!=NULL)
+    {
+        if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+        {
+            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to create socket for .NET Core dump generation.";
+        }
+        else
+        {
+            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success creating socket for .NET Core dump generation.";
+
+            // Create socket to diagnostics server
+            memset(&addr, 0, sizeof(struct sockaddr_un));
+            addr.sun_family = AF_UNIX;
+            strncpy(addr.sun_path, socketName, sizeof(addr.sun_path)-1);
+
+            if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
+            {
+                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation.";
+            }
+            else
+            {
+                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success connecting to socket for .NET Core dump generation.";
+
+                unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));
+                int payloadSize = sizeof(dumpFileNameLen);
+                payloadSize += dumpFileNameLen*sizeof(wchar_t);
+                unsigned int dumpType = CORECLR_DUMPTYPE_FULL;
+                payloadSize += sizeof(dumpType);
+                unsigned int diagnostics = CORECLR_DUMPLOGGING_OFF;
+                payloadSize += sizeof(diagnostics);
+
+                uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
+
+                // First initialize header
+                temp_buffer = (char*) malloc(totalPacketSize);
+                if(temp_buffer!=NULL)
+                {
+                    memset(temp_buffer, 0, totalPacketSize);
+                    struct IpcHeader dumpHeader =
+                    {
+                        { {"DOTNET_IPC_V1"} },
+                        (uint16_t)totalPacketSize,
+                        (uint8_t)0x01,
+                        (uint8_t)0x01,
+                        (uint16_t)0x0000
+                    };
+
+                    char* temp_buffer_cur = temp_buffer;
+
+                    memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));
+                    temp_buffer_cur += sizeof(struct IpcHeader);
+
+                    // Now we add the payload
+                    memcpy(temp_buffer_cur, &dumpFileNameLen, sizeof(dumpFileNameLen));
+                    temp_buffer_cur += sizeof(dumpFileNameLen);
+
+                    memcpy(temp_buffer_cur, dumpFileNameW, dumpFileNameLen*sizeof(uint16_t));
+                    temp_buffer_cur += dumpFileNameLen*sizeof(uint16_t);
+
+                    // next, the dumpType
+                    memcpy(temp_buffer_cur, &dumpType, sizeof(unsigned int));
+                    temp_buffer_cur += sizeof(unsigned int);
+
+                    // next, the diagnostics flag
+                    memcpy(temp_buffer_cur, &diagnostics, sizeof(unsigned int));
+
+                    if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
+                    {
+                        LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed sending packet to diagnostics server: " << errno;
+                    }
+                    else
+                    {
+                        LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success sending packet to diagnostics server: ";
+
+                        // Lets get the header first
+                        struct IpcHeader retHeader;
+                        if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
+                        {
+                            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed receiving response header from diagnostics server: " << errno;
+                        }
+                        else
+                        {
+                            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success receiving response header from diagnostics server";
+                            // Check the header to make sure its the right size
+                            if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
+                            {
+                                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed validating header size in response header from diagnostics server " << retHeader.Size << "!= 24]";
+                            }
+                            else
+                            {
+                                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success validating header size in response header from diagnostics server ";
+                                // Next, get the payload which contains a single uint32 (hresult)
+                                int32_t res = -1;
+                                if(recv(fd, &res, sizeof(int32_t), 0)==-1)
+                                {
+                                     LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed receiving result code from response payload from diagnostics server: " << errno;
+                                }
+                                else
+                                {
+                                     LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success receiving result code from response payload from diagnostics server: " << errno;
+
+                                    if(res==0)
+                                    {
+                                        LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Core dump generation success ";
+                                        bRet = true;
+                                    }
+                                    else
+                                    {
+                                        LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Response error: " << res;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    free(temp_buffer);
+                }
+
+                close(fd);
+            }
+        }
+
+        free(dumpFileNameW);
+    }
+
+    return bRet;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GenerateCoreClrDump
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+char* CorProfiler::GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
+{
+    char* prefixTmpFolder = NULL;
+    char* t = NULL;
+
+    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
+    prefixTmpFolder = getenv("TMPDIR");
+    if(prefixTmpFolder==NULL)
+    {
+        if(targetPid)
+        {
+            int len = snprintf(NULL, 0, "/tmp/%s%d-%d", prefix, pid, targetPid);
+            t = (char*) malloc(len+1);
+            sprintf(t, "/tmp/%s%d-%d", prefix, pid, targetPid);
+        }
+        else
+        {
+            int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
+            t = (char*) malloc(len+1);
+            sprintf(t, "/tmp/%s%d", prefix, pid);
+        }
+    }
+    else
+    {
+        if(targetPid)
+        {
+            int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+            t = (char*) malloc(len+1);
+            sprintf(t, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+        }
+        else
+        {
+            int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
+            t = (char*) malloc(len+1);
+            sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        }
+    }
+
+    return t;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetPath
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+char* CorProfiler::GetPath(char* lineBuf)
+{
+    char delim[] = " ";
+
+    // example of /proc/net/unix line:
+    // 0000000000000000: 00000003 00000000 00000000 0001 03 20287 @/tmp/.X11-unix/X0
+    char *ptr = strtok(lineBuf, delim);
+
+    // Move to last column which contains the name of the file (/socket)
+    for(int i=0; i<7; i++)
+    {
+        ptr = strtok(NULL, delim);
+    }
+
+    if(ptr!=NULL)
+    {
+        ptr[strlen(ptr)-1]='\0';
+    }
+
+    return ptr;
+}
+
 
 // ========================================================================================================================
 // ========================================================================================================================
