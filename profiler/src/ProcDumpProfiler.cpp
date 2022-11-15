@@ -152,9 +152,31 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetUint16
+//
+// Primitive conversion from char* to uint16_t*.
+//
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+uint16_t* CorProfiler::GetUint16(char* buffer)
+{
+    uint16_t* dumpFileNameW = NULL;
+
+    if(buffer!=NULL)
+    {
+        dumpFileNameW = (uint16_t*) malloc((strlen(buffer)+1)*sizeof(uint16_t));
+        for(int i=0; i<(strlen(buffer)+1); i++)
+        {
+            dumpFileNameW[i] = (uint16_t) buffer[i];
+        }
+    }
+
+    return dumpFileNameW;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ParseExceptionList
 //
-// Syntax of client data: <pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+// Syntax of client data: <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(WCHAR* filter)
@@ -177,14 +199,34 @@ bool CorProfiler::ParseClientData(WCHAR* filter)
         if(i==0)
         {
             //
-            // First part of the exception list is always the procdump pid.
+            // First part of the exception list is always the full path to the dump file to be created.
+            // We need this to send to the coreclr when we instruct it to generate a dump
+            //
+            WCHAR* path = (WCHAR*) malloc(exception.length()*sizeof(uint16_t)+1);
+            for(int i=0; i<exception.length(); i++)
+            {
+               path[i] = exception[i];
+            }
+            path[exception.length()] = '\0';
+            fullDumpPath = path;
+
+            LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << exception;
+            i++;
+            continue;
+        }
+        if(i==1)
+        {
+            //
+            // Second part of the exception list is always the procdump pid.
             // we we need this to communicate back status to procdump
             //
             procDumpPid = std::stoi(exception);
             LOG(TRACE) << "CorProfiler::ParseClientData: ProcDump PID = " << procDumpPid;
-            i=1;
+            i++;
             continue;
         }
+
+
         // exception filter
         std::wstring segment2;
         std::wstringstream stream(exception);

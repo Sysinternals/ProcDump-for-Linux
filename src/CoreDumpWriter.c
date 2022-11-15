@@ -8,7 +8,7 @@
 //--------------------------------------------------------------------
 #include "Includes.h"
 
-static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "thread", "filedesc", "signal", "time", "manual" };
+static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "thread", "filedesc", "signal", "time", "exception", "manual" };
 
 //--------------------------------------------------------------------
 //
@@ -30,6 +30,62 @@ struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDum
     writer->Type = type;
 
     return writer;
+}
+
+
+//--------------------------------------------------------------------
+//
+// GetCoreDumpName - Gets the core dump name
+//
+//--------------------------------------------------------------------
+char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type)
+{
+    char *name = sanitize(procName);
+    time_t rawTime = {0};
+    struct tm* timerInfo = NULL;
+    char date[DATE_LENGTH];
+    char* gcorePrefixName = NULL;
+
+    gcorePrefixName = malloc(PATH_MAX+1);
+    if(!gcorePrefixName)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("GetCoreDumpName: Memory allocation failure");
+        exit(-1);
+    }
+
+    const char *desc = CoreDumpTypeStrings[type];
+
+    // get time for current dump generated
+    rawTime = time(NULL);
+    if((timerInfo = localtime(&rawTime)) == NULL){
+        Log(error, INTERNAL_ERROR);
+        Trace("GetCoreDumpName: failed localtime");
+        exit(-1);
+    }
+    strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
+
+    // assemble the full file name (including path) for core dumps
+    if(dumpName != NULL)
+    {
+        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s", dumpPath, dumpName) < 0)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("GetCoreDumpName: failed sprintf custom output file name");
+            exit(-1);
+        }
+    }
+    else
+    {
+        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%s_%s", dumpPath, name, desc, date) < 0)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("GetCoreDumpName: failed sprintf default output file name");
+            exit(-1);
+        }
+    }
+
+    return gcorePrefixName;
 }
 
 //--------------------------------------------------------------------
@@ -102,52 +158,21 @@ int WriteCoreDump(struct CoreDumpWriter *self)
 // --------------------------------------------------------------------------------------
 int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 {
-    char date[DATE_LENGTH];
     char command[BUFFER_LENGTH];
     char ** outputBuffer;
     char lineBuffer[BUFFER_LENGTH];
-    char gcorePrefixName[BUFFER_LENGTH];
-    char coreDumpFileName[BUFFER_LENGTH];
+    char coreDumpFileName[PATH_MAX+1] = {0};
+    auto_free char* gcorePrefixName = NULL;
     int  lineLength;
     int  i;
     int  rc = 0;
-    time_t rawTime;
-
     pid_t gcorePid;
-    struct tm* timerInfo = NULL;
     FILE *commandPipe = NULL;
 
-    const char *desc = CoreDumpTypeStrings[self->Type];
     char *name = sanitize(self->Config->ProcessName);
     pid_t pid = self->Config->ProcessId;
 
-    // get time for current dump generated
-    rawTime = time(NULL);
-    if((timerInfo = localtime(&rawTime)) == NULL){
-        Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed localtime");
-        exit(-1);
-    }
-    strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
-
-    // assemble the full file name (including path) for core dumps
-    if(self->Config->CoreDumpName != NULL) {
-        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%d",
-                    self->Config->CoreDumpPath,
-                    self->Config->CoreDumpName,
-                    self->Config->NumberOfDumpsCollected) < 0) {
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf custom output file name");
-            exit(-1);
-        }
-    } else {
-        if(snprintf(gcorePrefixName, BUFFER_LENGTH, "%s/%s_%s_%s",
-                    self->Config->CoreDumpPath, name, desc, date) < 0) {
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed sprintf default output file name");
-            exit(-1);
-        }
-    }
+    gcorePrefixName = GetCoreDumpName(self->Config->ProcessId, name, self->Config->CoreDumpPath, self->Config->CoreDumpName, self->Type);
 
     // assemble the command
     if(snprintf(command, BUFFER_LENGTH, "gcore -o %s %d 2>&1", gcorePrefixName, pid) < 0){
@@ -157,7 +182,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     }
 
     // assemble filename
-    if(snprintf(coreDumpFileName, BUFFER_LENGTH, "%s.%d", gcorePrefixName, pid) < 0){
+    if(snprintf(coreDumpFileName, PATH_MAX, "%s.%d", gcorePrefixName, pid) < 0){
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDumpInternal: failed sprintf core file name");
         exit(-1);

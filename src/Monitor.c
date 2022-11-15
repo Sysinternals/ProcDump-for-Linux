@@ -1195,6 +1195,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     Trace("ExceptionMonitoring: Starting ExceptionMonitoring Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* exceptionFilter = NULL;
+    char* fullDumpPath = NULL;
 
     int rc = 0;
 
@@ -1205,8 +1206,10 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
         }
 
+        fullDumpPath = GetCoreDumpName(config->ProcessId, config->ProcessName, config->CoreDumpPath, config->CoreDumpName, EXCEPTION);
+
         // Inject the profiler into the target process
-        if(InjectProfiler(config->ProcessId, exceptionFilter)==0)
+        if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)==0)
         {
             WaitForProfilerCompletion(config);
         }
@@ -1214,6 +1217,8 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         {
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
         }
+
+        free(fullDumpPath);
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");

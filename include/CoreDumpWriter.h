@@ -19,6 +19,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdint.h>
+#include <linux/limits.h>
 
 #define DATE_LENGTH 26
 #define MAX_LINES 15
@@ -68,6 +69,7 @@ enum ECoreDumpType {
     FILEDESC,               // trigger on file descriptor count
     SIGNAL,                 // trigger on signal
     TIME,                   // trigger on time interval
+    EXCEPTION,              // trigger on exception
     MANUAL                  // manual trigger
 };
 
@@ -79,5 +81,6 @@ struct CoreDumpWriter {
 struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDumpConfiguration *config);
 int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName);
 int WriteCoreDump(struct CoreDumpWriter *self);
+char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type);
 
 #endif // CORE_DUMP_WRITER_H

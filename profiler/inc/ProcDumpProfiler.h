@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <linux/limits.h>
 
 #include "cor.h"
 #include "corprof.h"
@@ -42,10 +43,12 @@ private:
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
     pthread_t ipcThread;
     pid_t procDumpPid;
+    String fullDumpPath;
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(WCHAR* fw);
     int SendDumpCompletedStatus();
+    uint16_t* GetUint16(char* buffer);
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;

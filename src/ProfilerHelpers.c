@@ -57,7 +57,7 @@ int ExtractProfiler()
 // process instructing the runtime to load the profiler.
 //
 //--------------------------------------------------------------------
-int LoadProfiler(pid_t pid, char* filter)
+int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 {
     struct sockaddr_un addr = {0};
     uint32_t attachTimeout = 5000;
@@ -67,6 +67,7 @@ int LoadProfiler(pid_t pid, char* filter)
     auto_free_fd int fd = 0;
     auto_free char* socketName = NULL;
     auto_free char* clientData = NULL;
+    auto_free char* dumpPath = NULL;
     auto_free uint16_t* profilerPathW = NULL;
     auto_free void* temp_buffer = NULL;
 
@@ -115,9 +116,10 @@ int LoadProfiler(pid_t pid, char* filter)
     // client data
     if(filter)
     {
-        clientDataSize = snprintf(NULL, 0, "%d;%s", getpid(), filter) + 1;
+        // client data in the following format: <full_path_to_dump>;<procdump_pid>;Exception1>:<dumpsToCollect>;...
+        clientDataSize = snprintf(NULL, 0, "%s;%d;%s", fullDumpPath, getpid(), filter) + 1;
         clientData = malloc(clientDataSize);
-        sprintf(clientData, "%d;%s", getpid(), filter);
+        sprintf(clientData, "%s;%d;%s", fullDumpPath, getpid(), filter);
     }
     else
     {
@@ -239,7 +241,7 @@ int LoadProfiler(pid_t pid, char* filter)
 //    to get status
 //
 //--------------------------------------------------------------------
-int InjectProfiler(pid_t pid, char* filter)
+int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath)
 {
     int ret = ExtractProfiler();
     if(ret != 0)
@@ -249,7 +251,7 @@ int InjectProfiler(pid_t pid, char* filter)
         return ret;
     }
 
-    ret = LoadProfiler(pid, filter);
+    ret = LoadProfiler(pid, filter, fullDumpPath);
     if(ret != 0)
     {
         Log(error, "Failed to load profiler. Please make sure you are running elevated and targetting a .NET process.");
