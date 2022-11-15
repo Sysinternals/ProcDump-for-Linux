@@ -110,12 +110,17 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
     char* filter = (char*) pvClientData;
     filter[cbClientData]='\0';
 
+    ParseClientData(filter);
+
+/*
     // Convert to WCHAR
     WCHAR* fW = (WCHAR*) malloc((strlen(filter)+1)*sizeof(uint16_t));
     for(int i=0; i<(strlen(filter)+1); i++)
     {
         fW[i] = (uint16_t) filter[i];
-    }
+    }*/
+
+    processName = GetProcessName();
 
     HRESULT queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo8), reinterpret_cast<void **>(&this->corProfilerInfo8));
     if (FAILED(queryInterfaceResult))
@@ -145,8 +150,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         return E_FAIL;
     }
 
-    ParseClientData(fW);
-
     LOG(TRACE) << "Exit: CorProfiler::InitializeForAttach";
     return S_OK;
 }
@@ -157,16 +160,16 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 // Primitive conversion from char* to uint16_t*.
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-uint16_t* CorProfiler::GetUint16(char* buffer)
+WCHAR* CorProfiler::GetUint16(char* buffer)
 {
-    uint16_t* dumpFileNameW = NULL;
+    WCHAR* dumpFileNameW = NULL;
 
     if(buffer!=NULL)
     {
-        dumpFileNameW = (uint16_t*) malloc((strlen(buffer)+1)*sizeof(uint16_t));
+        dumpFileNameW = (WCHAR*) malloc((strlen(buffer)+1)*sizeof(WCHAR));
         for(int i=0; i<(strlen(buffer)+1); i++)
         {
-            dumpFileNameW[i] = (uint16_t) buffer[i];
+            dumpFileNameW[i] = (WCHAR) buffer[i];
         }
     }
 
@@ -179,38 +182,32 @@ uint16_t* CorProfiler::GetUint16(char* buffer)
 // Syntax of client data: <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-bool CorProfiler::ParseClientData(WCHAR* filter)
+bool CorProfiler::ParseClientData(char* filter)
 {
     LOG(TRACE) << "Enter: CorProfiler::ParseClientData";
-    String filterW(filter);
-    std::wstringstream exceptionFilter(filterW.ToCStr());
-    std::wstring segment;
-    std::vector<std::wstring> exclist;
+    std::stringstream exceptionFilter(filter);
+    std::string segment;
+    std::vector<std::string> exclist;
 
-    while(std::getline(exceptionFilter, segment, L';'))
+    while(std::getline(exceptionFilter, segment, ';'))
     {
         exclist.push_back(segment);
     }
 
-    std::vector<std::wstring> exceptionList;
+    std::vector<std::string> exceptionList;
     int i=0;
-    for(std::wstring exception : exclist)
+    for(std::string exception : exclist)
     {
         if(i==0)
         {
             //
-            // First part of the exception list is always the full path to the dump file to be created.
-            // We need this to send to the coreclr when we instruct it to generate a dump
+            // First part of the exception list is either:
+            //    > base path to dump location (if it ends with '/')
+            //    > full path to dump file
             //
-            WCHAR* path = (WCHAR*) malloc(exception.length()*sizeof(uint16_t)+1);
-            for(int i=0; i<exception.length(); i++)
-            {
-               path[i] = exception[i];
-            }
-            path[exception.length()] = '\0';
-            fullDumpPath = path;
+            fullDumpPath = exception;
 
-            LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << exception;
+            LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << fullDumpPath;
             i++;
             continue;
         }
@@ -228,22 +225,14 @@ bool CorProfiler::ParseClientData(WCHAR* filter)
 
 
         // exception filter
-        std::wstring segment2;
-        std::wstringstream stream(exception);
+        std::string segment2;
+        std::stringstream stream(exception);
         ExceptionMonitorEntry entry;
         entry.collectedDumps = 0;
-        std::getline(stream, segment2, L':');
+        std::getline(stream, segment2, ':');
 
-        entry.exception = (WCHAR*) malloc(segment2.length()*sizeof(uint16_t)+1);
-        wchar_t* t = (wchar_t*) segment2.c_str();
-
-        for(int i=0; i<segment2.length(); i++)
-        {
-            entry.exception[i] = segment2[i];
-        }
-        entry.exception[segment2.length()] = '\0';
-
-        std::getline(stream, segment2, L':');
+        entry.exception = segment2;
+        std::getline(stream, segment2, ':');
         entry.dumpsToCollect = std::stoi(segment2);
 
         exceptionMonitorList.push_back(entry);
@@ -251,8 +240,8 @@ bool CorProfiler::ParseClientData(WCHAR* filter)
 
     for (auto & element : exceptionMonitorList)
     {
-        String str(element.exception);
-        LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << str.ToCStr() << " with dump count set to " << std::to_wstring(element.dumpsToCollect);
+        //String str(element.exception);
+        LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << element.exception << " with dump count set to " << std::to_string(element.dumpsToCollect);
     }
 
     LOG(TRACE) << "Exit: CorProfiler::ParseClientData";
@@ -348,6 +337,121 @@ int CorProfiler::SendDumpCompletedStatus()
     return 0;
 }
 
+//--------------------------------------------------------------------
+//
+// CorProfiler::GetProcessName - Get process name
+//
+//--------------------------------------------------------------------
+char* CorProfiler::GetProcessName()
+{
+	char fileBuffer[PATH_MAX+1] = {0};
+	int charactersRead = 0;
+	int	itr = 0;
+	char* stringItr = NULL;
+	char* processName = NULL;
+	FILE* procFile = NULL;
+
+	procFile = fopen("/proc/self/cmdline", "r");
+	if(procFile != NULL)
+    {
+		if(fgets(fileBuffer, PATH_MAX, procFile) == NULL)
+        {
+            LOG(TRACE) << "CorProfiler::GetProcessName: Failed to get /proc/self/cmdline contents";
+            fclose(procFile);
+			return NULL;
+		}
+	}
+	else
+    {
+        LOG(TRACE) << "CorProfiler::GetProcessName: Failed to open /proc/self/cmdline";
+		return NULL;
+	}
+
+
+	// Extract process name
+	stringItr = fileBuffer;
+	charactersRead  = strlen(fileBuffer);
+	for(int i = 0; i <= charactersRead; i++)
+    {
+		if(fileBuffer[i] == '\0')
+        {
+			itr = i - itr;
+
+			if(strcmp(stringItr, "sudo") != 0)
+            {
+				processName = strrchr(stringItr, '/');
+
+				if(processName != NULL)
+                {
+                    fclose(procFile);
+					return strdup(processName + 1);
+				}
+				else
+                {
+                    fclose(procFile);
+					return strdup(stringItr);
+				}
+			}
+			else
+            {
+				stringItr += (itr+1); 	// +1 to move past '\0'
+			}
+		}
+	}
+
+    fclose(procFile);
+	return NULL;
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::ExceptionThrown
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+WCHAR* CorProfiler::GetDumpName(u_int16_t dumpCount)
+{
+    //
+    // If the path ends in '/' it means we have a base path and need to create the full path according to:
+    //  <base_path>/<process_name>_exception_<date_time_stamp>
+    //
+    if(fullDumpPath[fullDumpPath.length()-1] == '/')
+    {
+        time_t rawTime = {0};
+        struct tm* timerInfo = NULL;
+        char date[DATE_LENGTH];
+
+        LOG(TRACE) << "CorProfiler::GetDumpName: Base path specified.";
+
+        // get time for current dump generated
+        rawTime = time(NULL);
+        if((timerInfo = localtime(&rawTime)) == NULL)
+        {
+            LOG(TRACE) << "CorProfiler::GetDumpName: Failed to get localtime.";
+            return NULL;
+        }
+        strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
+        LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
+
+        std::ostringstream tmp;
+        tmp << fullDumpPath << processName.c_str() << "_exception_" << date;
+        std::string name = tmp.str();
+        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << name;
+        return GetUint16((char*)name.c_str());
+    }
+    else
+    {
+        //
+        // We have a full path...append the dump count to the very end (_X)
+        //
+        LOG(TRACE) << "CorProfiler::GetDumpName: Full path specified.";
+
+        std::ostringstream tmp;
+        tmp << fullDumpPath << "_" << dumpCount;
+        std::string name = tmp.str();
+        LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << name;
+        return GetUint16((char*)name.c_str());
+    }
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::ExceptionThrown
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -362,10 +466,19 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     // Check to see if we have any matches on exceptions
     for (auto & element : exceptionMonitorList)
     {
-        String exc(element.exception);
+        WCHAR* exception = GetUint16((char*) element.exception.c_str());
+        String exc(exception);
         if(exceptionName==exc)
         {
             LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
+
+            WCHAR* dumpName = GetDumpName(element.collectedDumps);
+
+            // Invoke coreclr dump generation
+
+
+            free(exception);
+            free(dumpName);
 
             // Notify procdump that a dump was generated
             SendDumpCompletedStatus();

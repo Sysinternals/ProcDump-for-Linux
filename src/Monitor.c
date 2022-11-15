@@ -1206,7 +1206,34 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
         }
 
-        fullDumpPath = GetCoreDumpName(config->ProcessId, config->ProcessName, config->CoreDumpPath, config->CoreDumpName, EXCEPTION);
+        if(config->CoreDumpName==NULL)
+        {
+            // We don't have a dump name so we just use the path (append a '/' to indicate its a base path)
+            if(config->CoreDumpPath[strlen(config->CoreDumpPath)-1] != '/')
+            {
+                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
+                snprintf(fullDumpPath, strlen(config->CoreDumpPath) + 2, "%s/", config->CoreDumpPath);
+            }
+            else
+            {
+                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 1);
+                snprintf(fullDumpPath, strlen(config->CoreDumpPath) + 1, "%s", config->CoreDumpPath);
+            }
+        }
+        else
+        {
+            // We have a dump name, let's append to dump path
+            if(config->CoreDumpPath[strlen(config->CoreDumpPath)] != '/')
+            {
+                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
+                snprintf(fullDumpPath, strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2, "%s/%s", config->CoreDumpPath, config->CoreDumpName);
+            }
+            else
+            {
+                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0', +1 = '/'
+                snprintf(fullDumpPath, strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1, "%s%s", config->CoreDumpPath, config->CoreDumpName);
+            }
+        }
 
         // Inject the profiler into the target process
         if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)==0)

@@ -23,6 +23,7 @@
 
 #define LOG_FILE    "/var/tmp/procdumpprofiler.log"
 #define MAX_LOG_FILE_SIZE    "1000000"
+#define DATE_LENGTH 26
 
 void* CancelThread(void* args);
 
@@ -32,7 +33,7 @@ private:
 
     struct ExceptionMonitorEntry
     {
-        WCHAR* exception;
+        std::string exception;
         int dumpsToCollect;
         int collectedDumps;
     };
@@ -43,12 +44,15 @@ private:
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
     pthread_t ipcThread;
     pid_t procDumpPid;
-    String fullDumpPath;
+    std::string processName;
+    std::string fullDumpPath;
 
     String GetExceptionName(ObjectID objectId);
-    bool ParseClientData(WCHAR* fw);
+    bool ParseClientData(char* fw);
     int SendDumpCompletedStatus();
-    uint16_t* GetUint16(char* buffer);
+    WCHAR* GetUint16(char* buffer);
+    WCHAR* GetDumpName(uint16_t dumpCount);
+    char* GetProcessName();
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;
