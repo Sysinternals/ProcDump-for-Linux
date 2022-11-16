@@ -1201,10 +1201,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        if(config->ExceptionFilter)
-        {
-            exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
-        }
+        exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
 
         if(config->CoreDumpName==NULL)
         {
@@ -1249,5 +1246,44 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
+    pthread_exit(NULL);
+}
+
+
+//--------------------------------------------------------------------
+//
+// ProcessMonitor - Thread that monitors for the existence of the
+// target process.
+//
+//--------------------------------------------------------------------
+void *ProcessMonitor(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("ProcessMonitor: Starting ProcessMonitor Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    int rc = 0;
+
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
+        {
+            if(!LookupProcessByPid(config->ProcessId))
+            {
+                break;
+            }
+
+            if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
+                break;
+            }
+        }
+    }
+
+    //
+    // Target process terminated, cancel the status socket to unblock WaitForProfiler...
+    //
+    shutdown(config->statusSocket, SHUT_RD);
+    config->statusSocket = -1;
+
+    Trace("ProcessMonitor: Exiting ProcessMonitor Thread");
     pthread_exit(NULL);
 }

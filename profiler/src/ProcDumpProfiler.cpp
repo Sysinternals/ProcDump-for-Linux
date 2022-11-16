@@ -8,64 +8,98 @@
 #include <string>
 #include <stdio.h>
 
+#define ELPP_THREAD_SAFE
+#define ELPP_FORCE_USE_STD_THREAD
+
 INITIALIZE_EASYLOGGINGPP
 
-char cancelSocketPath[FILENAME_MAX+1];
+
+char cancelSocketPath[PATH_MAX+1];
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CancelThread - Waits for cancellation notification from ProcDump (in case of CTRL-C)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void* CancelThread(void* args)
 {
-    LOG(TRACE) << "Enter: CancelThread";
+    LOG(TRACE) << "CancelThread: Enter";
     unsigned int s, t, s2;
     struct sockaddr_un local, remote;
     int len;
     char* prefixTmpFolder = NULL;
 
-    CorProfiler* profiler = (CorProfiler*) args;
+    CorProfiler* profiler = static_cast<CorProfiler*> (args);
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     prefixTmpFolder = getenv("TMPDIR");
     if(prefixTmpFolder==NULL)
     {
-        snprintf(cancelSocketPath, FILENAME_MAX, "/tmp/procdump/procdump-cancel-%d", getpid());
+        snprintf(cancelSocketPath, PATH_MAX, "/tmp/procdump/procdump-cancel-%d", getpid());
     }
     else
     {
-        snprintf(cancelSocketPath, FILENAME_MAX, "%s/procdump/procdump-cancel-%d", prefixTmpFolder, getpid());
+        snprintf(cancelSocketPath, PATH_MAX, "%s/procdump/procdump-cancel-%d", prefixTmpFolder, getpid());
     }
 
-    s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
+    {
+        LOG(TRACE) << "CancelThread: Failed to create socket";
+        profiler->SendCatastrophicFailureStatus();
+        return NULL;
+    }
 
     local.sun_family = AF_UNIX;
     strcpy(local.sun_path, cancelSocketPath);
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
-    bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
+    if(bind(s, (struct sockaddr *) (&local), len)==-1)
+    {
+        LOG(TRACE) << "CancelThread: Failed to bind to socket";
+        close(s);
+        profiler->SendCatastrophicFailureStatus();
+        return NULL;
+    }
 
-    listen(s, 1);       // Only allow one client to connect
+    if(listen(s, 1)==-1)
+    {
+        LOG(TRACE) << "CancelThread: Failed to listen";
+        close(s);
+        profiler->SendCatastrophicFailureStatus();
+        return NULL;
+    }
 
     while(true)
     {
+        LOG(TRACE) << "CancelThread: Waiting for cancellation";
         bool res=false;
-        LOG(TRACE) << "CancelThread:Waiting for cancellation";
 
         t = sizeof(remote);
-        s2 = accept(s, (struct sockaddr *)&remote, &t);
+        if((s2 = accept(s, (struct sockaddr *) (&remote), &t))==-1)
+        {
+            LOG(TRACE) << "CancelThread: Failed to accept";
+            close(s);
+            profiler->SendCatastrophicFailureStatus();
+            return NULL;
+        }
 
 
-        LOG(INFO) << "CancelThread:Connected to cancellation request";
+        LOG(INFO) << "CancelThread: Connected to cancellation request";
 
-        recv(s2, &res, sizeof(bool), 0);
+        if(recv(s2, &res, sizeof(bool), 0)==-1)
+        {
+            LOG(TRACE) << "CancelThread: Failed to accept";
+            close(s);
+            close(s2);
+            profiler->SendCatastrophicFailureStatus();
+            return NULL;
+        }
         if(res==true)
         {
-            LOG(INFO) << "CancelThread:Unloading profiler";
+            LOG(INFO) << "CancelThread: Unloading profiler";
 
             // The detach timeout is set to 30s but the runtime will continue trying with
             // larger timeouts if 30s is not enough. In most cases, 30s is overkill but in the cases where
             // it's in the process of writing a large dump it can take some time
-            profiler->corProfilerInfo3->RequestProfilerDetach(30000);
+            profiler->corProfilerInfo3->RequestProfilerDetach(DETACH_TIMEOUT);
 
             close(s2);
             break;
@@ -75,6 +109,8 @@ void* CancelThread(void* args)
     }
 
     unlink(cancelSocketPath);
+
+    LOG(TRACE) << "CancelThread: Exit";
     return NULL;
 }
 
@@ -88,7 +124,7 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
 
-    // Create IPC threads
+    // Create the cancel thread which waits for a cancellation signal from procdump
     pthread_create(&ipcThread, NULL, CancelThread, this);
 }
 
@@ -97,7 +133,6 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 CorProfiler::~CorProfiler()
 {
-    Shutdown();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -105,41 +140,52 @@ CorProfiler::~CorProfiler()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfilerInfoUnk, void *pvClientData, UINT cbClientData)
 {
-    LOG(TRACE) << "Enter: CorProfiler::InitializeForAttach";
+    LOG(TRACE) << "CorProfiler::InitializeForAttach: Enter";
 
-    char* filter = (char*) pvClientData;
+    char* filter = new char[cbClientData+1];
+    if(filter==NULL)
+    {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to allocate memory for exception filter";
+        return E_FAIL;
+    }
+
+    memcpy(filter, pvClientData, cbClientData);
     filter[cbClientData]='\0';
 
-    ParseClientData(filter);
-
-/*
-    // Convert to WCHAR
-    WCHAR* fW = (WCHAR*) malloc((strlen(filter)+1)*sizeof(uint16_t));
-    for(int i=0; i<(strlen(filter)+1); i++)
+    if(ParseClientData(filter)==false)
     {
-        fW[i] = (uint16_t) filter[i];
-    }*/
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to parse client data";
+        delete[] filter;
+        return E_FAIL;
+    }
+
+    delete[] filter;
 
     processName = GetProcessName();
+    if(processName.empty())
+    {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to get process name";
+        return E_FAIL;
+    }
 
     HRESULT queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo8), reinterpret_cast<void **>(&this->corProfilerInfo8));
     if (FAILED(queryInterfaceResult))
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo8";
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to query for ICorProfilerInfo8";
         return E_FAIL;
     }
 
     queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo3), reinterpret_cast<void **>(&this->corProfilerInfo3));
     if (FAILED(queryInterfaceResult))
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo3";
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to query for ICorProfilerInfo3";
         return E_FAIL;
     }
 
     queryInterfaceResult = pCorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo), reinterpret_cast<void **>(&this->corProfilerInfo));
     if (FAILED(queryInterfaceResult))
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach:Failed to query for ICorProfilerInfo";
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to query for ICorProfilerInfo";
         return E_FAIL;
     }
 
@@ -147,10 +193,11 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
     HRESULT hr = this->corProfilerInfo8->SetEventMask(eventMask);
     if(FAILED(hr))
     {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask";
         return E_FAIL;
     }
 
-    LOG(TRACE) << "Exit: CorProfiler::InitializeForAttach";
+    LOG(TRACE) << "CorProfiler::InitializeForAttach: Exit";
     return S_OK;
 }
 
@@ -162,17 +209,25 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 WCHAR* CorProfiler::GetUint16(char* buffer)
 {
+    LOG(TRACE) << "CorProfiler::GetUint16: Enter";
+
     WCHAR* dumpFileNameW = NULL;
 
     if(buffer!=NULL)
     {
-        dumpFileNameW = (WCHAR*) malloc((strlen(buffer)+1)*sizeof(WCHAR));
+        dumpFileNameW = static_cast<WCHAR*> (malloc((strlen(buffer)+1)*sizeof(WCHAR)));
+        if(!dumpFileNameW)
+        {
+            return NULL;
+        }
+
         for(int i=0; i<(strlen(buffer)+1); i++)
         {
-            dumpFileNameW[i] = (WCHAR) buffer[i];
+            dumpFileNameW[i] = static_cast<WCHAR> (buffer[i]);
         }
     }
 
+    LOG(TRACE) << "CorProfiler::GetUint16: Exit";
     return dumpFileNameW;
 }
 
@@ -184,7 +239,7 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(char* filter)
 {
-    LOG(TRACE) << "Enter: CorProfiler::ParseClientData";
+    LOG(TRACE) << "CorProfiler::ParseClientData: Enter";
     std::stringstream exceptionFilter(filter);
     std::string segment;
     std::vector<std::string> exclist;
@@ -240,11 +295,10 @@ bool CorProfiler::ParseClientData(char* filter)
 
     for (auto & element : exceptionMonitorList)
     {
-        //String str(element.exception);
         LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << element.exception << " with dump count set to " << std::to_string(element.dumpsToCollect);
     }
 
-    LOG(TRACE) << "Exit: CorProfiler::ParseClientData";
+    LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
     return true;
 }
 
@@ -261,7 +315,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Initialize(IUnknown *pICorProfilerInfoUnk
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 {
-    LOG(TRACE) << "Enter: CorProfiler::Shutdown";
+    LOG(TRACE) << "CorProfiler::Shutdown: Enter";
     if (this->corProfilerInfo8 != nullptr)
     {
         this->corProfilerInfo8->Release();
@@ -280,16 +334,34 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
         this->corProfilerInfo = nullptr;
     }
 
-    LOG(TRACE) << "Exit: CorProfiler::Shutdown";
+    UnloadProfiler();
+
+    LOG(TRACE) << "CorProfiler::Shutdown: Exit";
     return S_OK;
+}
+
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::SendCatastrophicFailureStatus
+// Sends a catastrophic failure  notification to procdump. Procdump should immediately stop monitoring as a result since the profiler will unload itself
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+void CorProfiler::SendCatastrophicFailureStatus()
+{
+    SendDumpCompletedStatus("", 'F');
+    UnloadProfiler();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::SendDumpCompletedStatus
-// Sends a notification to procdump that a dump was written
+// Sends a status notification to procdump. The status flag should be one of the following:
+//      > If dump was succesfully written: '1'
+//      > If dump was unable to be written: '0'
+//      > Any catastrophic failure of the profiler: 'F' (procdump should immediately stop monitoring as this results in an unload of the profiler)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-int CorProfiler::SendDumpCompletedStatus()
+int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
 {
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Enter";
+
     int s, len;
     struct sockaddr_un remote;
     char tmpFolder[FILENAME_MAX+1];
@@ -319,31 +391,64 @@ int CorProfiler::SendDumpCompletedStatus()
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, tmpFolder);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-    if(connect(s, (struct sockaddr *)&remote, len)==-1)
+    if(connect(s, (struct sockaddr *) (&remote), len)==-1)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to connect: " << errno;
+        close(s);
         return -1;
     }
 
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Connected";
 
-    bool cancel=true;
-    if(send(s, &cancel, 1, 0)==-1)
+
+    // packet looks like this: <[uint]payload_len><[byte] 0=failure, 1=success><[uint] dumpfile_path_len><[char*]Dumpfile path>
+    uint totalPayloadLen = sizeof(uint) + sizeof(char) + sizeof(uint) + dump.length();
+    uint payLoadLen = sizeof(char) + sizeof(uint) + dump.length();
+    char* payload = new char[totalPayloadLen];
+    if(payload==NULL)
     {
-        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to send completion status";
+        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed memory allocation for payload";
+        close(s);
         return -1;
     }
 
+    char* current = payload;
+    memcpy(current, &payLoadLen, sizeof(uint));
+    current+=sizeof(uint);
+
+    memcpy(current, &status, sizeof(char));
+    current+=sizeof(char);
+
+    uint pathLen = dump.length();
+    memcpy(current, &pathLen, sizeof(uint));
+    current+=sizeof(uint);
+
+    memcpy(current, dump.c_str(), strlen(dump.c_str()));
+    current+=strlen(dump.c_str());
+
+    if(send(s, payload, totalPayloadLen, 0)==-1)
+    {
+        LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to send completion status";
+        close(s);
+        delete[] payload;
+        return -1;
+    }
+
+    delete[] payload;
+
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Exit";
     return 0;
 }
 
 //--------------------------------------------------------------------
 //
-// CorProfiler::GetProcessName - Get process name
+// CorProfiler::GetProcessName - Get current process name
 //
 //--------------------------------------------------------------------
-char* CorProfiler::GetProcessName()
+std::string CorProfiler::GetProcessName()
 {
+    LOG(TRACE) << "CorProfiler::GetProcessName: Enter";
+
 	char fileBuffer[PATH_MAX+1] = {0};
 	int charactersRead = 0;
 	int	itr = 0;
@@ -367,6 +472,7 @@ char* CorProfiler::GetProcessName()
 		return NULL;
 	}
 
+    fclose(procFile);
 
 	// Extract process name
 	stringItr = fileBuffer;
@@ -383,13 +489,11 @@ char* CorProfiler::GetProcessName()
 
 				if(processName != NULL)
                 {
-                    fclose(procFile);
-					return strdup(processName + 1);
+					return std::string(strdup(processName + 1));
 				}
 				else
                 {
-                    fclose(procFile);
-					return strdup(stringItr);
+					return std::string(strdup(stringItr));
 				}
 			}
 			else
@@ -399,16 +503,19 @@ char* CorProfiler::GetProcessName()
 		}
 	}
 
-    fclose(procFile);
+    LOG(TRACE) << "CorProfiler::GetProcessName: Exit";
 	return NULL;
 }
 
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// CorProfiler::ExceptionThrown
+// CorProfiler::GetDumpName
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
 {
+    LOG(TRACE) << "CorProfiler::GetDumpName: Enter";
+    std::ostringstream tmp;
+
     //
     // If the path ends in '/' it means we have a base path and need to create the full path according to:
     //  <base_path>/<process_name>_exception_<date_time_stamp>
@@ -431,10 +538,8 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
         strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
         LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
 
-        std::ostringstream tmp;
         tmp << fullDumpPath << processName.c_str() << "_exception_" << date;
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
-        return tmp.str();
     }
     else
     {
@@ -443,11 +548,12 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
         //
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path specified.";
 
-        std::ostringstream tmp;
         tmp << fullDumpPath << "_" << dumpCount;
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
-        return tmp.str();
     }
+
+    LOG(TRACE) << "CorProfiler::GetDumpName: Exit";
+    return tmp.str();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -455,63 +561,104 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 {
-    LOG(TRACE) << "Enter: CorProfiler::ExceptionThrown";
+    LOG(TRACE) << "CorProfiler::ExceptionThrown: Enter";
 
     String exceptionName = GetExceptionName(thrownObjectId);
+    if(exceptionName.Length() == 0)
+    {
+        LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to get the name of the exception.";
+        SendCatastrophicFailureStatus();
+        return E_FAIL;
+    }
 
-    LOG(TRACE) << "Enter: CorProfiler::ExceptionThrown: " << exceptionName.ToCStr();
+    LOG(TRACE) << "CorProfiler::ExceptionThrown: exception name: " << exceptionName.ToCStr();
 
     // Check to see if we have any matches on exceptions
     for (auto & element : exceptionMonitorList)
     {
-        WCHAR* exception = GetUint16((char*) element.exception.c_str());
-        String exc(exception);
-        if(exceptionName==exc)
+        WCHAR* exception = GetUint16(const_cast<char*> (element.exception.c_str()));
+        if(exception==NULL)
         {
-            LOG(TRACE) << "Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
+            LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to get exception name (WHCAR).";
+            SendCatastrophicFailureStatus();
+            return E_FAIL;
+        }
+
+        String exc(exception);
+        free(exception);
+        if(exceptionName==exc || element.exception.compare("<any>") == 0)
+        {
+            LOG(TRACE) << "CorProfiler::ExceptionThrown: Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
             std::string dump = GetDumpName(element.collectedDumps);
-            WCHAR* dumpName = GetUint16((char*)dump.c_str());
 
             // Invoke coreclr dump generation
             char* socketName = NULL;
             if(IsCoreClrProcess(getpid(), &socketName))
             {
-                LOG(TRACE) << "Target is .NET process";
-                if(GenerateCoreClrDump(socketName, (char*) dump.c_str()))
+                LOG(TRACE) << "CorProfiler::ExceptionThrown: Target is .NET process";
+                bool res = GenerateCoreClrDump(socketName, const_cast<char*> (dump.c_str()));
+                if(res==false)
                 {
-                    LOG(TRACE) << "Success generating core dump ";
-                }
-                else
-                {
-                    LOG(TRACE) << "Failed generating core dump";
+                    delete[] socketName;
+
+                    // If we fail to generate a core dump we consider that a catastrophic failure and terminate all monitoring
+                    SendCatastrophicFailureStatus();
+                    return E_FAIL;
                 }
 
-                free(socketName);
+                // Notify procdump that a dump was generated
+                if(SendDumpCompletedStatus(dump, '1')==-1)
+                {
+                    delete[] socketName;
+
+                    SendCatastrophicFailureStatus();
+                    return E_FAIL;
+                }
+
+                LOG(TRACE) << "CorProfiler::ExceptionThrown: Generating core dump result: " << res;
+
+                if(res)
+                {
+                    element.collectedDumps++;
+                }
+
+                delete[] socketName;
             }
-
-            free(dumpName);
-
-            // Notify procdump that a dump was generated
-            SendDumpCompletedStatus();
-            element.collectedDumps++;
+            else
+            {
+                LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to create dump";
+                SendCatastrophicFailureStatus();
+                return E_FAIL;
+            }
 
             if(element.collectedDumps == element.dumpsToCollect)
             {
-                //
-                // Profiler is done, send message to procdump, cancel cancellation thread, detach and delete socket
-                //
-                pthread_cancel(ipcThread);
-                unlink(cancelSocketPath);
-                corProfilerInfo3->RequestProfilerDetach(30000);
+                // We're done collecting dumps...
+                UnloadProfiler();
             }
         }
-
-        free(exception);
     }
 
-    LOG(TRACE) << "Exit: CorProfiler::ExceptionThrown";
+    LOG(TRACE) << "CorProfiler::ExceptionThrown: Exit";
     return S_OK;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::UnloadProfiler
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+void CorProfiler::UnloadProfiler()
+{
+    LOG(TRACE) << "CorProfiler::UnloadProfiler: Enter";
+
+    //
+    // Profiler is done, send message to procdump, cancel cancellation thread, detach and delete socket
+    //
+    pthread_cancel(ipcThread);
+    unlink(cancelSocketPath);
+    corProfilerInfo3->RequestProfilerDetach(DETACH_TIMEOUT);
+
+    LOG(TRACE) << "CorProfiler::UnloadProfiler: Exit";
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -519,7 +666,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 String CorProfiler::GetExceptionName(ObjectID objectId)
 {
-    LOG(TRACE) << "Enter: CorProfiler::GetExceptionName, objectId =" << objectId;
+    LOG(TRACE) << "CorProfiler::GetExceptionName: Enter with objectId =" << objectId;
 
     String name;
     ClassID classId;
@@ -531,36 +678,38 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     HRESULT hRes = corProfilerInfo->GetClassFromObject(objectId, &classId);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetClassFromObject";
-        return WCHAR("Failed_GetClassFromObject");
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassFromObject";
+        return WCHAR("");
     }
 
     hRes = corProfilerInfo->GetClassIDInfo(classId, &moduleId, &typeDefToken);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetClassIDInfo";
-        return WCHAR("Failed_GetClassIDInfo");
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassIDInfo";
+        return WCHAR("");
     }
 
-    hRes = corProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**)&metadata);
+    hRes = corProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**) (&metadata));
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetModuleMetaData";
-        return WCHAR("Failed_GetModuleMetaData");
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetModuleMetaData";
+        return WCHAR("");
     }
 
     WCHAR funcName[1024];
     hRes = metadata->GetTypeDefProps(typeDefToken, funcName, 1024, &read, NULL, NULL);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "Failed: CorProfiler::GetExceptionName in call to GetTypeDefProps";
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetTypeDefProps";
         metadata->Release();
-        return WCHAR("Failed_GetTypeDefProps");
+        return WCHAR("");
     }
 
     name+=funcName;
 
     metadata->Release();
+
+    LOG(TRACE) << "CorProfiler::GetExceptionName: Exit";
     return name;
 }
 
@@ -569,6 +718,8 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
 {
+    LOG(TRACE) << "CorProfiler::IsCoreClrProcess: Enter";
+
     bool bRet = false;
     *socketName = NULL;
     FILE *procFile = NULL;
@@ -583,52 +734,56 @@ bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
     // exists by the following prefix, we assume its a .NET Core process:
     //    dotnet-diagnostic-{%d:PID}
     // The sockets are found in /proc/net/unix
-    procFile = fopen("/proc/net/unix", "r");
-    if(procFile != NULL)
+    if(tmpFolder!=NULL)
     {
-        fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers.
-
-        while(fgets(lineBuf, 4096, procFile) != NULL)
+        procFile = fopen("/proc/net/unix", "r");
+        if(procFile != NULL)
         {
-            char* ptr = GetPath(lineBuf);
-            if(ptr!=NULL)
+            fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers.
+
+            while(fgets(lineBuf, 4096, procFile) != NULL)
             {
-                if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
+                char* ptr = GetPath(lineBuf);
+                if(ptr!=NULL)
                 {
-                    // Found the correct socket...copy the name to the out param
-                    *socketName = (char*) malloc(sizeof(char)*strlen(ptr)+1);
-                    if(*socketName!=NULL)
+                    if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
                     {
-                        memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
-                        if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
+                        // Found the correct socket
+                        *socketName = new char[(sizeof(char)*strlen(ptr)+1)];
+                        if(*socketName!=NULL)
                         {
-                            LOG(TRACE) << "CoreCLR diagnostics socket: " << (*socketName);
-                            bRet = true;
+                            memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
+                            if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
+                            {
+                                LOG(TRACE) << "CorProfiler::IsCoreClrProcess: CoreCLR diagnostics socket: " << (*socketName);
+                                bRet = true;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
-        }
 
-        fclose(procFile);
-    }
-    else
-    {
-        LOG(TRACE) << "Failed to open /proc/net/unix: " << errno;
+            fclose(procFile);
+        }
+        else
+        {
+            LOG(TRACE) << "CorProfiler::IsCoreClrProcess: Failed to open /proc/net/unix: " << errno;
+        }
     }
 
     if(tmpFolder)
     {
-        free(tmpFolder);
+        delete[] tmpFolder;
     }
 
     if(*socketName!=NULL && bRet==false)
     {
-        free(*socketName);
+        delete[] *socketName;
         *socketName = NULL;
     }
 
+    LOG(TRACE) << "CorProfiler::IsCoreClrProcess: Exit";
     return bRet;
 }
 
@@ -637,6 +792,8 @@ bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
 {
+    LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Enter";
+
     bool bRet = false;
     struct sockaddr_un addr = {0};
     int fd = 0;
@@ -658,7 +815,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
             addr.sun_family = AF_UNIX;
             strncpy(addr.sun_path, socketName, sizeof(addr.sun_path)-1);
 
-            if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
+            if (connect(fd, (struct sockaddr*) (&addr), sizeof(struct sockaddr_un)) == -1)
             {
                 LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation.";
             }
@@ -677,7 +834,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
                 uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
 
                 // First initialize header
-                temp_buffer = (char*) malloc(totalPacketSize);
+                temp_buffer = new char[totalPacketSize];
                 if(temp_buffer!=NULL)
                 {
                     memset(temp_buffer, 0, totalPacketSize);
@@ -758,7 +915,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
                         }
                     }
 
-                    free(temp_buffer);
+                    delete[] temp_buffer;
                 }
 
                 close(fd);
@@ -768,6 +925,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
         free(dumpFileNameW);
     }
 
+    LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Exit";
     return bRet;
 }
 
@@ -776,6 +934,8 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 char* CorProfiler::GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
 {
+    LOG(TRACE) << "CorProfiler::GetSocketPath: Enter";
+
     char* prefixTmpFolder = NULL;
     char* t = NULL;
 
@@ -783,35 +943,31 @@ char* CorProfiler::GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
     prefixTmpFolder = getenv("TMPDIR");
     if(prefixTmpFolder==NULL)
     {
-        if(targetPid)
+        prefixTmpFolder = "/tmp";
+    }
+
+    if(targetPid)
+    {
+        int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+        t = new char[len+1];
+        if(t==NULL)
         {
-            int len = snprintf(NULL, 0, "/tmp/%s%d-%d", prefix, pid, targetPid);
-            t = (char*) malloc(len+1);
-            sprintf(t, "/tmp/%s%d-%d", prefix, pid, targetPid);
+            return NULL;
         }
-        else
-        {
-            int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
-            t = (char*) malloc(len+1);
-            sprintf(t, "/tmp/%s%d", prefix, pid);
-        }
+        snprintf(t, len, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
     }
     else
     {
-        if(targetPid)
+        int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        t = new char[len+1];
+        if(t==NULL)
         {
-            int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
-            t = (char*) malloc(len+1);
-            sprintf(t, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+            return NULL;
         }
-        else
-        {
-            int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
-            t = (char*) malloc(len+1);
-            sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
-        }
+        snprintf(t, len, "%s/%s%d", prefixTmpFolder, prefix, pid);
     }
 
+    LOG(TRACE) << "CorProfiler::GetSocketPath: Exit";
     return t;
 }
 

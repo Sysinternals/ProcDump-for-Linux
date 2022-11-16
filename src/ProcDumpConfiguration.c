@@ -157,8 +157,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bDumpOnException =            NULL;
 
     self->socketPath =                  NULL;
+    self->statusSocket =                -1;
 }
-
 
 //--------------------------------------------------------------------
 //
@@ -248,6 +248,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->ExceptionFilter = self->ExceptionFilter == NULL ? NULL : strdup(self->ExceptionFilter);
         copy->socketPath = self->socketPath == NULL ? NULL : strdup(self->socketPath);
         copy->bDumpOnException = self->bDumpOnException;
+        copy->statusSocket = self->statusSocket;
 
         return copy;
     }

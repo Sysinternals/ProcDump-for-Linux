@@ -21,6 +21,8 @@
 #include "profilerstring.h"
 #include "easylogging++.h"
 
+#define DETACH_TIMEOUT  30000
+
 #define LOG_FILE    "/var/tmp/procdumpprofiler.log"
 #define MAX_LOG_FILE_SIZE    "1000000"
 #define DATE_LENGTH 26
@@ -75,20 +77,23 @@ private:
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(char* fw);
-    int SendDumpCompletedStatus();
+    int SendDumpCompletedStatus(std::string dump, char success);
     WCHAR* GetUint16(char* buffer);
     std::string GetDumpName(uint16_t dumpCount);
-    char* GetProcessName();
+    std::string GetProcessName();
     bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
     bool IsCoreClrProcess(pid_t pid, char** socketName);
     char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
     char* GetPath(char* lineBuf);
+    void UnloadProfiler();
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;
-
     CorProfiler();
     virtual ~CorProfiler();
+
+    void SendCatastrophicFailureStatus();
+
     HRESULT STDMETHODCALLTYPE Initialize(IUnknown* pICorProfilerInfoUnk) override;
     HRESULT STDMETHODCALLTYPE Shutdown() override;
     HRESULT STDMETHODCALLTYPE AppDomainCreationStarted(AppDomainID appDomainId) override;

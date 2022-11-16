@@ -83,6 +83,7 @@ struct ProcDumpConfiguration {
     // Quit
     int nQuit; // if not 0, then quit
     struct Handle evtQuit; // for signalling threads we are quitting
+    int statusSocket;   // Socket used to wait for target process reporting status to procdump
 
 
     // Trigger behavior

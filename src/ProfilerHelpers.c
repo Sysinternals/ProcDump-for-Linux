@@ -267,11 +267,13 @@ int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath)
 // GetEncodedExceptionFilter
 //
 // Create the exception filter string which goes like this:
-//    <procdump_pid>;<full_dump_path>;Exception[;Exception...]
+//    <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 // Where Exception is:
-//    Name_of_Exception:num_dumps
-// The exception filter passed in from the command line:
-//    <Name_ofException>,...
+//    Name_of_Exception:num_dumps or
+//    <any> which means that the user did not specify an exception filter and we just dump on
+//          any exception that happens to throw.
+// The exception filter passed in from the command line using -f:
+//    <Name_ofException>,<Name_ofException>,...
 //
 //--------------------------------------------------------------------
 char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDumps)
@@ -283,7 +285,7 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     char* exceptionFilterCur = NULL;
     char tmp[10];
 
-    char* cpy = strdup(exceptionFilterCmdLine);
+    char* cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("<any>");
 
     numberOfDumpsLen = sprintf(tmp, "%d", numDumps);
 
@@ -296,7 +298,8 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     }
 
     free(cpy);
-    cpy = strdup(exceptionFilterCmdLine);
+
+    cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("<any>");
 
     totalExceptionNameLen++; // NULL terminator
 
@@ -378,6 +381,7 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
     unsigned int t, s2;
     struct sockaddr_un local, remote;
     int len;
+    pthread_t processMonitor;
 
     auto_free char* tmpFolder = NULL;
     auto_free_fd int s=-1;
@@ -395,26 +399,76 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
     bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
     chmod(tmpFolder, 0777);
 
+    //
+    // Create a thread that will monitor for abnormal process terminations of the target process.
+    // In case of an abnormal process termination, it cancels the socket that procdump is waiting on
+    // for status from target process and we can exit cleanly.
+    //
+    config->statusSocket = s;
+    if ((pthread_create(&processMonitor, NULL, ProcessMonitor, (void *) config)) != 0)
+    {
+        Trace("WaitForProfilerCompletion: failed to create ProcessMonitor.");
+        return -1;
+    }
+
+
     listen(s, 1);       // Only allow one client to connect
 
     int dumpsGenerated = 0;
 
     while(true)
     {
-        bool res=false;
         Trace("CancelThread:Waiting for status");
 
         t = sizeof(remote);
         s2 = accept(s, (struct sockaddr *)&remote, &t);
+        if(s2==-1)
+        {
+            // This means the target process died and we need to return
+            return -1;
+        }
 
         Trace("CancelThread:Connected to status");
 
-        recv(s2, &res, sizeof(bool), 0);
-        if(res==true)
+        // packet looks like this: <payload_len><[byte] 0=failure, 1=success><[uint_32] dumpfile_path_len><[char*]Dumpfile path>
+        int payloadLen = 0;
+        recv(s2, &payloadLen, sizeof(int), 0);
+        if(payloadLen>0)
         {
-            dumpsGenerated++;
-            if(dumpsGenerated == config->NumberOfDumpsToCollect)
+            Trace("Received payload len %d", payloadLen);
+            char* payload = (char*) malloc(payloadLen);
+            recv(s2, payload, payloadLen, 0);
+
+            char status = payload[0];
+            Trace("Received status %c", status);
+
+            int dumpLen = 0;
+            memcpy(&dumpLen, payload+1, sizeof(int));
+            Trace("Received dump length %d", dumpLen);
+
+            char* dump = malloc(dumpLen+1);
+            memcpy(dump, payload+1+sizeof(int), dumpLen);
+            dump[dumpLen] = '\0';
+            Trace("Received dump path %s", dump);
+
+            if(status=='1')
             {
+                Log(info, "Core dump generated: %s", dump);
+
+                dumpsGenerated++;
+                if(dumpsGenerated == config->NumberOfDumpsToCollect)
+                {
+                    Trace("Total dump count has been reached: %d", dumpsGenerated);
+                    break;
+                }
+            }
+            else if(status=='2')
+            {
+                Log(error, "Failed to generate core dump: %s", dump);
+            }
+            else if(status=='F')
+            {
+                Log(error, "Exception monitoring failed.");
                 Trace("Total dump count has been reached: %d", dumpsGenerated);
                 break;
             }
