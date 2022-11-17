@@ -232,7 +232,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             exit(-1);
         }
 
-        // Oterwise, we use gcore dump generation   TODO: We might consider adding a forcegcore flag in cases where
+        // Oterwise, we use gcore dump generation   TODO@FUTURE: We might consider adding a forcegcore flag in cases where
         // someone wants to use gcore even for .NET Core 3.x+ processes.
         commandPipe = popen2(command, "r", &gcorePid);
         self->Config->gcorePid = gcorePid;

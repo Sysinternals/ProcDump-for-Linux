@@ -57,7 +57,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
                         memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
                         if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
                         {
-                            Trace("CoreCLR diagnostics socket: %s", socketName);
+                            Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", socketName);
                             bRet = true;
                         }
                         break;
@@ -68,7 +68,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     }
     else
     {
-        Trace("Failed to open /proc/net/unix [%d].", errno);
+        Trace("IsCoreClrProcess: Failed to open /proc/net/unix [%d].", errno);
     }
 
     if(*socketName!=NULL && bRet==false)
@@ -101,7 +101,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
     {
         if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
         {
-            Trace("Failed to create socket for .NET Core dump generation.");
+            Trace("GenerateCoreClrDump: Failed to create socket for .NET Core dump generation.");
         }
         else
         {
@@ -112,7 +112,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
             if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
             {
-                Trace("Failed to connect to socket for .NET Core dump generation.");
+                Trace("GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation.");
             }
             else
             {
@@ -161,7 +161,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
                     if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
                     {
-                        Trace("Failed sending packet to diagnostics server [%d]", errno);
+                        Trace("GenerateCoreClrDump: Failed sending packet to diagnostics server [%d]", errno);
                     }
                     else
                     {
@@ -169,14 +169,14 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                         struct IpcHeader retHeader;
                         if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
                         {
-                            Trace("Failed receiving response header from diagnostics server [%d]", errno);
+                            Trace("GenerateCoreClrDump: Failed receiving response header from diagnostics server [%d]", errno);
                         }
                         else
                         {
                             // Check the header to make sure its the right size
                             if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
                             {
-                                Trace("Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
+                                Trace("GenerateCoreClrDump: Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
                             }
                             else
                             {
@@ -184,7 +184,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                                 int32_t res = -1;
                                 if(recv(fd, &res, sizeof(int32_t), 0)==-1)
                                 {
-                                    Trace("Failed receiving result code from response payload from diagnostics server [%d]", errno);
+                                    Trace("GenerateCoreClrDump: Failed receiving result code from response payload from diagnostics server [%d]", errno);
                                 }
                                 else
                                 {

@@ -377,7 +377,7 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
 
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Socket path: " << tmpFolder;
 
-    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to create socket: " << errno;
         return -1;

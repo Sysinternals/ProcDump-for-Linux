@@ -393,6 +393,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 return PrintUsage();
             }
 
+            if(self->NumberOfDumpsToCollect > MAX_DUMP_COUNT)
+            {
+                Log(error, "Max dump count must be less than %d.", MAX_DUMP_COUNT);
+                return PrintUsage();
+            }
+
             i++;
         }
         else if( 0 == strcasecmp( argv[i], "/s" ) ||
@@ -709,7 +715,7 @@ int PrintUsage()
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
     printf("            [-e]\n");
-    printf("            [-f <Exception_Name>]\n");
+    printf("            [-f Include_Filter,...]\n");
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
     printf("            [-log]\n");
@@ -727,8 +733,8 @@ int PrintUsage()
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");
-    printf("   -e      [.NET] Create dump when the process encounters an exception\n");
-    printf("   -f      [.NET] Filter on the name of the exception.\n");
+    printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
+    printf("   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to syslog.\n");

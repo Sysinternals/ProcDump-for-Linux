@@ -488,7 +488,6 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
 
             self->Threads[self->nThreads].trigger = Exception;
             self->nThreads++;
-
         }
         else
         {
@@ -1198,13 +1197,18 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     Trace("ExceptionMonitoring: Starting ExceptionMonitoring Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* exceptionFilter = NULL;
-    char* fullDumpPath = NULL;
+    auto_free char* fullDumpPath = NULL;
 
     int rc = 0;
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
         exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
+        if(exceptionFilter==NULL)
+        {
+            Trace("ExceptionMonitoring: Failed to get exception filter.");
+            return NULL;
+        }
 
         if(config->CoreDumpName==NULL)
         {
@@ -1212,11 +1216,23 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)-1] != '/')
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
+                if(fullDumpPath==NULL)
+                {
+                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    return NULL;
+                }
+
                 snprintf(fullDumpPath, strlen(config->CoreDumpPath) + 2, "%s/", config->CoreDumpPath);
             }
             else
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + 1);
+                if(fullDumpPath==NULL)
+                {
+                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    return NULL;
+                }
+
                 snprintf(fullDumpPath, strlen(config->CoreDumpPath) + 1, "%s", config->CoreDumpPath);
             }
         }
@@ -1226,11 +1242,23 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)] != '/')
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
+                if(fullDumpPath==NULL)
+                {
+                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    return NULL;
+                }
+
                 snprintf(fullDumpPath, strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2, "%s/%s", config->CoreDumpPath, config->CoreDumpName);
             }
             else
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0', +1 = '/'
+                if(fullDumpPath==NULL)
+                {
+                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    return NULL;
+                }
+
                 snprintf(fullDumpPath, strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1, "%s%s", config->CoreDumpPath, config->CoreDumpName);
             }
         }
@@ -1243,10 +1271,8 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         else
         {
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
+            return NULL;
         }
-
-        free(exceptionFilter);
-        free(fullDumpPath);
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
@@ -1265,7 +1291,6 @@ void *ProcessMonitor(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("ProcessMonitor: Starting ProcessMonitor Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     int rc = 0;
-
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {

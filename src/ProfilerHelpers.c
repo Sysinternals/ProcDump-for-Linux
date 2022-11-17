@@ -8,6 +8,7 @@
 //--------------------------------------------------------------------
 #include "Includes.h"
 
+// These are the start and end addresses to the embedded profiler binary
 extern char _binary_obj_ProcDumpProfiler_so_end[];
 extern char _binary_obj_ProcDumpProfiler_so_start[];
 
@@ -16,7 +17,8 @@ extern char _binary_obj_ProcDumpProfiler_so_start[];
 // ExtractProfiler
 //
 // The profiler so is embedded into the ProcDump binary. This function
-// extracts the profiler so and places it into /opt/procdump
+// extracts the profiler so and places it into
+// PROCDUMP_DIR "/" PROFILER_FILE_NAME
 //
 //--------------------------------------------------------------------
 int ExtractProfiler()
@@ -79,7 +81,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
     {
-        Trace("Failed to create socket for .NET Core dump generation.");
+        Trace("LoadProfiler: Failed to create socket for .NET Core dump generation.");
         return -1;
     }
 
@@ -90,7 +92,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
     {
-        Trace("Failed to connect to socket for .NET Core profiler load.");
+        Trace("LoadProfiler: Failed to connect to socket for .NET Core profiler load.");
         return -1;
     }
 
@@ -105,10 +107,13 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     //profiler path
     profilerPathW = GetUint16(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
-    unsigned int profilerPathLen = (strlen(PROCDUMP_DIR "/" PROFILER_FILE_NAME)+1);
+    if(profilerPathW==NULL)
+    {
+        Trace("LoadProfiler: Failed to GetUint16.");
+        return -1;
+    }
 
-    //profilerPathW = GetUint16("/home/marioh/profiler/profiler/procdumpprofiler.so");
-    //unsigned int profilerPathLen = (strlen("/home/marioh/profiler/profiler/procdumpprofiler.so")+1);
+    unsigned int profilerPathLen = (strlen(PROCDUMP_DIR "/" PROFILER_FILE_NAME)+1);
 
     payloadSize += sizeof(profilerPathLen);
     payloadSize += profilerPathLen*sizeof(uint16_t);
@@ -116,15 +121,23 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     // client data
     if(filter)
     {
-        // client data in the following format: <full_path_to_dump>;<procdump_pid>;Exception1>:<dumpsToCollect>;...
+        // client data in the following format:
+        // <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
         clientDataSize = snprintf(NULL, 0, "%s;%d;%s", fullDumpPath, getpid(), filter) + 1;
         clientData = malloc(clientDataSize);
+        if(clientData==NULL)
+        {
+            Trace("LoadProfiler: Failed to allocate memory for client data.");
+            return -1;
+        }
+
         sprintf(clientData, "%s;%d;%s", fullDumpPath, getpid(), filter);
     }
     else
     {
         clientDataSize = 0;
     }
+
     payloadSize += sizeof(clientDataSize);
     payloadSize += clientDataSize*sizeof(unsigned char);
 
@@ -136,7 +149,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     temp_buffer = malloc(totalPacketSize);
     if(temp_buffer==NULL)
     {
-        Trace("Failed allocating memory");
+        Trace("LoadProfiler: Failed to allocate memory for packet.")
         return -1;
     }
 
@@ -179,7 +192,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     // Send the payload
     if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
     {
-        Trace("Failed sending packet to diagnostics server [%d]", errno);
+        Trace("LoadProfiler: Failed sending packet to diagnostics server [%d]", errno);
         return -1;
     }
 
@@ -187,21 +200,21 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     struct IpcHeader retHeader;
     if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
     {
-        Trace("Failed receiving response header from diagnostics server [%d]", errno);
+        Trace("LoadProfiler: Failed receiving response header from diagnostics server [%d]", errno);
         return -1;
     }
 
     // Check the header to make sure its the right size
     if(retHeader.Size != CORECLR_DIAG_IPCHEADER_SIZE)
     {
-        Trace("Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
+        Trace("LoadProfiler: Failed validating header size in response header from diagnostics server [%d != 24]", retHeader.Size);
         return -1;
     }
 
     int32_t res = -1;
     if(recv(fd, &res, sizeof(int32_t), 0)==-1)
     {
-        Trace("Failed receiving result code from response payload from diagnostics server [%d]", errno);
+        Trace("LoadProfiler: Failed receiving result code from response payload from diagnostics server [%d]", errno);
         return -1;
     }
     else
@@ -211,12 +224,12 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
             if(res==0x8013136A)
             {
                 // The profiler is already loaded in the target process
-                Trace("Target process is already beeing monitored.");
-                Log(error, "Target process is already beeing monitored.");
+                Trace("LoadProfiler: Target process is already being monitored.");
+                Log(error, "Target process is already being monitored.");
             }
             else
             {
-                Trace("Error returned from diagnostics server [0x%x]", res);
+                Trace("LoadProfiler: Error returned from diagnostics server [0x%x]", res);
                 Log(error, "Error returned from diagnostics server [0x%x]", res);
             }
 
@@ -234,11 +247,11 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 // Injects the profiler into the target process by:
 //
 // 1. Extracting the profiler binary from the procdump binary and placing in
-//    /opt/procdump. This location is by default protected by sudo.
+//    tmp location.
 // 2. Send a command to the target process diagnostics pipe with the location
 //    of the profiler (passing in any relevant data such as exception filter and
-//    dump count). The profiler opens an IPC pipe that ProcDump will communicate with
-//    to get status
+//    dump count). The profiler opens an IPC pipe that ProcDump can send
+//    cancellation requests to.
 //
 //--------------------------------------------------------------------
 int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath)
@@ -285,6 +298,7 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     char* exceptionFilterCur = NULL;
     char tmp[10];
 
+    // If no exceptions were specified using -f we should dump on any exception (hence we add <any>)
     char* cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("<any>");
 
     numberOfDumpsLen = sprintf(tmp, "%d", numDumps);
@@ -304,6 +318,11 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     totalExceptionNameLen++; // NULL terminator
 
     exceptionFilter = malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2)); // +1 for : seperator +1 for ; seperator
+    if(exceptionFilter==NULL)
+    {
+        return NULL;
+    }
+
     exceptionFilterCur = exceptionFilter;
 
     token = strtok(cpy, ",");
@@ -334,29 +353,25 @@ int CancelProfiler(pid_t pid)
 
     tmpFolder = GetSocketPath("procdump/procdump-cancel-", pid, 0);
 
-    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)        // TODO: Errors
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
     {
-        Trace("Failed to create socket\n");
+        Trace("CancelProfiler: Failed to create socket\n");
         return -1;
     }
-
-    Trace("Trying to connect...\n");
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, tmpFolder);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if(connect(s, (struct sockaddr *)&remote, len)==-1)
     {
-        Trace("Failed to connect\n");
+        Trace("CancelProfiler: Failed to connect\n");
         return -1;
     }
-
-    Trace("Connected...\n");
 
     bool cancel=true;
     if(send(s, &cancel, 1, 0)==-1)
     {
-        Trace("Failed to send cancellation\n");
+        Trace("CancelProfiler: Failed to send cancellation\n");
         return -1;
     }
 
@@ -367,11 +382,14 @@ int CancelProfiler(pid_t pid)
 //
 // WaitForProfilerCompletion
 //
-// Waits for profiler to send a status (bool=true) on (<prefix>/procdump-status-<pid>)
-// that indicates that a dump was generated. We wait here until the dump condition
-// (number of dumps) has been satisfied until we return. For example, if the user
-// specified they wanted 3 dumps on System.InvalidOperationException, we will get three
-// status (bool==true) before we return.
+// Waits for profiler to send a status on (<prefix>/procdump-status-<pid>).
+// Status is in the form of:
+// <[uint]payload_len><[byte] 0=failure, 1=success><[uint] dumpfile_path_len><[char*]Dumpfile path>
+//
+// Where the failure byte is interpreted as following:
+//  '0' - Dump with the given path failed to generate
+//  '1' - Dump with the given path was generated
+//  'F' - Profiler encountered an error and unloaded itself (path not applicable)
 //
 // The socket created is in the form: <socket_path>/procdump-status-<procdumpPid>-<targetPid>
 //
@@ -388,68 +406,110 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
 
     tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
     config->socketPath = tmpFolder;
-    Trace("Status socket path: %s", tmpFolder);
+    Trace("WaitForProfilerCompletion: Status socket path: %s", tmpFolder);
 
-    s = socket(AF_UNIX, SOCK_STREAM, 0);    // TODO: Failure
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        return -1;
+    }
 
     local.sun_family = AF_UNIX;
     strcpy(local.sun_path, tmpFolder);
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
-    bind(s, (struct sockaddr *)&local, len);    // TODO: Failure
+    if(bind(s, (struct sockaddr *)&local, len)==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        return -1;
+    }
+
+    //
+    // Change perms on the socket to be read/write for 'others' since the profiler is loaded into
+    // an unknown user process
+    //
     chmod(tmpFolder, 0777);
 
     //
     // Create a thread that will monitor for abnormal process terminations of the target process.
     // In case of an abnormal process termination, it cancels the socket that procdump is waiting on
-    // for status from target process and we can exit cleanly.
+    // for status from target process and we can exit promptly.
     //
     config->statusSocket = s;
     if ((pthread_create(&processMonitor, NULL, ProcessMonitor, (void *) config)) != 0)
     {
-        Trace("WaitForProfilerCompletion: failed to create ProcessMonitor.");
+        Trace("WaitForProfilerCompletion: failed to create ProcessMonitor thread.");
         return -1;
     }
 
-
-    listen(s, 1);       // Only allow one client to connect
+    if(listen(s, 1)==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to listen on socket\n");
+        return -1;
+    }
 
     int dumpsGenerated = 0;
 
     while(true)
     {
-        Trace("CancelThread:Waiting for status");
+        Trace("WaitForProfilerCompletion:Waiting for status");
 
         t = sizeof(remote);
-        s2 = accept(s, (struct sockaddr *)&remote, &t);
-        if(s2==-1)
+        if((s2 = accept(s, (struct sockaddr *)&remote, &t))==-1)
         {
             // This means the target process died and we need to return
+            Trace("WaitForProfilerCompletion: Failed in accept call on socket\n");
             return -1;
         }
 
-        Trace("CancelThread:Connected to status");
-
         // packet looks like this: <payload_len><[byte] 0=failure, 1=success><[uint_32] dumpfile_path_len><[char*]Dumpfile path>
         int payloadLen = 0;
-        recv(s2, &payloadLen, sizeof(int), 0);
+        if(recv(s2, &payloadLen, sizeof(int), 0)==-1)
+        {
+            // This means the target process died and we need to return
+            Trace("WaitForProfilerCompletion: Failed in recv on accept socket\n");
+            close(s2);
+            return -1;
+        }
+
         if(payloadLen>0)
         {
             Trace("Received payload len %d", payloadLen);
             char* payload = (char*) malloc(payloadLen);
-            recv(s2, payload, payloadLen, 0);
+            if(payload==NULL)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                close(s2);
+                return -1;
+            }
+
+            if(recv(s2, payload, payloadLen, 0)==-1)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                close(s2);
+                free(payload);
+                return -1;
+            }
 
             char status = payload[0];
-            Trace("Received status %c", status);
+            Trace("WaitForProfilerCompletion: Received status %c", status);
 
             int dumpLen = 0;
             memcpy(&dumpLen, payload+1, sizeof(int));
-            Trace("Received dump length %d", dumpLen);
+            Trace("WaitForProfilerCompletion: Received dump length %d", dumpLen);
 
             char* dump = malloc(dumpLen+1);
+            if(dump==NULL)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for dump\n");
+                close(s2);
+                free(payload);
+                return -1;
+            }
+
             memcpy(dump, payload+1+sizeof(int), dumpLen);
             dump[dumpLen] = '\0';
-            Trace("Received dump path %s", dump);
+            Trace("WaitForProfilerCompletion: Received dump path %s", dump);
 
             free(payload);
 
@@ -459,8 +519,9 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
                 dumpsGenerated++;
                 if(dumpsGenerated == config->NumberOfDumpsToCollect)
                 {
+                    close(s2);
                     free(dump);
-                    Trace("Total dump count has been reached: %d", dumpsGenerated);
+                    Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", dumpsGenerated);
                     break;
                 }
             }
@@ -471,13 +532,16 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             else if(status=='F')
             {
                 Log(error, "Exception monitoring failed.");
-                Trace("Total dump count has been reached: %d", dumpsGenerated);
+                Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", dumpsGenerated);
                 free(dump);
+                close(s2);
                 break;
             }
 
             free(dump);
         }
+
+        close(s2);
     }
 
     unlink(tmpFolder);

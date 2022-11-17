@@ -37,6 +37,7 @@
 #define EMPTY_PROC_NAME "(null)"
 
 #define MIN_POLLING_INTERVAL 1000   // default trigger polling interval (ms)
+#define MAX_DUMP_COUNT 100          // maximum number of dumps that can be requested to be collected
 
 // -------------------
 // Structs
