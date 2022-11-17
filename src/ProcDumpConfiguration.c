@@ -177,9 +177,10 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     pthread_mutex_destroy(&self->ptrace_mutex);
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    if(self->WaitingForProcessName)
+    if(self->ProcessName)
     {
         free(self->ProcessName);
+        self->ProcessName = NULL;
     }
 
     if(self->socketPath)
@@ -188,15 +189,23 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->socketPath = NULL;
     }
 
-    /* TODO: Crash
     if(self->ExceptionFilter)
     {
         free(self->ExceptionFilter);
+        self->ExceptionFilter = NULL;
     }
 
-    free(self->CoreDumpPath);
-    free(self->CoreDumpName);
-    */
+    if(self->CoreDumpPath)
+    {
+        free(self->CoreDumpPath);
+        self->CoreDumpPath = NULL;
+    }
+
+    if(self->CoreDumpName)
+    {
+        free(self->CoreDumpName);
+        self->CoreDumpName = NULL;
+    }
 }
 
 

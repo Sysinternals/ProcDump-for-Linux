@@ -451,13 +451,15 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             dump[dumpLen] = '\0';
             Trace("Received dump path %s", dump);
 
+            free(payload);
+
             if(status=='1')
             {
                 Log(info, "Core dump generated: %s", dump);
-
                 dumpsGenerated++;
                 if(dumpsGenerated == config->NumberOfDumpsToCollect)
                 {
+                    free(dump);
                     Trace("Total dump count has been reached: %d", dumpsGenerated);
                     break;
                 }
@@ -470,8 +472,11 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             {
                 Log(error, "Exception monitoring failed.");
                 Trace("Total dump count has been reached: %d", dumpsGenerated);
+                free(dump);
                 break;
             }
+
+            free(dump);
         }
     }
 

@@ -54,7 +54,7 @@ install:
 	cp procdump.1 $(DESTDIR)$(MANDIR)
 
 $(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/ProcDumpProfiler.cpp $(PROFSRCDIR)/dllmain.cpp $(PROFSRCDIR)/corprof_i.cpp $(PROFSRCDIR)/easylogging++.cc | $(OBJDIR)
-	$(PROFCLANG) -g -pthread -shared -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
+	$(PROFCLANG) -DELPP_THREAD_SAFE -g -pthread -shared -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
 	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)

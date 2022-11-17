@@ -108,6 +108,8 @@ void *SignalThread(void *input)
 //--------------------------------------------------------------------
 void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
+    auto_free struct MonitoredProcessMapEntry* monitoredProcessMap = NULL;
+
     if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch\n", self->ProcessName);
     if (self->bProcessGroup == true)    Log(info, "Monitoring processes of PGID '%d'\n", self->ProcessGroup);
 
@@ -125,7 +127,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         return;
     }
 
-    struct MonitoredProcessMapEntry* monitoredProcessMap = (struct MonitoredProcessMapEntry*) calloc(maxPid, sizeof(struct MonitoredProcessMapEntry));
+    monitoredProcessMap = (struct MonitoredProcessMapEntry*) calloc(maxPid, sizeof(struct MonitoredProcessMapEntry));
     if(!monitoredProcessMap)
     {
         Log(error, INTERNAL_ERROR);
@@ -216,6 +218,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         monitoredProcessMap[item->config->ProcessId].active = false;
         pthread_mutex_unlock(&queue_mutex);
         FreeProcDumpConfiguration(item->config);
+        free(item->config);
         free(item);
     }
     else
@@ -396,6 +399,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             {
                 // free config entry
                 FreeProcDumpConfiguration(deleteList[i]->config);
+                free(deleteList[i]->config);
                 TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
                 free(deleteList[i]);
             }
@@ -456,7 +460,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         pthread_mutex_unlock(&queue_mutex);
 
         free(target_config);
-
     }
 }
 
@@ -1242,6 +1245,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
         }
 
+        free(exceptionFilter);
         free(fullDumpPath);
     }
 
@@ -1269,10 +1273,6 @@ void *ProcessMonitor(void *thread_args /* struct ProcDumpConfiguration* */)
         {
             if(!LookupProcessByPid(config->ProcessId))
             {
-                break;
-            }
-
-            if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
                 break;
             }
         }

@@ -8,9 +8,6 @@
 #include <string>
 #include <stdio.h>
 
-#define ELPP_THREAD_SAFE
-#define ELPP_FORCE_USE_STD_THREAD
-
 INITIALIZE_EASYLOGGINGPP
 
 
@@ -82,7 +79,7 @@ void* CancelThread(void* args)
         }
 
 
-        LOG(INFO) << "CancelThread: Connected to cancellation request";
+        LOG(TRACE) << "CancelThread: Connected to cancellation request";
 
         if(recv(s2, &res, sizeof(bool), 0)==-1)
         {
@@ -94,7 +91,7 @@ void* CancelThread(void* args)
         }
         if(res==true)
         {
-            LOG(INFO) << "CancelThread: Unloading profiler";
+            LOG(TRACE) << "CancelThread: Unloading profiler";
 
             // The detach timeout is set to 30s but the runtime will continue trying with
             // larger timeouts if 30s is not enough. In most cases, 30s is overkill but in the cases where
