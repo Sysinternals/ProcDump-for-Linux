@@ -71,7 +71,7 @@ private:
     ICorProfilerInfo* corProfilerInfo;
     ICorProfilerInfo8* corProfilerInfo8;
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
-    pthread_t ipcThread;
+    pthread_t cancelThread;
     pid_t procDumpPid;
     std::string processName;
     std::string fullDumpPath;

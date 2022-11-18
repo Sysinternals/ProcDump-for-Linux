@@ -19,7 +19,7 @@ TESTOUT=$(BINDIR)/ProcDumpTestApplication
 # Profiler
 PROFSRCDIR=profiler/src
 PROFINCDIR=profiler/inc
-PROFCXXFLAGS ?= --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -DBIT64 -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
+PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -DBIT64 -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
 PROFCLANG=clang++
 
 # Revision value from build pipeline
@@ -54,7 +54,7 @@ install:
 	cp procdump.1 $(DESTDIR)$(MANDIR)
 
 $(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/ProcDumpProfiler.cpp $(PROFSRCDIR)/dllmain.cpp $(PROFSRCDIR)/corprof_i.cpp $(PROFSRCDIR)/easylogging++.cc | $(OBJDIR)
-	$(PROFCLANG) -DELPP_THREAD_SAFE -g -pthread -shared -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
+	$(PROFCLANG) -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
 	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)

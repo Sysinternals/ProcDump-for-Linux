@@ -122,7 +122,7 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
 
     // Create the cancel thread which waits for a cancellation signal from procdump
-    pthread_create(&ipcThread, NULL, CancelThread, this);
+    pthread_create(&cancelThread, NULL, CancelThread, this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -654,7 +654,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void CorProfiler::CleanupProfiler()
 {
-    pthread_cancel(ipcThread);
+    pthread_cancel(cancelThread);
     unlink(cancelSocketPath);
 
 }
