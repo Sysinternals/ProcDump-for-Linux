@@ -280,6 +280,7 @@ bool CorProfiler::ParseClientData(char* filter)
         std::string segment2;
         std::stringstream stream(exception);
         ExceptionMonitorEntry entry;
+        entry.exceptionID = NULL;
         entry.collectedDumps = 0;
         std::getline(stream, segment2, ':');
 
@@ -331,7 +332,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
         this->corProfilerInfo = nullptr;
     }
 
-    UnloadProfiler();
+    CleanupProfiler();
 
     LOG(TRACE) << "CorProfiler::Shutdown: Exit";
     return S_OK;
@@ -583,7 +584,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
         String exc(exception);
         free(exception);
-        if(exceptionName==exc || element.exception.compare("<any>") == 0)
+        if((exceptionName==exc || element.exception.compare("<any>") == 0) && element.exceptionID != thrownObjectId)
         {
             LOG(TRACE) << "CorProfiler::ExceptionThrown: Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
@@ -603,6 +604,13 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
                     SendCatastrophicFailureStatus();
                     return E_FAIL;
                 }
+
+                //
+                // In asp.net, an exception thrown in the app is caught by asp.net and then rethrown and caught again. To avoid
+                // generating multiple dumps for the same exception instance we store the objectID. If we have already generated
+                // a dump for that object ID we simply ignore it
+                //
+                element.exceptionID = thrownObjectId;
 
                 // Notify procdump that a dump was generated
                 if(SendDumpCompletedStatus(dump, '1')==-1)
@@ -642,17 +650,23 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::CleanupProfiler
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+void CorProfiler::CleanupProfiler()
+{
+    pthread_cancel(ipcThread);
+    unlink(cancelSocketPath);
+
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::UnloadProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void CorProfiler::UnloadProfiler()
 {
     LOG(TRACE) << "CorProfiler::UnloadProfiler: Enter";
 
-    //
-    // Profiler is done, send message to procdump, cancel cancellation thread, detach and delete socket
-    //
-    pthread_cancel(ipcThread);
-    unlink(cancelSocketPath);
+    CleanupProfiler();
     corProfilerInfo3->RequestProfilerDetach(DETACH_TIMEOUT);
 
     LOG(TRACE) << "CorProfiler::UnloadProfiler: Exit";

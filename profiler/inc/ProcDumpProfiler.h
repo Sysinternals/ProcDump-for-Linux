@@ -64,6 +64,7 @@ private:
         std::string exception;
         int dumpsToCollect;
         int collectedDumps;
+        ObjectID exceptionID;
     };
 
     std::atomic<int> refCount;
@@ -86,6 +87,7 @@ private:
     char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
     char* GetPath(char* lineBuf);
     void UnloadProfiler();
+    void CleanupProfiler();
 
 public:
     ICorProfilerInfo3* corProfilerInfo3;

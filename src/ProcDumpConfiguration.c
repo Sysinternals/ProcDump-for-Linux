@@ -530,6 +530,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // Validate multi arguments
     //
 
+    // If exception filter is provided with no -e switch exit
+    if((self->ExceptionFilter && self->bDumpOnException == false))
+    {
+        Log(error, "Please use the -e switch when specifying an exception filter (-f)");
+        return PrintUsage();
+    }
+
     // If no path was provided, assume the current directory
     if (self->CoreDumpPath == NULL) {
         self->CoreDumpPath = strdup(".");

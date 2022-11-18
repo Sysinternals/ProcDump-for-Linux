@@ -411,6 +411,8 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
     if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
     {
         Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
         return -1;
     }
 
@@ -421,6 +423,8 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
     if(bind(s, (struct sockaddr *)&local, len)==-1)
     {
         Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
         return -1;
     }
 
@@ -439,16 +443,18 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
     if ((pthread_create(&processMonitor, NULL, ProcessMonitor, (void *) config)) != 0)
     {
         Trace("WaitForProfilerCompletion: failed to create ProcessMonitor thread.");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
         return -1;
     }
 
     if(listen(s, 1)==-1)
     {
         Trace("WaitForProfilerCompletion: Failed to listen on socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
         return -1;
     }
-
-    int dumpsGenerated = 0;
 
     while(true)
     {
@@ -459,6 +465,8 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
         {
             // This means the target process died and we need to return
             Trace("WaitForProfilerCompletion: Failed in accept call on socket\n");
+            unlink(tmpFolder);
+            config->socketPath = NULL;
             return -1;
         }
 
@@ -468,7 +476,9 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
         {
             // This means the target process died and we need to return
             Trace("WaitForProfilerCompletion: Failed in recv on accept socket\n");
+            unlink(tmpFolder);
             close(s2);
+            config->socketPath = NULL;
             return -1;
         }
 
@@ -479,15 +489,19 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             if(payload==NULL)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                unlink(tmpFolder);
                 close(s2);
+                config->socketPath = NULL;
                 return -1;
             }
 
             if(recv(s2, payload, payloadLen, 0)==-1)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                unlink(tmpFolder);
                 close(s2);
                 free(payload);
+                config->socketPath = NULL;
                 return -1;
             }
 
@@ -502,8 +516,10 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             if(dump==NULL)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for dump\n");
+                unlink(tmpFolder);
                 close(s2);
                 free(payload);
+                config->socketPath = NULL;
                 return -1;
             }
 
@@ -516,12 +532,14 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             if(status=='1')
             {
                 Log(info, "Core dump generated: %s", dump);
-                dumpsGenerated++;
-                if(dumpsGenerated == config->NumberOfDumpsToCollect)
+                config->NumberOfDumpsCollected++;
+                if(config->NumberOfDumpsCollected == config->NumberOfDumpsToCollect)
                 {
+                    Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", config->NumberOfDumpsCollected);
+                    unlink(tmpFolder);
                     close(s2);
                     free(dump);
-                    Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", dumpsGenerated);
+                    config->socketPath = NULL;
                     break;
                 }
             }
@@ -532,9 +550,11 @@ int WaitForProfilerCompletion(struct ProcDumpConfiguration* config)
             else if(status=='F')
             {
                 Log(error, "Exception monitoring failed.");
-                Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", dumpsGenerated);
+                Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", config->NumberOfDumpsCollected);
+                unlink(tmpFolder);
                 free(dump);
                 close(s2);
+                config->socketPath = NULL;
                 break;
             }
 

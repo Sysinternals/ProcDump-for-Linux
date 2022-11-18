@@ -40,7 +40,10 @@ static inline void cleanup_void(void* val)
 //-------------------------------------------------------------------------------------
 static inline void cleanup_fd(int* val)
 {
-    close(*val);
+    if (*val)
+    {
+        close(*val);
+    }
 }
 
 //-------------------------------------------------------------------------------------
@@ -48,7 +51,10 @@ static inline void cleanup_fd(int* val)
 //-------------------------------------------------------------------------------------
 static inline void cleanup_dir(DIR** val)
 {
-    closedir(*val);
+    if(*val)
+    {
+        closedir(*val);
+    }
 }
 
 //-------------------------------------------------------------------------------------
@@ -56,7 +62,10 @@ static inline void cleanup_dir(DIR** val)
 //-------------------------------------------------------------------------------------
 static inline void cleanup_file(FILE** val)
 {
-    fclose(*val);
+    if(*val)
+    {
+        fclose(*val);
+    }
 }
 
 #define auto_free __attribute__ ((__cleanup__(cleanup_void)))
