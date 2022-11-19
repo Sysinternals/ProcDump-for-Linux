@@ -24,6 +24,7 @@ extern sigset_t sig_set;
 //--------------------------------------------------------------------
 void *SignalThread(void *input)
 {
+    Trace("SignalThread: Enter");
     int sig_caught, rc;
     struct ConfigQueueEntry * item;
 
@@ -35,6 +36,8 @@ void *SignalThread(void *input)
     switch (sig_caught)
     {
     case SIGINT:
+        Trace("SignalThread: Got a SIGINT");
+
         // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
         pthread_mutex_lock(&queue_mutex);
         TAILQ_FOREACH(item, &configQueueHead, element)
@@ -78,10 +81,11 @@ void *SignalThread(void *input)
         break;
 
         default:
-        fprintf (stderr, "\nUnexpected signal %d\n", sig_caught);
+            Trace("Unexpected signal %d", sig_caught);
         break;
     }
 
+    Trace("SignalThread: Exit");
     exit(0);
 }
 

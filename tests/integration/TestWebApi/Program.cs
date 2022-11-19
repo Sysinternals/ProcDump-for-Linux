@@ -3,7 +3,6 @@ var app = builder.Build();
 
 app.MapGet("/throwinvalidoperation", () =>
 {
-    Console.WriteLine("AHA");
     throw new System.InvalidOperationException();
 });
 

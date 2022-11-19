@@ -7,17 +7,14 @@ cd TestWebApi
 dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
 TESTPID=$!
 sleep 5s
-sudo $PROCDUMPPATH -e -f System.NonExistingException TestWebApi testdump&
+sudo $PROCDUMPPATH -n 1 -e -f System.InvalidOperationException TestWebApi testdump&
 sleep 5s
 wget http://localhost:5032/throwinvalidoperation
+wget http://localhost:5032/throwinvalidoperation
 sleep 5s
-sudo pkill -9 procdump
-if [ -f "testdump_0" ]; then
+if [[ -f "testdump_0" ]]; then
     rm -rf testdump_0
-    sudo pkill -9 TestWebApi
-    popd
-    exit 1
-else
+    rm -rf testdump_1
     popd
 
     #check to make sure profiler so is unloaded
@@ -28,4 +25,8 @@ else
     else
         exit 0
     fi
+else
+    pkill -9 TestWebApi
+    popd
+    exit 1
 fi

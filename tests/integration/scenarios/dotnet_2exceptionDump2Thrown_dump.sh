@@ -4,20 +4,29 @@ PROCDUMPPATH=$(readlink -m "$DIR/../../../bin/procdump");
 
 pushd .
 cd TestWebApi
-dotnet run --urls=http://localhost:5032&
+dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
+TESTPID=$!
 sleep 5s
 sudo $PROCDUMPPATH -n 2 -e -f System.InvalidOperationException TestWebApi testdump&
 sleep 5s
 wget http://localhost:5032/throwinvalidoperation
 wget http://localhost:5032/throwinvalidoperation
 sleep 5s
-pkill -9 TestWebApi
 if [[ -f "testdump_0" && -f "testdump_1" ]]; then
     rm -rf testdump_0
     rm -rf testdump_1
     popd
-    exit 0
+
+    #check to make sure profiler so is unloaded
+    PROF="$(cat /proc/${TESTPID}/maps | awk '{print $6}' | grep '\procdumpprofiler.so' | uniq)"
+    pkill -9 TestWebApi
+    if [[ "$PROF" == "procdumpprofiler.so" ]]; then
+        exit 1
+    else
+        exit 0
+    fi
 else
+    pkill -9 TestWebApi
     popd
     exit 1
 fi

@@ -88,12 +88,13 @@ void InitProcDump()
 //--------------------------------------------------------------------
 void ExitProcDump()
 {
+    Trace("ExitProcDump: Enter");
     pthread_mutex_destroy(&LoggerLock);
     closelog();
-    FreeProcDumpConfiguration(&g_config);
 
     // Try to delete the profiler lib in case it was left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    Trace("ExitProcDump: Exit");
 }
 
 //--------------------------------------------------------------------
@@ -167,6 +168,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 {
+    Trace("FreeProcDumpConfiguration: Enter");
     DestroyEvent(&(self->evtCtrlHandlerCleanupComplete.event));
     DestroyEvent(&(self->evtBannerPrinted.event));
     DestroyEvent(&(self->evtConfigurationPrinted.event));
@@ -213,6 +215,8 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         free(self->CoreDumpName);
         self->CoreDumpName = NULL;
     }
+
+    Trace("FreeProcDumpConfiguration: Exit");
 }
 
 
