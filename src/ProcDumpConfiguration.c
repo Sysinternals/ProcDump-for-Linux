@@ -183,8 +183,15 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->ProcessName = NULL;
     }
 
+    if(self->statusSocket != -1)
+    {
+        close(self->statusSocket);
+        self->statusSocket = -1;
+    }
+
     if(self->socketPath)
     {
+        unlink(self->socketPath);
         free(self->socketPath);
         self->socketPath = NULL;
     }

@@ -64,21 +64,10 @@ void *SignalThread(void *input)
                         pthread_mutex_unlock(&item->config->ptrace_mutex);
 
                         if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
-                            Log(error, "An error occurred while canceling SignalMonitorThread.\n");
+                            Log(error, "An error occurred while cancelling SignalMonitorThread.\n");
                             exit(-1);
                         }
                     }
-                }
-            }
-
-            // If we are monitoring for .NET exceptions we need to cancel/unload the profiler in the target
-            if(item->config->bDumpOnException)
-            {
-                CancelProfiler(item->config->ProcessId);
-                if(item->config->socketPath)
-                {
-                    unlink(item->config->socketPath);
-                    item->config->socketPath = NULL;
                 }
             }
         }
@@ -1198,6 +1187,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* exceptionFilter = NULL;
     auto_free char* fullDumpPath = NULL;
+    auto_cancel_thread pthread_t waitForProfilerCompletion = -1;
 
     int rc = 0;
 
@@ -1263,10 +1253,17 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             }
         }
 
+        // Create thread to wait for profiler completion
+        if ((pthread_create(&waitForProfilerCompletion, NULL, WaitForProfilerCompletion, (void *) config)) != 0)
+        {
+            Trace("ExceptionMonitoring: failed to create WaitForProfilerCompletion thread.");
+            return NULL;
+        }
+
         // Inject the profiler into the target process
         if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)==0)
         {
-            WaitForProfilerCompletion(config);
+            pthread_join(waitForProfilerCompletion, NULL);
         }
         else
         {
@@ -1276,6 +1273,207 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
+    pthread_exit(NULL);
+}
+
+//-------------------------------------------------------------------------------------
+//
+// WaitForProfilerCompletion
+//
+// Waits for profiler to send a status on (<prefix>/procdump-status-<pid>).
+// Status is in the form of:
+// <[uint]payload_len><[byte] 0=failure, 1=success><[uint] dumpfile_path_len><[char*]Dumpfile path>
+//
+// Where the failure byte is interpreted as following:
+//  '0' - Dump with the given path failed to generate
+//  '1' - Dump with the given path was generated
+//  'F' - Profiler encountered an error and unloaded itself (path not applicable)
+//  'H' - Profiler pinging to see if procdump is still running (path not applicable)
+//
+// The socket created is in the form: <socket_path>/procdump-status-<procdumpPid>-<targetPid>
+//
+//-------------------------------------------------------------------------------------
+void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("WaitForProfilerCompletion: Starting WaitForProfilerCompletion Thread");
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    unsigned int t, s2;
+    struct sockaddr_un local, remote;
+    int len;
+    auto_cancel_thread pthread_t processMonitor = -1;
+
+    auto_free char* tmpFolder = NULL;
+    auto_free_fd int s=-1;
+
+    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
+    config->socketPath = tmpFolder;
+    Trace("WaitForProfilerCompletion: Status socket path: %s", tmpFolder);
+
+    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
+        return NULL;
+    }
+
+    local.sun_family = AF_UNIX;
+    strcpy(local.sun_path, tmpFolder);
+    unlink(local.sun_path);
+    len = strlen(local.sun_path) + sizeof(local.sun_family);
+    if(bind(s, (struct sockaddr *)&local, len)==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to create socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
+        return NULL;
+    }
+
+    //
+    // Change perms on the socket to be read/write for 'others' since the profiler is loaded into
+    // an unknown user process
+    //
+    chmod(tmpFolder, 0777);
+
+    //
+    // Create a thread that will monitor for abnormal process terminations of the target process.
+    // In case of an abnormal process termination, it cancels the socket that procdump is waiting on
+    // for status from target process and we can exit promptly.
+    //
+    config->statusSocket = s;
+    if ((pthread_create(&processMonitor, NULL, ProcessMonitor, (void *) config)) != 0)
+    {
+        Trace("WaitForProfilerCompletion: failed to create ProcessMonitor thread.");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
+        return NULL;
+    }
+
+    if(listen(s, 1)==-1)
+    {
+        Trace("WaitForProfilerCompletion: Failed to listen on socket\n");
+        unlink(tmpFolder);
+        config->socketPath = NULL;
+        return NULL;
+    }
+
+    while(true)
+    {
+        Trace("WaitForProfilerCompletion:Waiting for status");
+
+        t = sizeof(remote);
+        if((s2 = accept(s, (struct sockaddr *)&remote, &t))==-1)
+        {
+            // This means the target process died and we need to return
+            Trace("WaitForProfilerCompletion: Failed in accept call on socket\n");
+            unlink(tmpFolder);
+            config->socketPath = NULL;
+            return NULL;
+        }
+
+        // packet looks like this: <payload_len><[byte] 0=failure, 1=success><[uint_32] dumpfile_path_len><[char*]Dumpfile path>
+        int payloadLen = 0;
+        if(recv(s2, &payloadLen, sizeof(int), 0)==-1)
+        {
+            // This means the target process died and we need to return
+            Trace("WaitForProfilerCompletion: Failed in recv on accept socket\n");
+            unlink(tmpFolder);
+            close(s2);
+            config->socketPath = NULL;
+            return NULL;
+        }
+
+        if(payloadLen>0)
+        {
+            Trace("Received payload len %d", payloadLen);
+            char* payload = (char*) malloc(payloadLen);
+            if(payload==NULL)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                unlink(tmpFolder);
+                close(s2);
+                config->socketPath = NULL;
+                return NULL;
+            }
+
+            if(recv(s2, payload, payloadLen, 0)==-1)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
+                unlink(tmpFolder);
+                close(s2);
+                free(payload);
+                config->socketPath = NULL;
+                return NULL;
+            }
+
+            char status = payload[0];
+            Trace("WaitForProfilerCompletion: Received status %c", status);
+
+            int dumpLen = 0;
+            memcpy(&dumpLen, payload+1, sizeof(int));
+            Trace("WaitForProfilerCompletion: Received dump length %d", dumpLen);
+
+            char* dump = malloc(dumpLen+1);
+            if(dump==NULL)
+            {
+                Trace("WaitForProfilerCompletion: Failed to allocate memory for dump\n");
+                unlink(tmpFolder);
+                close(s2);
+                free(payload);
+                config->socketPath = NULL;
+                return NULL;
+            }
+
+            memcpy(dump, payload+1+sizeof(int), dumpLen);
+            dump[dumpLen] = '\0';
+            Trace("WaitForProfilerCompletion: Received dump path %s", dump);
+
+            free(payload);
+
+            if(status=='1')
+            {
+                Log(info, "Core dump generated: %s", dump);
+                config->NumberOfDumpsCollected++;
+                if(config->NumberOfDumpsCollected == config->NumberOfDumpsToCollect)
+                {
+                    Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", config->NumberOfDumpsCollected);
+                    unlink(tmpFolder);
+                    close(s2);
+                    free(dump);
+                    config->socketPath = NULL;
+                    break;
+                }
+            }
+            else if(status=='2')
+            {
+                Log(error, "Failed to generate core dump: %s", dump);
+            }
+            else if(status=='F')
+            {
+                Log(error, "Exception monitoring failed.");
+                Trace("WaitForProfilerCompletion: Total dump count has been reached: %d", config->NumberOfDumpsCollected);
+                unlink(tmpFolder);
+                free(dump);
+                close(s2);
+                config->socketPath = NULL;
+                break;
+            }
+           else if(status=='H')
+            {
+                Trace("WaitForProfilerCompletion: Recieved health check ping from profiler");
+            }
+
+
+            free(dump);
+        }
+
+        close(s2);
+    }
+
+    unlink(tmpFolder);
+    config->socketPath = NULL;
+
+    Trace("WaitForProfilerCompletion: Exiting WaitForProfilerCompletion Thread");
     pthread_exit(NULL);
 }
 
@@ -1307,7 +1505,6 @@ void *ProcessMonitor(void *thread_args /* struct ProcDumpConfiguration* */)
     // Target process terminated, cancel the status socket to unblock WaitForProfiler...
     //
     shutdown(config->statusSocket, SHUT_RD);
-    config->statusSocket = -1;
 
     Trace("ProcessMonitor: Exiting ProcessMonitor Thread");
     pthread_exit(NULL);

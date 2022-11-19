@@ -68,10 +68,22 @@ static inline void cleanup_file(FILE** val)
     }
 }
 
+//-------------------------------------------------------------------------------------
+// Auto cancel pthread
+//-------------------------------------------------------------------------------------
+static inline void cancel_pthread(unsigned long* val)
+{
+    if(*val!=-1)
+    {
+        pthread_cancel(*val);
+    }
+}
+
 #define auto_free __attribute__ ((__cleanup__(cleanup_void)))
 #define auto_free_fd __attribute__ ((__cleanup__(cleanup_fd)))
 #define auto_free_dir __attribute__ ((__cleanup__(cleanup_dir)))
 #define auto_free_file __attribute__ ((__cleanup__(cleanup_file)))
+#define auto_cancel_thread __attribute__ ((__cleanup__(cancel_pthread)))
 
 bool ConvertToInt(const char* src, int* conv);
 bool IsValidNumberArg(const char *arg);

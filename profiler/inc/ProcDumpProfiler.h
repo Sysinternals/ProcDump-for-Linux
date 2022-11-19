@@ -22,6 +22,7 @@
 #include "easylogging++.h"
 
 #define DETACH_TIMEOUT  30000
+#define HEALTH_POLL_FREQ 5              // In secs
 
 #define LOG_FILE    "/var/tmp/procdumpprofiler.log"
 #define MAX_LOG_FILE_SIZE    "1000000"
@@ -53,7 +54,7 @@ struct IpcHeader
     uint16_t Reserved;   // reserved for future use
 };
 
-void* CancelThread(void* args);
+void* HealthThread(void* args);
 
 class CorProfiler : public ICorProfilerCallback8
 {
@@ -71,30 +72,31 @@ private:
     ICorProfilerInfo* corProfilerInfo;
     ICorProfilerInfo8* corProfilerInfo8;
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
-    pthread_t cancelThread;
-    pid_t procDumpPid;
+    pthread_t healthThread;
     std::string processName;
     std::string fullDumpPath;
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(char* fw);
-    int SendDumpCompletedStatus(std::string dump, char success);
     WCHAR* GetUint16(char* buffer);
     std::string GetDumpName(uint16_t dumpCount);
     std::string GetProcessName();
     bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
     bool IsCoreClrProcess(pid_t pid, char** socketName);
-    char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
     char* GetPath(char* lineBuf);
-    void UnloadProfiler();
     void CleanupProfiler();
+    void SendCatastrophicFailureStatus();
 
 public:
-    ICorProfilerInfo3* corProfilerInfo3;
     CorProfiler();
     virtual ~CorProfiler();
 
-    void SendCatastrophicFailureStatus();
+    char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
+    ICorProfilerInfo3* corProfilerInfo3;
+    pid_t procDumpPid;
+
+    int SendDumpCompletedStatus(std::string dump, char success);
+    void UnloadProfiler();
 
     HRESULT STDMETHODCALLTYPE Initialize(IUnknown* pICorProfilerInfoUnk) override;
     HRESULT STDMETHODCALLTYPE Shutdown() override;

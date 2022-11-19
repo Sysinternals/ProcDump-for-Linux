@@ -11,103 +11,44 @@
 INITIALIZE_EASYLOGGINGPP
 
 
-char cancelSocketPath[PATH_MAX+1];
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// CancelThread - Waits for cancellation notification from ProcDump (in case of CTRL-C)
+// HealthThread
+//
+// Periodically (default 5s) calls the procdump status pipe for a health check. If we're unable to communicate with procdump it means it has been
+// terminated and we can unload.
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-void* CancelThread(void* args)
+void* HealthThread(void* args)
 {
-    LOG(TRACE) << "CancelThread: Enter";
-    unsigned int s, t, s2;
-    struct sockaddr_un local, remote;
-    int len;
-    char* prefixTmpFolder = NULL;
+    LOG(TRACE) << "HealthThread: Enter";
 
     CorProfiler* profiler = static_cast<CorProfiler*> (args);
-
-    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
-    prefixTmpFolder = getenv("TMPDIR");
-    if(prefixTmpFolder==NULL)
-    {
-        snprintf(cancelSocketPath, PATH_MAX, "/tmp/procdump/procdump-cancel-%d", getpid());
-    }
-    else
-    {
-        snprintf(cancelSocketPath, PATH_MAX, "%s/procdump/procdump-cancel-%d", prefixTmpFolder, getpid());
-    }
-
-    if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
-    {
-        LOG(TRACE) << "CancelThread: Failed to create socket";
-        profiler->SendCatastrophicFailureStatus();
-        return NULL;
-    }
-
-    local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, cancelSocketPath);
-    unlink(local.sun_path);
-    len = strlen(local.sun_path) + sizeof(local.sun_family);
-    if(bind(s, (struct sockaddr *) (&local), len)==-1)
-    {
-        LOG(TRACE) << "CancelThread: Failed to bind to socket";
-        close(s);
-        profiler->SendCatastrophicFailureStatus();
-        return NULL;
-    }
-
-    if(listen(s, 1)==-1)
-    {
-        LOG(TRACE) << "CancelThread: Failed to listen";
-        close(s);
-        profiler->SendCatastrophicFailureStatus();
-        return NULL;
-    }
+    char* sockPath = NULL;
 
     while(true)
     {
-        LOG(TRACE) << "CancelThread: Waiting for cancellation";
-        bool res=false;
-
-        t = sizeof(remote);
-        if((s2 = accept(s, (struct sockaddr *) (&remote), &t))==-1)
+        if(profiler->SendDumpCompletedStatus("", 'H')==-1)
         {
-            LOG(TRACE) << "CancelThread: Failed to accept";
-            close(s);
-            profiler->SendCatastrophicFailureStatus();
-            return NULL;
-        }
+            LOG(TRACE) << "HealthThread: Procdump not reachable..unloading ourselves";
+            sockPath = profiler->GetSocketPath("procdump/procdump-status-", profiler->procDumpPid, getpid());
+            if(sockPath)
+            {
+                LOG(TRACE) << "HealthThread: Unlinking the socket path " << sockPath;
+                // if procdump exited abnormally, the socket file will still exist so we clean it up.
+                unlink(sockPath);
 
+                free(sockPath);
+            }
 
-        LOG(TRACE) << "CancelThread: Connected to cancellation request";
-
-        if(recv(s2, &res, sizeof(bool), 0)==-1)
-        {
-            LOG(TRACE) << "CancelThread: Failed to accept";
-            close(s);
-            close(s2);
-            profiler->SendCatastrophicFailureStatus();
-            return NULL;
-        }
-        if(res==true)
-        {
-            LOG(TRACE) << "CancelThread: Unloading profiler";
-
-            // The detach timeout is set to 30s but the runtime will continue trying with
-            // larger timeouts if 30s is not enough. In most cases, 30s is overkill but in the cases where
-            // it's in the process of writing a large dump it can take some time
-            profiler->corProfilerInfo3->RequestProfilerDetach(DETACH_TIMEOUT);
-
-            close(s2);
+            profiler->UnloadProfiler();
             break;
         }
 
-        close(s2);
+        LOG(TRACE) << "HealthThread: Procdump running...";
+
+        sleep(HEALTH_POLL_FREQ);
     }
 
-    unlink(cancelSocketPath);
-
-    LOG(TRACE) << "CancelThread: Exit";
+    LOG(TRACE) << "HealthThread: Exit";
     return NULL;
 }
 
@@ -120,9 +61,6 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
-
-    // Create the cancel thread which waits for a cancellation signal from procdump
-    pthread_create(&cancelThread, NULL, CancelThread, this);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -193,6 +131,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask";
         return E_FAIL;
     }
+
+    // Create the health check thread which periodically pings procdump to see if its still alive
+    pthread_create(&healthThread, NULL, HealthThread, this);
 
     LOG(TRACE) << "CorProfiler::InitializeForAttach: Exit";
     return S_OK;
@@ -346,6 +287,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 void CorProfiler::SendCatastrophicFailureStatus()
 {
     SendDumpCompletedStatus("", 'F');
+    CleanupProfiler();
     UnloadProfiler();
 }
 
@@ -362,25 +304,15 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
 
     int s, len;
     struct sockaddr_un remote;
-    char tmpFolder[FILENAME_MAX+1];
-    char* prefixTmpFolder = NULL;
+    char* tmpFolder = NULL;
 
-    // If $TMPDIR is set, use it as the path, otherwise we use /tmp
-    prefixTmpFolder = getenv("TMPDIR");
-    if(prefixTmpFolder==NULL)
-    {
-        snprintf(tmpFolder, FILENAME_MAX, "/tmp/procdump/procdump-status-%d-%d", procDumpPid, getpid());
-    }
-    else
-    {
-        snprintf(tmpFolder, FILENAME_MAX, "%s/procdump/procdump-status-%d-%d", prefixTmpFolder, procDumpPid, getpid());
-    }
-
+    tmpFolder = GetSocketPath("procdump/procdump-status-", procDumpPid, getpid());
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Socket path: " << tmpFolder;
 
     if((s = socket(AF_UNIX, SOCK_STREAM, 0))==-1)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to create socket: " << errno;
+        delete[] tmpFolder;
         return -1;
     }
 
@@ -392,6 +324,7 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
     if(connect(s, (struct sockaddr *) (&remote), len)==-1)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to connect: " << errno;
+        delete[] tmpFolder;
         close(s);
         return -1;
     }
@@ -406,6 +339,7 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
     if(payload==NULL)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed memory allocation for payload";
+        delete[] tmpFolder;
         close(s);
         return -1;
     }
@@ -429,10 +363,12 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to send completion status";
         close(s);
         delete[] payload;
+        delete[] tmpFolder;
         return -1;
     }
 
     delete[] payload;
+    delete[] tmpFolder;
 
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Exit";
     return 0;
@@ -640,6 +576,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 // We're done collecting dumps...
+                CleanupProfiler();
                 UnloadProfiler();
             }
         }
@@ -654,9 +591,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void CorProfiler::CleanupProfiler()
 {
-    pthread_cancel(cancelThread);
-    unlink(cancelSocketPath);
-
+    pthread_cancel(healthThread);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -666,7 +601,6 @@ void CorProfiler::UnloadProfiler()
 {
     LOG(TRACE) << "CorProfiler::UnloadProfiler: Enter";
 
-    CleanupProfiler();
     corProfilerInfo3->RequestProfilerDetach(DETACH_TIMEOUT);
 
     LOG(TRACE) << "CorProfiler::UnloadProfiler: Exit";
@@ -965,7 +899,7 @@ char* CorProfiler::GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         {
             return NULL;
         }
-        snprintf(t, len, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+        snprintf(t, len+1, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
     }
     else
     {
@@ -975,7 +909,7 @@ char* CorProfiler::GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         {
             return NULL;
         }
-        snprintf(t, len, "%s/%s%d", prefixTmpFolder, prefix, pid);
+        snprintf(t, len+1, "%s/%s%d", prefixTmpFolder, prefix, pid);
     }
 
     LOG(TRACE) << "CorProfiler::GetSocketPath: Exit";
