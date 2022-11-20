@@ -358,7 +358,7 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
     memcpy(current, dump.c_str(), strlen(dump.c_str()));
     current+=strlen(dump.c_str());
 
-    if(send(s, payload, totalPayloadLen, 0)==-1)
+    if(send_all(s, payload, totalPayloadLen)==-1)
     {
         LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Failed to send completion status";
         close(s);
@@ -733,6 +733,52 @@ bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::send_all
+//
+// Helper that waits until all data has been sent.
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+int CorProfiler::send_all(int socket, void* buffer, size_t length)
+{
+    char *ptr = (char*) buffer;
+    while (length > 0)
+    {
+        int i = send(socket, ptr, length, 0);
+        if (i < 1)
+        {
+            return -1;
+        }
+
+        ptr += i;
+        length -= i;
+    }
+
+    return 0;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::recv_all
+//
+// Helper that waits until all data has been read.
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+int CorProfiler::recv_all(int socket, void* buffer, size_t length)
+{
+    char *ptr = (char*) buffer;
+    while (length > 0)
+    {
+        int i = recv(socket, ptr, length, 0);
+        if (i < 1)
+        {
+            return -1;
+        }
+
+        ptr += i;
+        length -= i;
+    }
+
+    return 0;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GenerateCoreClrDump
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
@@ -811,7 +857,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
                     // next, the diagnostics flag
                     memcpy(temp_buffer_cur, &diagnostics, sizeof(unsigned int));
 
-                    if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
+                    if(send_all(fd, temp_buffer, totalPacketSize)==-1)
                     {
                         LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed sending packet to diagnostics server: " << errno;
                     }
@@ -821,7 +867,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
                         // Lets get the header first
                         struct IpcHeader retHeader;
-                        if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
+                        if(recv_all(fd, &retHeader, sizeof(struct IpcHeader))==-1)
                         {
                             LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed receiving response header from diagnostics server: " << errno;
                         }
@@ -838,7 +884,7 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
                                 LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success validating header size in response header from diagnostics server ";
                                 // Next, get the payload which contains a single uint32 (hresult)
                                 int32_t res = -1;
-                                if(recv(fd, &res, sizeof(int32_t), 0)==-1)
+                                if(recv_all(fd, &res, sizeof(int32_t))==-1)
                                 {
                                      LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed receiving result code from response payload from diagnostics server: " << errno;
                                 }

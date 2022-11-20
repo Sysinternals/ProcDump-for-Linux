@@ -96,6 +96,8 @@ int StringToGuid(char* szGuid, struct CLSID* pGuid);
 int GetHex(char* szStr, int size, void* pResult);
 bool createDir(const char *dir, mode_t perms);
 char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid);
+int send_all(int socket, void *buffer, size_t length);
+int recv_all(int socket, void* buffer, size_t length);
 
 #endif // GENHELPERS_H
 

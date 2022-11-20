@@ -159,7 +159,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                     // next, the diagnostics flag
                     memcpy(temp_buffer_cur, &diagnostics, sizeof(unsigned int));
 
-                    if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
+                    if(send_all(fd, temp_buffer, totalPacketSize)==-1)
                     {
                         Trace("GenerateCoreClrDump: Failed sending packet to diagnostics server [%d]", errno);
                     }
@@ -167,7 +167,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                     {
                         // Lets get the header first
                         struct IpcHeader retHeader;
-                        if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
+                        if(recv_all(fd, &retHeader, sizeof(struct IpcHeader))==-1)
                         {
                             Trace("GenerateCoreClrDump: Failed receiving response header from diagnostics server [%d]", errno);
                         }
@@ -182,7 +182,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                             {
                                 // Next, get the payload which contains a single uint32 (hresult)
                                 int32_t res = -1;
-                                if(recv(fd, &res, sizeof(int32_t), 0)==-1)
+                                if(recv_all(fd, &res, sizeof(int32_t))==-1)
                                 {
                                     Trace("GenerateCoreClrDump: Failed receiving result code from response payload from diagnostics server [%d]", errno);
                                 }

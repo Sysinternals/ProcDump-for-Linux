@@ -16,7 +16,7 @@
 
 #include "ProcDumpConfiguration.h"
 
-
+#define MAX_PROFILER_CONNECTIONS    50
 
 // Monitor functions
 void MonitorProcesses(struct ProcDumpConfiguration*self);

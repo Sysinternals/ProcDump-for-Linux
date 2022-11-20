@@ -413,3 +413,53 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
 
     return t;
 }
+
+//--------------------------------------------------------------------
+//
+// send_all
+//
+// Keeps sending data on socket until all data has been sent.
+//
+//--------------------------------------------------------------------
+int send_all(int socket, void* buffer, size_t length)
+{
+    char *ptr = (char*) buffer;
+    while (length > 0)
+    {
+        int i = send(socket, ptr, length, 0);
+        if (i < 1)
+        {
+            return -1;
+        }
+
+        ptr += i;
+        length -= i;
+    }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// recv_all
+//
+// Keeps reading data on socket until all data has been read.
+//
+//--------------------------------------------------------------------
+int recv_all(int socket, void* buffer, size_t length)
+{
+    char *ptr = (char*) buffer;
+    while (length > 0)
+    {
+        int i = recv(socket, ptr, length, 0);
+        if (i < 1)
+        {
+            return -1;
+        }
+
+        ptr += i;
+        length -= i;
+    }
+
+    return 0;
+}

@@ -1353,7 +1353,12 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
         return NULL;
     }
 
-    if(listen(s, 1)==-1)
+    //
+    // Since the profiler callbacks can be invoked concurrently, we can also have X number of
+    // pending status calls to ProcDump. We cap this to 50 by default which should be plenty for most
+    // scenarios
+    //
+    if(listen(s, MAX_PROFILER_CONNECTIONS)==-1)
     {
         Trace("WaitForProfilerCompletion: Failed to listen on socket\n");
         unlink(tmpFolder);
@@ -1377,7 +1382,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
 
         // packet looks like this: <payload_len><[byte] 0=failure, 1=success><[uint_32] dumpfile_path_len><[char*]Dumpfile path>
         int payloadLen = 0;
-        if(recv(s2, &payloadLen, sizeof(int), 0)==-1)
+        if(recv_all(s2, &payloadLen, sizeof(int))==-1)
         {
             // This means the target process died and we need to return
             Trace("WaitForProfilerCompletion: Failed in recv on accept socket\n");
@@ -1400,7 +1405,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
                 return NULL;
             }
 
-            if(recv(s2, payload, payloadLen, 0)==-1)
+            if(recv_all(s2, payload, payloadLen)==-1)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for payload\n");
                 unlink(tmpFolder);
@@ -1416,6 +1421,16 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
             int dumpLen = 0;
             memcpy(&dumpLen, payload+1, sizeof(int));
             Trace("WaitForProfilerCompletion: Received dump length %d", dumpLen);
+
+            if(dumpLen > PATH_MAX+1)
+            {
+                Trace("WaitForProfilerCompletion: Payload contained invalid dumplen %s\n", dumpLen);
+                unlink(tmpFolder);
+                close(s2);
+                free(payload);
+                config->socketPath = NULL;
+                return NULL;
+            }
 
             char* dump = malloc(dumpLen+1);
             if(dump==NULL)
@@ -1466,7 +1481,6 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
             {
                 Trace("WaitForProfilerCompletion: Recieved health check ping from profiler");
             }
-
 
             free(dump);
         }

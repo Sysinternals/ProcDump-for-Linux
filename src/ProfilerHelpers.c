@@ -190,7 +190,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     }
 
     // Send the payload
-    if(send(fd, temp_buffer, totalPacketSize, 0)==-1)
+    if(send_all(fd, temp_buffer, totalPacketSize)==-1)
     {
         Trace("LoadProfiler: Failed sending packet to diagnostics server [%d]", errno);
         return -1;
@@ -198,7 +198,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     // Get response
     struct IpcHeader retHeader;
-    if(recv(fd, &retHeader, sizeof(struct IpcHeader), 0)==-1)
+    if(recv_all(fd, &retHeader, sizeof(struct IpcHeader))==-1)
     {
         Trace("LoadProfiler: Failed receiving response header from diagnostics server [%d]", errno);
         return -1;
@@ -212,7 +212,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     }
 
     int32_t res = -1;
-    if(recv(fd, &res, sizeof(int32_t), 0)==-1)
+    if(recv_all(fd, &res, sizeof(int32_t))==-1)
     {
         Trace("LoadProfiler: Failed receiving result code from response payload from diagnostics server [%d]", errno);
         return -1;
