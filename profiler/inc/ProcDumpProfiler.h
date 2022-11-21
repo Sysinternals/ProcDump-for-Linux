@@ -27,6 +27,9 @@
 #define LOG_FILE    "/var/tmp/procdumpprofiler.log"
 #define MAX_LOG_FILE_SIZE    "1000000"
 #define DATE_LENGTH 26
+#define PROFILER_STATUS_FAILURE 'F'
+#define PROFILER_STATUS_HEALTH 'H'
+#define PROFILER_STATUS_SUCCESS '1'
 
 #define CORECLR_DUMPTYPE_FULL 4
 #define CORECLR_DUMPLOGGING_OFF 0
@@ -56,6 +59,34 @@ struct IpcHeader
 
 void* HealthThread(void* args);
 
+//
+// Simple mutex auto lock class (no copy constructor semantics or operator overloads)
+//
+class AutoMutex
+{
+private:
+    pthread_mutex_t* mutex;
+    bool locked;
+
+public:
+    AutoMutex(pthread_mutex_t* mut) : mutex(mut), locked(false)
+    {
+        if(pthread_mutex_lock(mutex)==0)
+        {
+            locked = true;
+        }
+    }
+
+    ~AutoMutex()
+    {
+        if(locked==true)
+        {
+            pthread_mutex_unlock(mutex);
+            locked = false;
+        }
+    }
+};
+
 class CorProfiler : public ICorProfilerCallback8
 {
 private:
@@ -75,6 +106,7 @@ private:
     pthread_t healthThread;
     std::string processName;
     std::string fullDumpPath;
+    pthread_mutex_t endDumpCondition;
 
     String GetExceptionName(ObjectID objectId);
     bool ParseClientData(char* fw);

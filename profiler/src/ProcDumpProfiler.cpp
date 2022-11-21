@@ -26,7 +26,7 @@ void* HealthThread(void* args)
 
     while(true)
     {
-        if(profiler->SendDumpCompletedStatus("", 'H')==-1)
+        if(profiler->SendDumpCompletedStatus("", PROFILER_STATUS_HEALTH)==-1)
         {
             LOG(TRACE) << "HealthThread: Procdump not reachable..unloading ourselves";
             sockPath = profiler->GetSocketPath("procdump/procdump-status-", profiler->procDumpPid, getpid());
@@ -45,7 +45,7 @@ void* HealthThread(void* args)
 
         LOG(TRACE) << "HealthThread: Procdump running...";
 
-        sleep(HEALTH_POLL_FREQ);
+        sleep(HEALTH_POLL_FREQ);        // sleep is a thread cancellation point
     }
 
     LOG(TRACE) << "HealthThread: Exit";
@@ -61,6 +61,8 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
+
+    pthread_mutex_init(&endDumpCondition, NULL);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -68,6 +70,7 @@ CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 CorProfiler::~CorProfiler()
 {
+    pthread_mutex_destroy(&endDumpCondition);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -286,21 +289,25 @@ HRESULT STDMETHODCALLTYPE CorProfiler::Shutdown()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void CorProfiler::SendCatastrophicFailureStatus()
 {
-    SendDumpCompletedStatus("", 'F');
+    LOG(TRACE) << "CorProfiler::SendCatastrophicFailureStatus: Enter";
+
+    SendDumpCompletedStatus("", PROFILER_STATUS_FAILURE);
     CleanupProfiler();
     UnloadProfiler();
+
+    LOG(TRACE) << "CorProfiler::SendCatastrophicFailureStatus: Exit";
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::SendDumpCompletedStatus
 // Sends a status notification to procdump. The status flag should be one of the following:
 //      > If dump was succesfully written: '1'
-//      > If dump was unable to be written: '0'
-//      > Any catastrophic failure of the profiler: 'F' (procdump should immediately stop monitoring as this results in an unload of the profiler)
+//      > 'H' for health pings. If it fails, means procdump was terminated.
+//      > Any catastrophic failure of the profiler: PROFILER_STATUS_FAILURE (procdump should immediately stop monitoring as this results in an unload of the profiler)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
 {
-    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Enter";
+    LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Enter with status '" << status << "'";
 
     int s, len;
     struct sockaddr_un remote;
@@ -501,7 +508,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     if(exceptionName.Length() == 0)
     {
         LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to get the name of the exception.";
-        SendCatastrophicFailureStatus();
         return E_FAIL;
     }
 
@@ -522,6 +528,16 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
         free(exception);
         if((exceptionName==exc || element.exception.compare("<any>") == 0) && element.exceptionID != thrownObjectId)
         {
+            //
+            // We have to serialize calls to the diag pipe to avoid concurrency issues
+            //
+            AutoMutex lock = AutoMutex(&endDumpCondition);
+            if(element.collectedDumps == element.dumpsToCollect)
+            {
+                LOG(TRACE) << "CorProfiler::ExceptionThrown: Dump count has been reached...exiting early";
+                return S_OK;
+            }
+
             LOG(TRACE) << "CorProfiler::ExceptionThrown: Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
             std::string dump = GetDumpName(element.collectedDumps);
@@ -549,7 +565,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
                 element.exceptionID = thrownObjectId;
 
                 // Notify procdump that a dump was generated
-                if(SendDumpCompletedStatus(dump, '1')==-1)
+                if(SendDumpCompletedStatus(dump, PROFILER_STATUS_SUCCESS)==-1)
                 {
                     delete[] socketName;
 
@@ -576,6 +592,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 // We're done collecting dumps...
+                LOG(TRACE) << "CorProfiler::ExceptionThrown: Dump count has been reached...cleaning up and unloading";
                 CleanupProfiler();
                 UnloadProfiler();
             }
@@ -591,7 +608,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 void CorProfiler::CleanupProfiler()
 {
+    LOG(TRACE) << "CorProfiler::CleanupProfiler: Enter";
     pthread_cancel(healthThread);
+    pthread_join(healthThread, NULL);
+    LOG(TRACE) << "CorProfiler::CleanupProfiler: Exit";
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -623,21 +643,21 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     HRESULT hRes = corProfilerInfo->GetClassFromObject(objectId, &classId);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassFromObject";
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassFromObject " << hRes;
         return WCHAR("");
     }
 
     hRes = corProfilerInfo->GetClassIDInfo(classId, &moduleId, &typeDefToken);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassIDInfo";
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetClassIDInfo " << hRes;
         return WCHAR("");
     }
 
     hRes = corProfilerInfo->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**) (&metadata));
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetModuleMetaData";
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetModuleMetaData " << hRes;
         return WCHAR("");
     }
 
@@ -645,7 +665,7 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
     hRes = metadata->GetTypeDefProps(typeDefToken, funcName, 1024, &read, NULL, NULL);
     if(FAILED(hRes))
     {
-        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetTypeDefProps";
+        LOG(TRACE) << "CorProfiler::GetExceptionName: Failed in call to GetTypeDefProps " << hRes;
         metadata->Release();
         return WCHAR("");
     }
