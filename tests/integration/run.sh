@@ -24,7 +24,7 @@ if [ ! -e /usr/bin/stress-ng ]; then
    exit 1
 fi
 
-if [ ! -e /usr/share/dotnet/dotnet ]; then
+if [ ! -e /usr/bin/dotnet ]; then
    echo "Please install .NET before running this script!"
    exit 1
 fi

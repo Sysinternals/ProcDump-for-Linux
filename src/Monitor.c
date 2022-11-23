@@ -1265,15 +1265,13 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         }
 
         // Inject the profiler into the target process
-        if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)==0)
-        {
-            pthread_join(waitForProfilerCompletion, NULL);
-        }
-        else
+        if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)!=0)
         {
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
-            return NULL;
+            pthread_cancel(waitForProfilerCompletion);
         }
+
+        pthread_join(waitForProfilerCompletion, NULL);
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
