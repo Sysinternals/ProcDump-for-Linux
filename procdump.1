@@ -1,5 +1,5 @@
 .\" Manpage for procdump.
-.TH man 8 "09/26/2022" "1.3" "procdump manpage"
+.TH man 8 "12/12/2022" "1.4" "procdump manpage"
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
@@ -10,6 +10,8 @@ procdump [-n Count]
         [-tc Thread_Threshold]
         [-fc FileDescriptor_Threshold]
         [-sig Signal_Number]
+        [-e]
+        [-f Include_Filter,...]
         [-pf Polling_Frequency]
         [-o]
         [-log]
@@ -27,6 +29,8 @@ Options:
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
+   -e      [.NET] Create dump when the process encounters an exception.
+   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.

@@ -54,6 +54,9 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Mon Dec 12 2022 Mario Hewardt <marioh@microsoft.com> - 1.4
+- added the capability to dump on .NET 1st chance exceptions (-e and -f)
+
 * Mon Sep 26 2022 Javid Habibi <jahabibi@microsoft.com> - 1.3
 - added process group trigger
 - BREAKING CHANGE: rework CLI interface to match that of Procdump for Windows
