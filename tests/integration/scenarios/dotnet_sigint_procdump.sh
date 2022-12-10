@@ -1,9 +1,10 @@
 #!/bin/bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 PROCDUMPPATH=$(readlink -m "$DIR/../../../bin/procdump");
+TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
-cd TestWebApi
+cd $TESTWEBAPIPATH
 dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
 TESTPID=$!
 sleep 5s
