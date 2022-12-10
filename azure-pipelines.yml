@@ -1,13 +1,4 @@
 # Azure build pipelines for Procdump-for-Linux
-
-resources:
-  repositories:
-  - repository: ProcDump
-    type: github
-    endpoint: sysinternals
-    name: Sysinternals/ProcDump-for-Linux
-
-
 trigger:
   branches:
     include:
@@ -26,7 +17,6 @@ stages:
       pool:
        vmImage: 'ubuntu-latest'
       steps:
-      - checkout: ProcDump
       - script: |
           sudo apt update
           sudo apt install -y gdb stress-ng zlib1g-dev
