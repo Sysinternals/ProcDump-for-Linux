@@ -5,7 +5,7 @@ TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
 cd $TESTWEBAPIPATH
-dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
+dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sleep 10s
 sudo $PROCDUMPPATH -n 1 -e -f System.InvalidOperationException TestWebApi testdump&

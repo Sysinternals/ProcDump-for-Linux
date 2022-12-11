@@ -7,7 +7,7 @@ pushd .
 sudo $PROCDUMPPATH -e -f System.InvalidOperationException -w TestWebApi&
 sleep 5s
 cd $TESTWEBAPIPATH
-dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
+dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sleep 10s
 wget http://localhost:5032/throwinvalidoperation
