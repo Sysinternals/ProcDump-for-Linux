@@ -9,7 +9,7 @@ sleep 5s
 cd $TESTWEBAPIPATH
 dotnet run --urls=http://localhost:5032 > /dev/null 2>&1&
 TESTPID=$!
-sleep 5s
+sleep 10s
 wget http://localhost:5032/throwinvalidoperation
 sleep 5s
 
