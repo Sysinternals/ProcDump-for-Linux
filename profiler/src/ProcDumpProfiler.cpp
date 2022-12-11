@@ -390,62 +390,62 @@ std::string CorProfiler::GetProcessName()
 {
     LOG(TRACE) << "CorProfiler::GetProcessName: Enter";
 
-	char fileBuffer[PATH_MAX+1] = {0};
-	int charactersRead = 0;
-	int	itr = 0;
-	char* stringItr = NULL;
-	char* processName = NULL;
-	FILE* procFile = NULL;
+    char fileBuffer[PATH_MAX+1] = {0};
+    int charactersRead = 0;
+    int	itr = 0;
+    char* stringItr = NULL;
+    char* processName = NULL;
+    FILE* procFile = NULL;
 
-	procFile = fopen("/proc/self/cmdline", "r");
-	if(procFile != NULL)
+    procFile = fopen("/proc/self/cmdline", "r");
+    if(procFile != NULL)
     {
-		if(fgets(fileBuffer, PATH_MAX, procFile) == NULL)
+        if(fgets(fileBuffer, PATH_MAX, procFile) == NULL)
         {
             LOG(TRACE) << "CorProfiler::GetProcessName: Failed to get /proc/self/cmdline contents";
             fclose(procFile);
-			return NULL;
-		}
-	}
-	else
+            return NULL;
+        }
+    }
+    else
     {
         LOG(TRACE) << "CorProfiler::GetProcessName: Failed to open /proc/self/cmdline";
-		return NULL;
-	}
+        return NULL;
+    }
 
     fclose(procFile);
 
 	// Extract process name
-	stringItr = fileBuffer;
-	charactersRead  = strlen(fileBuffer);
-	for(int i = 0; i <= charactersRead; i++)
+    stringItr = fileBuffer;
+    charactersRead  = strlen(fileBuffer);
+    for(int i = 0; i <= charactersRead; i++)
     {
-		if(fileBuffer[i] == '\0')
+        if(fileBuffer[i] == '\0')
         {
-			itr = i - itr;
+            itr = i - itr;
 
-			if(strcmp(stringItr, "sudo") != 0)
+            if(strcmp(stringItr, "sudo") != 0)
             {
-				processName = strrchr(stringItr, '/');
+                processName = strrchr(stringItr, '/');
 
-				if(processName != NULL)
+                if(processName != NULL)
                 {
-					return std::string(strdup(processName + 1));
-				}
-				else
+                    return std::string(strdup(processName + 1));
+                }
+                else
                 {
-					return std::string(strdup(stringItr));
-				}
-			}
-			else
+                    return std::string(strdup(stringItr));
+                }
+            }
+            else
             {
-				stringItr += (itr+1); 	// +1 to move past '\0'
-			}
-		}
-	}
+                stringItr += (itr+1); 	// +1 to move past '\0'
+            }
+        }
+    }
 
     LOG(TRACE) << "CorProfiler::GetProcessName: Exit";
-	return NULL;
+    return NULL;
 }
 
 

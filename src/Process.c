@@ -525,62 +525,61 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 //
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid){
-	char procFilePath[32];
-	char fileBuffer[MAX_CMDLINE_LEN];
-	int charactersRead = 0;
-	int	itr = 0;
-	char * stringItr;
-	char * processName;
-	auto_free_file FILE * procFile = NULL;
-
+    char procFilePath[32];
+    char fileBuffer[MAX_CMDLINE_LEN];
+    int charactersRead = 0;
+    int	itr = 0;
+    char * stringItr;
+    char * processName;
+    auto_free_file FILE * procFile = NULL;
 
     if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0) {
-		return NULL;
-	}
+        return NULL;
+    }
 
-	procFile = fopen(procFilePath, "r");
+    procFile = fopen(procFilePath, "r");
 
-	if(procFile != NULL) {
-		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
+    if(procFile != NULL) {
+        if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
 
             if(strlen(fileBuffer) == 0) {
                 Log(debug, "Empty cmdline.\n");
             }
             else{
-			}
-			return NULL;
-		}
-	}
-	else {
-		Log(debug, "Failed to open %s.\n", procFilePath);
-		return NULL;
-	}
+            }
+            return NULL;
+        }
+    }
+    else {
+        Log(debug, "Failed to open %s.\n", procFilePath);
+        return NULL;
+    }
 
 
-	// Extract process name
-	stringItr = fileBuffer;
-	charactersRead  = strlen(fileBuffer);
-	for(int i = 0; i <= charactersRead; i++){
-		if(fileBuffer[i] == '\0'){
-			itr = i - itr;
+    // Extract process name
+    stringItr = fileBuffer;
+    charactersRead  = strlen(fileBuffer);
+    for(int i = 0; i <= charactersRead; i++){
+        if(fileBuffer[i] == '\0'){
+            itr = i - itr;
 
-			if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
-				processName = strrchr(stringItr, '/');	// does this process include a filepath?
+            if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
+                processName = strrchr(stringItr, '/');	// does this process include a filepath?
 
-				if(processName != NULL){
-					return strdup(processName + 1);	// +1 to not include '/' character
-				}
-				else{
-					return strdup(stringItr);
-				}
-			}
-			else{
-				stringItr += (itr+1); 	// +1 to move past '\0'
-			}
-		}
-	}
+                if(processName != NULL){
+                    return strdup(processName + 1);	// +1 to not include '/' character
+                }
+                else{
+                    return strdup(stringItr);
+                }
+            }
+            else{
+                stringItr += (itr+1); 	// +1 to move past '\0'
+            }
+        }
+    }
 
-	return NULL;
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -590,7 +589,7 @@ char * GetProcessName(pid_t pid){
 //
 //--------------------------------------------------------------------
 pid_t GetProcessPgid(pid_t pid){
-	pid_t pgid = NO_PID;
+    pid_t pgid = NO_PID;
 
     char procFilePath[32];
     char fileBuffer[1024];
