@@ -12,6 +12,7 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
   * Ubuntu 16.04 LTS
 * `gdb` >= 7.6.1
 * `zlib` (build-time only)
+* `clang`
 
 ## Install ProcDump
 Checkout our [install instructions](INSTALL.md) for distribution specific steps to install Procdump.
@@ -41,18 +42,20 @@ make && make rpm
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
 ```
 procdump [-n Count]
-        [-s Seconds]
-        [-c|-cl CPU_Usage]
-        [-m|-ml Commit_Usage]
-        [-tc Thread_Threshold]
-        [-fc FileDescriptor_Threshold]
-        [-sig Signal_Number]
-        [-pf Polling_Frequency]
-        [-o]
-        [-log]
-        {
+         [-s Seconds]
+         [-c|-cl CPU_Usage]
+         [-m|-ml Commit_Usage]
+         [-tc Thread_Threshold]
+         [-fc FileDescriptor_Threshold]
+         [-sig Signal_Number]
+         [-e]
+         [-f Include_Filter,...]
+         [-pf Polling_Frequency]
+         [-o]
+         [-log]
+         {
           {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-        }
+         }
 
 Options:
    -n      Number of dumps to write before exiting.
@@ -64,6 +67,8 @@ Options:
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
+   -e      [.NET] Create dump when the process encounters an exception.
+   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.
@@ -112,6 +117,10 @@ sudo procdump 1234 dump
 The following will create a core dump when a SIGSEGV occurs.
 ```
 sudo procdump -sig 11 1234
+```
+The following will create a core dump when the target .NET application throws a System.InvalidOperationException
+```
+sudo procdump -e -f System.InvalidOperationException 1234
 ```
 > All options can also be used with `-w`, to wait for any process with the given name.
 

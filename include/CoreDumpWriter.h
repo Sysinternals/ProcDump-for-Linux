@@ -19,9 +19,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdint.h>
-
-#include "Handle.h"
-#include "ProcDumpConfiguration.h"
+#include <linux/limits.h>
 
 #define DATE_LENGTH 26
 #define MAX_LINES 15
@@ -35,6 +33,16 @@
 struct MagicVersion
 {
     uint8_t Magic[14];
+};
+
+
+// CLSID struct
+struct CLSID
+{
+    uint32_t Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char Data4[8];
 };
 
 // The header to be associated with every command and response
@@ -61,6 +69,7 @@ enum ECoreDumpType {
     FILEDESC,               // trigger on file descriptor count
     SIGNAL,                 // trigger on signal
     TIME,                   // trigger on time interval
+    EXCEPTION,              // trigger on exception
     MANUAL                  // manual trigger
 };
 
@@ -70,7 +79,8 @@ struct CoreDumpWriter {
 };
 
 struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDumpConfiguration *config);
-
+int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName);
 int WriteCoreDump(struct CoreDumpWriter *self);
+char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type);
 
 #endif // CORE_DUMP_WRITER_H

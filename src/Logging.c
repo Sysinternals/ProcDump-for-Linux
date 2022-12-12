@@ -4,13 +4,11 @@
 //--------------------------------------------------------------------
 //
 // A simple logging library for log generation and debugging
-// 
+//
 //--------------------------------------------------------------------
+#include "Includes.h"
 
-#include "Logging.h"
-#include "ProcDumpConfiguration.h"
-
-static const char *LogLevelStrings[] = { "DEBUG", "INFO", "WARN", "CRITICAL", "ERROR" }; 
+static const char *LogLevelStrings[] = { "DEBUG", "INFO", "WARN", "CRITICAL", "ERROR" };
 extern struct ProcDumpConfiguration g_config;
 pthread_mutex_t LoggerLock;
 
@@ -38,12 +36,12 @@ void LogFormatter(enum LogLevel logLevel, const char *message, va_list args)
         va_end(copy);
         return;
     }
-    
+
     sprintf(trace, "[%s - %s]: ", timeBuff, LogLevelStrings[logLevel]);
     vsprintf(trace+traceLen, message, args);
 
-    // If a log entry is not 'debug' it simply goes to stdout. 
-    // If you want an entry to only go to the syslog, use 'debug' 
+    // If a log entry is not 'debug' it simply goes to stdout.
+    // If you want an entry to only go to the syslog, use 'debug'
     if(logLevel != debug)
     {
         puts(trace);

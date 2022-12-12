@@ -6,21 +6,22 @@
 // This library reads from the /procfs pseudo filesystem
 //
 //--------------------------------------------------------------------
+#include "Includes.h"
 
-#include <dirent.h>
-#include <sys/stat.h>
-
-#include "Process.h"
-
+//--------------------------------------------------------------------
+//
+// GetProcessStat - Gets the process stats for the given pid
+//
+//--------------------------------------------------------------------
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     char procFilePath[32];
     char fileBuffer[1024];
     char *token;
     char *savePtr = NULL;
-
-    FILE *procFile = NULL;
-    DIR* fddir = NULL;
     struct dirent* entry = NULL;
+
+    auto_free_file FILE *procFile = NULL;
+    auto_free_dir DIR* fddir = NULL;
 
     // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
     if(sprintf(procFilePath, "/proc/%d/fdinfo", pid) < 0){
@@ -35,8 +36,6 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         {
             proc->num_filedescriptors++;
         }
-
-        closedir(fddir);
     }
     else
     {
@@ -57,12 +56,8 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     if(procFile != NULL){
         if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
             Log(error, "Failed to read from %s. Exiting...", procFilePath);
-            fclose(procFile);
             return false;
         }
-
-        // close file after reading this iteration of stats
-        fclose(procFile);
     }
     else{
         Log(error, "Failed to open %s.", procFilePath);
@@ -521,3 +516,280 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 
     return true;
 }
+
+
+//--------------------------------------------------------------------
+//
+// GetProcessName - Get process name using PID provided.
+//                  Returns EMPTY_PROC_NAME for null process name.
+//
+//--------------------------------------------------------------------
+char * GetProcessName(pid_t pid){
+    char procFilePath[32];
+    char fileBuffer[MAX_CMDLINE_LEN];
+    int charactersRead = 0;
+    int	itr = 0;
+    char * stringItr;
+    char * processName;
+    auto_free_file FILE * procFile = NULL;
+
+    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0) {
+        return NULL;
+    }
+
+    procFile = fopen(procFilePath, "r");
+
+    if(procFile != NULL) {
+        if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
+
+            if(strlen(fileBuffer) == 0) {
+                Log(debug, "Empty cmdline.\n");
+            }
+            else{
+            }
+            return NULL;
+        }
+    }
+    else {
+        Log(debug, "Failed to open %s.\n", procFilePath);
+        return NULL;
+    }
+
+
+    // Extract process name
+    stringItr = fileBuffer;
+    charactersRead  = strlen(fileBuffer);
+    for(int i = 0; i <= charactersRead; i++){
+        if(fileBuffer[i] == '\0'){
+            itr = i - itr;
+
+            if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
+                processName = strrchr(stringItr, '/');	// does this process include a filepath?
+
+                if(processName != NULL){
+                    return strdup(processName + 1);	// +1 to not include '/' character
+                }
+                else{
+                    return strdup(stringItr);
+                }
+            }
+            else{
+                stringItr += (itr+1); 	// +1 to move past '\0'
+            }
+        }
+    }
+
+    return NULL;
+}
+
+//--------------------------------------------------------------------
+//
+// GetProcessPgid - Get process pgid using PID provided.
+//                  Returns NO_PID on error
+//
+//--------------------------------------------------------------------
+pid_t GetProcessPgid(pid_t pid){
+    pid_t pgid = NO_PID;
+
+    char procFilePath[32];
+    char fileBuffer[1024];
+    char *token;
+    char *savePtr = NULL;
+
+    auto_free_file FILE *procFile = NULL;
+
+    // Read /proc/[pid]/stat
+    if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
+        return pgid;
+    }
+    procFile = fopen(procFilePath, "r");
+
+    if(procFile != NULL){
+        if(fgets(fileBuffer, sizeof(fileBuffer), procFile) == NULL) {
+            return pgid;
+        }
+    }
+    else{
+        Trace("GetProcessPgid: Cannot open %s to check PGID", procFilePath);
+        return pgid;
+    }
+
+    // itaerate past process state
+    savePtr = strrchr(fileBuffer, ')');
+    savePtr += 2;   // iterate past ')' and ' ' in /proc/[pid]/stat
+
+    // iterate past process state
+    token = strtok_r(NULL, " ", &savePtr);
+
+    // iterate past parent process ID
+    token = strtok_r(NULL, " ", &savePtr);
+
+    // grab process group ID
+    token = strtok_r(NULL, " ", &savePtr);
+    if(token == NULL){
+        Trace("GetProcessPgid: failed to get token from proc/[pid]/stat - Process group ID.");
+        return pgid;
+    }
+
+    pgid = (pid_t)strtol(token, NULL, 10);
+
+    return pgid;
+}
+
+//--------------------------------------------------------------------
+//
+// LookupProcessByPid - Find process using PID provided.
+//
+//--------------------------------------------------------------------
+bool LookupProcessByPid(pid_t pid)
+{
+    char statFilePath[32];
+    auto_free_file FILE *fd = NULL;
+
+    if(pid == NO_PID)
+    {
+        return false;
+    }
+
+    // check to see if pid is an actual process running1`
+    if(pid != NO_PID) {
+        sprintf(statFilePath, "/proc/%d/stat", pid);
+    }
+
+    fd = fopen(statFilePath, "r");
+    if (fd == NULL) {
+        return false;
+    }
+
+    return true;
+}
+
+//--------------------------------------------------------------------
+//
+// LookupProcessByPgid - Find a running process using PGID provided.
+//
+//--------------------------------------------------------------------
+bool LookupProcessByPgid(pid_t pid)
+{
+    // check to see if pid is an actual process running
+    if(pid != NO_PID) {
+        struct dirent ** nameList;
+        int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+
+        // evaluate all running processes
+        for (int i = 0; i < numEntries; i++) {
+            pid_t procPid;
+            if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+            pid_t procPgid;
+
+            procPgid = GetProcessPgid(procPid);
+
+            if(procPgid != NO_PID && procPgid == pid)
+                return true;
+        }
+    }
+
+    // if we have ran through all the running processes then supplied PGID is invalid
+    return false;
+}
+
+//--------------------------------------------------------------------
+//
+// LookupProcessByName - Find a running process using name provided.
+//
+//--------------------------------------------------------------------
+bool LookupProcessByName(const char *procName)
+{
+    // check to see if name is an actual process running
+    struct dirent ** nameList;
+    int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+
+    // evaluate all running processes
+    for (int i = 0; i < numEntries; i++) {
+        pid_t procPid;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+
+        char* processName = GetProcessName(procPid);
+
+        if(processName && strcasecmp(processName, procName)==0)
+        {
+            free(processName);
+            return true;
+        }
+
+        if(processName) free(processName);
+    }
+
+    // if we have ran through all the running processes then supplied PGID is invalid
+    return false;
+}
+
+//--------------------------------------------------------------------
+//
+// LookupProcessPidByName - Return PID of process using name provided.
+//
+//--------------------------------------------------------------------
+pid_t LookupProcessPidByName(const char* name)
+{
+    // check to see if name is an actual process running
+    struct dirent ** nameList;
+    int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+
+    // evaluate all running processes
+    for (int i = 0; i < numEntries; i++) {
+        pid_t procPid;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+
+        char* procName = GetProcessName(procPid);
+        if(procName && strcasecmp(name, procName)==0)
+        {
+            struct ProcessStat stat;
+            free(procName);
+
+            if(!GetProcessStat(procPid, &stat))
+            {
+                return NO_PID;
+            }
+
+            return stat.pid;
+        }
+
+        if(procName) free(procName);
+    }
+
+    // if we have ran through all the running processes then supplied name is not found
+    return NO_PID;
+}
+
+//--------------------------------------------------------------------
+//
+// GetMaximumPID - Read from kernel configs what the maximum PID value is
+//
+// Returns maximum PID value before processes roll over or -1 upon error.
+//--------------------------------------------------------------------
+int GetMaximumPID()
+{
+    auto_free_file FILE * pidMaxFile = NULL;
+    int maxPIDs;
+
+    pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
+
+    if(pidMaxFile != NULL){
+        fscanf(pidMaxFile, "%d", &maxPIDs);
+        return maxPIDs;
+    }
+    else {
+        return -1;
+    }
+}
+
+//--------------------------------------------------------------------
+//
+// FilterForPid - Helper function for scandir to only return PIDs.
+//
+//--------------------------------------------------------------------
+int FilterForPid(const struct dirent *entry)
+{
+    return IsValidNumberArg(entry->d_name);
+}
+

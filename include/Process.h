@@ -17,13 +17,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
-#include "Logging.h"
+
+#define NO_PID INT_MAX
+#define MAX_CMDLINE_LEN 4096+1
+#define PID_MAX_KERNEL_CONFIG "/proc/sys/kernel/pid_max"
 
 // -----------------------------------------------------------
 // a series of structs for containing infromation from /procfs
 // -----------------------------------------------------------
 
-// 
+//
 // /proc/[pid]/stat
 //
 struct ProcessStat {
@@ -33,11 +36,11 @@ struct ProcessStat {
     pid_t ppid;     // the parent process ID : %d
     pid_t pgrp;     // the process group ID of the process : %d
     int session;    // The session ID of the process : %d
-    
-    // The controlling terminal of the process. 
-    // (the minor device number is contained in the combination 
+
+    // The controlling terminal of the process.
+    // (the minor device number is contained in the combination
     // of bits 31 to 20 and 7 to 0; the major device number is in bits 15 to 8) : %d
-    int tty_nr; 
+    int tty_nr;
     pid_t tpgid; // The ID of the foreground process group of the controlling terminal process : %d
 
     unsigned int flags;  // Kernel flags word of the process. See PF_* definitions in include/linux/sched.h : %u
@@ -68,7 +71,7 @@ struct ProcessStat {
 
     // For processes running under a non-real-time scheduling policy, this is the raw
     // nice value (setpriority(2)) as represented in the kernel. For processes running in a
-    // real-time scheduling policy, this is the negated scheduling priority minus one. 
+    // real-time scheduling policy, this is the negated scheduling priority minus one.
     long priority;
 
     // The nice value, a value in the range 19 (low priority) to -20 (high priority)
@@ -138,7 +141,7 @@ struct ProcessStat {
     unsigned long wchan;
 
     // Number of pages swapped (not maintained).
-    unsigned long nswap; 
+    unsigned long nswap;
 
     // Cumulative nswap for child processes (not maintained).
     unsigned long cnswap;
@@ -151,17 +154,17 @@ struct ProcessStat {
 
     // Real-time scheduling priority, a number in the range 1 to 99 for
     // processes scheduled under a real-time policy, or 0, for non-real-
-    // time processes 
+    // time processes
     unsigned int rt_priority;
 
-    // Scheduling policy. Decode using the SCHED_* constants in 
+    // Scheduling policy. Decode using the SCHED_* constants in
     // linux/sched.h
     unsigned int policy;
 
     // Aggregated block I/O delays, measured in clock ticks (centiseconds)
     unsigned long long delayacct_blkio_ticks;
 
-    // Guest time of the process (time spent running a virtual CPU for a 
+    // Guest time of the process (time spent running a virtual CPU for a
     // guest operating system), measured in clock ticks (divide by
     // sysconf(_SC_CLK_TCK)).
     unsigned long guest_time;
@@ -194,7 +197,7 @@ struct ProcessStat {
     unsigned long env_end;
 
     // The thread'd exit status in the form reported by waitpid.
-    int exit_code;    
+    int exit_code;
 
     // NOTE: This does not come from /proc/[pid]/stat rather is populated by enumerating the /proc/<pid>>/fdinfo
     int num_filedescriptors;
@@ -214,7 +217,7 @@ struct ProcessStatus {
     pid_t Gid[4];           // Real [0], effective [1], saved set [2], and filesystem [3] GIDs
     int FDSize;             // Number of file descriptor slots currently allocated.
     pid_t *Groups;          // Supplementary group list (array).
-    int GroupsLen;          
+    int GroupsLen;
     unsigned long VmPeak;   // Peak virtual memory size.
     unsigned long VmSize;   // Virtual memory size.
     unsigned long VmLck;    // Locked virtual memory.
@@ -250,10 +253,10 @@ struct ProcessStatus {
     unsigned long CapAmb; // Ambient capability set (since linux 4.3).
 
     // Seccomp mode of the process (since Linux 3.8).
-    // 0 means  SECCOMP_MODE_DISABLED;  
-    // 1  means  SECCOMP_MODE_STRICT; 
-    // 2 means SECCOMP_MODE_FILTER.  
-    // This field is provided only if  the  kernel  was  built 
+    // 0 means  SECCOMP_MODE_DISABLED;
+    // 1  means  SECCOMP_MODE_STRICT;
+    // 2 means SECCOMP_MODE_FILTER.
+    // This field is provided only if  the  kernel  was  built
     // with the CONFIG_SECCOMP kernel configuration option enabled.
     int Seccomp;
 
@@ -273,5 +276,13 @@ struct ProcessStatus {
 // -----------------------------------------------------------
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc);
+char * GetProcessName(pid_t pid);
+pid_t GetProcessPgid(pid_t pid);
+bool LookupProcessByPid(pid_t pid);
+bool LookupProcessByPgid(pid_t pid);
+bool LookupProcessByName(const char* procName);
+pid_t LookupProcessPidByName(const char* name);
+int GetMaximumPID();
+int FilterForPid(const struct dirent *entry);
 
 #endif // PROCFSLIB_PROCESS_H

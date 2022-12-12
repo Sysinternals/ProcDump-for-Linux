@@ -16,6 +16,12 @@ TESTOBJS=$(patsubst $(TESTDIR)/%.c, $(OBJDIR)/%.o, $(TESTSRC))
 OUT=$(BINDIR)/procdump
 TESTOUT=$(BINDIR)/ProcDumpTestApplication
 
+# Profiler
+PROFSRCDIR=profiler/src
+PROFINCDIR=profiler/inc
+PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -DBIT64 -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
+PROFCLANG=clang++
+
 # Revision value from build pipeline
 REVISION:=$(if $(REVISION),$(REVISION),'99999')
 
@@ -39,13 +45,17 @@ PKG_VERSION:=$(if $(VERSION),$(VERSION),0.0.0)
 
 all: clean build
 
-build: $(OBJDIR) $(BINDIR) $(OUT) $(TESTOUT)
+build: $(OBJDIR)/ProcDumpProfiler.so $(OBJDIR) $(BINDIR) $(OUT) $(TESTOUT)
 
 install:
 	mkdir -p $(DESTDIR)$(INSTALLDIR)
 	cp $(BINDIR)/procdump $(DESTDIR)$(INSTALLDIR)
 	mkdir -p $(DESTDIR)$(MANDIR)
 	cp procdump.1 $(DESTDIR)$(MANDIR)
+
+$(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/ProcDumpProfiler.cpp $(PROFSRCDIR)/dllmain.cpp $(PROFSRCDIR)/corprof_i.cpp $(PROFSRCDIR)/easylogging++.cc | $(OBJDIR)
+	$(PROFCLANG) -o $@ $(PROFCXXFLAGS) -I $(PROFINCDIR) $^
+	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
@@ -54,7 +64,7 @@ $(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
 $(OUT): $(OBJS) | $(BINDIR)
-	$(CC) -o $@ $^ $(CCFLAGS)
+	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS)
 
 $(TESTOUT): $(TESTOBJS) | $(BINDIR)
 	$(CC) -o $@ $^ $(CCFLAGS)
