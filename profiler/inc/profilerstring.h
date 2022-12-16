@@ -59,6 +59,30 @@ inline int wcscmp(const char16_t *lhs, const char16_t *rhs)
     return lhs[i] - rhs[i];
 }
 
+inline int wcscpy(char16_t *dst, size_t dmax,const char16_t *src)
+{
+    while (dmax > 0) {
+        *dst = *src;
+        if (*dst == u'\0') {
+                return 0;
+        }
+
+        dmax--;
+        dst++;
+        src++;
+    }
+    return 0;
+}
+inline int wcslwr(char16_t *str, size_t len)
+{
+    for (size_t i = 0; i < len; ++i)
+    {
+        if ((str[i] >= u'A') && (str[i] <= u'Z'))
+        str[i] = str[i] + (u'a' - u'A');   
+    }
+    return 0;
+}
+
 #endif // defined(__WIN32)
 
 // 16 bit string type that works cross plat and doesn't require changing widths
@@ -332,4 +356,16 @@ inline bool EndsWith(const String &lhs, const String &rhs)
     }
 
     return true;
+}
+
+inline WCHAR *getWCHARs(const String &src)
+{
+    size_t len = src.Length();
+    WCHAR* tempbuff = new WCHAR[len+1];
+    for (size_t i = 0; i < len; ++i)
+    {
+        tempbuff[i] = src[i];
+    }
+    tempbuff[len] = u'\0';
+    return tempbuff;
 }

@@ -439,8 +439,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                    0 == strcasecmp( argv[i], "-f" ))
         {
             if( i+1 >= argc ) return PrintUsage();
-
             self->ExceptionFilter = strdup(argv[i+1]);
+            if( tolower( self->ExceptionFilter[0] ) >  'z' || ( self->ExceptionFilter[0] != '*' && tolower( self->ExceptionFilter[0] ) <  'a' ) ) return PrintUsage();
             i++;
         }
 

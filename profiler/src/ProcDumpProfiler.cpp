@@ -11,6 +11,143 @@
 INITIALIZE_EASYLOGGINGPP
 
 
+//--------------------------------------------------------------------
+//
+// WildcardSearch - Search string supports '*' anywhere and any number of times
+//
+//--------------------------------------------------------------------
+bool WildcardSearch(WCHAR* szClassName, WCHAR* szSearch)
+{
+    if ((szClassName == NULL) || (szSearch == NULL))
+        return false;
+
+    WCHAR* szClassLowerMalloc = (WCHAR*)malloc(sizeof(WCHAR)*(wcslen(szClassName)+1));
+    if (szClassLowerMalloc == NULL)
+        return false;
+
+    WCHAR* szSearchLowerMalloc = (WCHAR*)malloc(sizeof(WCHAR)*(wcslen(szSearch)+1));
+    if (szSearchLowerMalloc == NULL)
+    {
+        free(szClassLowerMalloc);
+        return false;
+    }
+    
+    WCHAR* szClassLower = szClassLowerMalloc;
+    wcscpy(szClassLower, (wcslen(szClassName)+1), szClassName);
+    wcslwr(szClassLower, (wcslen(szClassName)+1));
+
+    WCHAR* szSearchLower = szSearchLowerMalloc;
+    wcscpy(szSearchLower, (wcslen(szSearch)+1), szSearch);
+    wcslwr(szSearchLower, (wcslen(szSearch)+1));
+
+    while ((*szSearchLower != u'\0') && (*szClassLower != u'\0'))
+    {
+        if (*szSearchLower != u'*')
+        {
+            // Straight (case insensitive) compare
+            if (*szSearchLower != *szClassLower)
+            {
+                free(szClassLowerMalloc);
+                szClassLowerMalloc = NULL;
+
+                free(szSearchLowerMalloc);
+                szSearchLowerMalloc = NULL;
+
+                return false;
+            }
+
+            szSearchLower++;
+            szClassLower++;
+            continue;
+        }
+
+        //
+        // Wildcard processing
+        //
+
+ContinueWildcard:
+        szSearchLower++;
+
+        // The wildcard is on the end; e.g. '*' 'blah*' or '*blah*'
+        // Must be a match
+        if (*szSearchLower == u'\0')
+        {
+            free(szClassLowerMalloc);
+            szClassLowerMalloc = NULL;
+
+            free(szSearchLowerMalloc);
+            szSearchLowerMalloc = NULL;
+            return true;
+        }
+
+        // Double Wildcard; e.g. '**' 'blah**' or '*blah**'
+        if (*szSearchLower == u'*')
+            goto ContinueWildcard;
+
+        // Find the length of the sub-string to search for
+        int endpos = 0;
+        while ((szSearchLower[endpos] != u'\0') && (szSearchLower[endpos] != u'*'))
+            endpos++;
+
+        // Find a match of the sub-search string anywhere within the class string
+        int cc = 0; // Offset in to the Class
+        int ss = 0; // Offset in to the Sub-Search
+        while (ss < endpos)
+        {
+            if (szClassLower[ss+cc] == u'\0')
+            {
+                free(szClassLowerMalloc);
+                szClassLowerMalloc = NULL;
+
+                free(szSearchLowerMalloc);
+                szSearchLowerMalloc = NULL;
+
+                return false;
+            }
+
+            if (szSearchLower[ss] != szClassLower[ss+cc])
+            {
+                cc++;
+                ss = 0;
+                continue;
+            }
+            ss++;
+        }
+
+        // If we get here, we found a match; move each string forward
+        szSearchLower += ss;
+        szClassLower += (ss + cc);
+    }
+
+    // Do we have a trailing wildcard? 
+    // This happens when Class = ABC.XYZ and Search = *XYZ*
+    // Needed as the trailing wildcard code (above) doesn't run after the ss/cc search as Class is null
+    while (*szSearchLower == u'*')
+    {
+        szSearchLower++;
+    }
+
+    // If Class and Search have no residual, this is a match.
+    if ((*szSearchLower == u'\0') && (*szClassLower == u'\0'))
+    {
+        free(szClassLowerMalloc);
+        szClassLowerMalloc = NULL;
+
+        free(szSearchLowerMalloc);
+        szSearchLowerMalloc = NULL;
+
+        return true;
+    }
+
+    free(szClassLowerMalloc);
+    szClassLowerMalloc = NULL;
+
+    free(szSearchLowerMalloc);
+    szSearchLowerMalloc = NULL;
+
+    return false;
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // HealthThread
 //
@@ -512,6 +649,8 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     }
 
     LOG(TRACE) << "CorProfiler::ExceptionThrown: exception name: " << exceptionName.ToCStr();
+  
+    WCHAR* exceptionWCHARs = getWCHARs(exceptionName);
 
     // Check to see if we have any matches on exceptions
     for (auto & element : exceptionMonitorList)
@@ -524,9 +663,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
             return E_FAIL;
         }
 
-        String exc(exception);
-        free(exception);
-        if((exceptionName==exc || element.exception.compare("<any>") == 0) && element.exceptionID != thrownObjectId)
+        if(WildcardSearch(exceptionWCHARs,exception) && element.exceptionID != thrownObjectId)
         {
             //
             // We have to serialize calls to the diag pipe to avoid concurrency issues
@@ -597,7 +734,9 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
                 UnloadProfiler();
             }
         }
+        free(exception);
     }
+    free(exceptionWCHARs);
 
     LOG(TRACE) << "CorProfiler::ExceptionThrown: Exit";
     return S_OK;
