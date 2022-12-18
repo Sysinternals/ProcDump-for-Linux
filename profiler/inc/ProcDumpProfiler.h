@@ -120,6 +120,7 @@ private:
     void SendCatastrophicFailureStatus();
     int send_all(int socket, void* buffer, size_t length);
     int recv_all(int socket, void* buffer, size_t length);
+    bool WildcardSearch(WCHAR*, WCHAR*);
 
 public:
     CorProfiler();

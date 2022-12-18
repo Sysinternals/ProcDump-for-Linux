@@ -297,7 +297,7 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     char* exceptionFilter = NULL;
     char* exceptionFilterCur = NULL;
     char tmp[10];
-    size_t len;
+    size_t len = 0;
 
     // If no exceptions were specified using -f we should dump on any exception (hence we add <any>)
     char* cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("*");

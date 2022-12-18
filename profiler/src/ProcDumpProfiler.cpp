@@ -10,13 +10,54 @@
 
 INITIALIZE_EASYLOGGINGPP
 
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// HealthThread
+//
+// Periodically (default 5s) calls the procdump status pipe for a health check. If we're unable to communicate with procdump it means it has been
+// terminated and we can unload.
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+void* HealthThread(void* args)
+{
+    LOG(TRACE) << "HealthThread: Enter";
+
+    CorProfiler* profiler = static_cast<CorProfiler*> (args);
+    char* sockPath = NULL;
+
+    while(true)
+    {
+        if(profiler->SendDumpCompletedStatus("", PROFILER_STATUS_HEALTH)==-1)
+        {
+            LOG(TRACE) << "HealthThread: Procdump not reachable..unloading ourselves";
+            sockPath = profiler->GetSocketPath("procdump/procdump-status-", profiler->procDumpPid, getpid());
+            if(sockPath)
+            {
+                LOG(TRACE) << "HealthThread: Unlinking the socket path " << sockPath;
+                // if procdump exited abnormally, the socket file will still exist so we clean it up.
+                unlink(sockPath);
+
+                free(sockPath);
+            }
+
+            profiler->UnloadProfiler();
+            break;
+        }
+
+        LOG(TRACE) << "HealthThread: Procdump running...";
+
+        sleep(HEALTH_POLL_FREQ);        // sleep is a thread cancellation point
+    }
+
+    LOG(TRACE) << "HealthThread: Exit";
+    return NULL;
+}
 
 //--------------------------------------------------------------------
 //
-// WildcardSearch - Search string supports '*' anywhere and any number of times
+// CorProfiler::WildcardSearch
+// Search string supports '*' anywhere and any number of times
 //
 //--------------------------------------------------------------------
-bool WildcardSearch(WCHAR* szClassName, WCHAR* szSearch)
+bool CorProfiler::WildcardSearch(WCHAR* szClassName, WCHAR* szSearch)
 {
     if ((szClassName == NULL) || (szSearch == NULL))
         return false;
@@ -146,47 +187,6 @@ ContinueWildcard:
     szSearchLowerMalloc = NULL;
 
     return false;
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-// HealthThread
-//
-// Periodically (default 5s) calls the procdump status pipe for a health check. If we're unable to communicate with procdump it means it has been
-// terminated and we can unload.
-//------------------------------------------------------------------------------------------------------------------------------------------------------
-void* HealthThread(void* args)
-{
-    LOG(TRACE) << "HealthThread: Enter";
-
-    CorProfiler* profiler = static_cast<CorProfiler*> (args);
-    char* sockPath = NULL;
-
-    while(true)
-    {
-        if(profiler->SendDumpCompletedStatus("", PROFILER_STATUS_HEALTH)==-1)
-        {
-            LOG(TRACE) << "HealthThread: Procdump not reachable..unloading ourselves";
-            sockPath = profiler->GetSocketPath("procdump/procdump-status-", profiler->procDumpPid, getpid());
-            if(sockPath)
-            {
-                LOG(TRACE) << "HealthThread: Unlinking the socket path " << sockPath;
-                // if procdump exited abnormally, the socket file will still exist so we clean it up.
-                unlink(sockPath);
-
-                free(sockPath);
-            }
-
-            profiler->UnloadProfiler();
-            break;
-        }
-
-        LOG(TRACE) << "HealthThread: Procdump running...";
-
-        sleep(HEALTH_POLL_FREQ);        // sleep is a thread cancellation point
-    }
-
-    LOG(TRACE) << "HealthThread: Exit";
-    return NULL;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
