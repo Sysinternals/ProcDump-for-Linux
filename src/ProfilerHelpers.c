@@ -297,9 +297,10 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     char* exceptionFilter = NULL;
     char* exceptionFilterCur = NULL;
     char tmp[10];
+    size_t len = 0;
 
     // If no exceptions were specified using -f we should dump on any exception (hence we add <any>)
-    char* cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("<any>");
+    char* cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("*");
 
     numberOfDumpsLen = sprintf(tmp, "%d", numDumps);
 
@@ -313,11 +314,11 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
 
     free(cpy);
 
-    cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("<any>");
+    cpy = exceptionFilterCmdLine ? strdup(exceptionFilterCmdLine) : strdup("*");
 
     totalExceptionNameLen++; // NULL terminator
 
-    exceptionFilter = malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2)); // +1 for : seperator +1 for ; seperator
+    exceptionFilter = malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2+2)); // +1 for : seperator +1 for ; seperator +2 for 2 '*' wildcard
     if(exceptionFilter==NULL)
     {
         return NULL;
@@ -328,7 +329,23 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     token = strtok(cpy, ",");
     while(token!=NULL)
     {
-        exceptionFilterCur += sprintf(exceptionFilterCur, "%s:%d;", token, numDumps);
+        len = strlen(token);
+        if(token[0] != '*' && token[len-1] != '*')
+        {
+            exceptionFilterCur += sprintf(exceptionFilterCur, "*%s*:%d;", token, numDumps);
+        }
+        else if(token[0] != '*')
+        {
+            exceptionFilterCur += sprintf(exceptionFilterCur, "*%s:%d;", token, numDumps);
+        }
+        else if(token[len-1] != '*')
+        {
+            exceptionFilterCur += sprintf(exceptionFilterCur, "%s*:%d;", token, numDumps);
+        }
+        else
+        {
+            exceptionFilterCur += sprintf(exceptionFilterCur, "%s:%d;", token, numDumps);
+        }
         token = strtok(NULL, ",");
     }
 
