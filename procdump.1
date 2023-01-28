@@ -1,41 +1,105 @@
 .\" Manpage for procdump.
-.TH man 8 "12/12/2022" "1.4" "procdump manpage"
+.TH PROCDUMP 1 "1/28/2023" "procdump" "User Commands"
 .SH NAME
-procdump \- generate coredumps based off performance triggers.
+procdump \- generate coredumps based on performance triggers.
 .SH SYNOPSIS
-procdump [-n Count]
-        [-s Seconds]
-        [-c|-cl CPU_Usage]
-        [-m|-ml Commit_Usage]
-        [-tc Thread_Threshold]
-        [-fc FileDescriptor_Threshold]
-        [-sig Signal_Number]
-        [-e]
-        [-f Include_Filter,...]
-        [-pf Polling_Frequency]
-        [-o]
-        [-log]
-        {
-            {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-        }
-
-Options:
-   -n      Number of dumps to write before exiting.
-   -s      Consecutive seconds before dump is written (default is 10).
-   -c      CPU threshold above which to create a dump of the process.
-   -cl     CPU threshold below which to create a dump of the process.
-   -m      Memory commit threshold in MB at which to create a dump.
-   -ml     Trigger when memory commit drops below specified MB value.
-   -tc     Thread count threshold above which to create a dump of the process.
-   -fc     File descriptor count threshold above which to create a dump of the process.
-   -sig    Signal number to intercept to create a dump of the process.
-   -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).
-   -pf     Polling frequency.
-   -o      Overwrite existing dump file.
-   -log    Writes extended ProcDump tracing to syslog.
-   -w      Wait for the specified process to launch if it's not running.
-   -pgid   Process ID specified refers to a process group ID.
-
+.B procdump
+[
+.B -n
+.I count
+] [
+.B -s
+.I seconds
+] [
+.B -c|-cl
+.I CPU usage
+] [
+.B -m|-ml
+.I usage
+] [
+.B -tc
+.I threshold
+] [
+.B -fc
+.I threshold
+] [
+.B -sig
+.I number
+] [
+.B -e
+] [
+.B -f
+.I filter,...
+] [
+.B -pf
+.I frequency
+] [
+.B -o
+] [
+.B -log
+] [[ [
+.B -w
+.I name
+]
+| [
+.B -pgid
+.I pid
+]
+] [
+.I file
+|
+.I folder
+]]
 .SH DESCRIPTION
 procdump is a Linux reimagining of the class ProcDump tool from the Sysinternals suite of tools for Windows. Procdump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
+.SH OPTIONS
+.TP
+.B -n
+Number of dumps to write before exiting.
+.TP
+.B -s
+Consecutive seconds before dump is written (default is 10).
+.TP
+.B -c
+CPU threshold above which to create a dump of the process.
+.TP
+.B -cl
+CPU threshold below which to create a dump of the process.
+.TP
+.B -m
+Memory commit threshold in MB at which to create a dump.
+.TP
+.B -ml
+Trigger when memory commit drops below specified MB value.
+.TP
+.B -tc
+Thread count threshold above which to create a dump of the process.
+.TP
+.B -fc
+File descriptor count threshold above which to create a dump of the process.
+.TP
+.B -sig
+Signal number to intercept to create a dump of the process.
+.TP
+.B -e
+[.NET] Create dump when the process encounters an exception.
+.TP
+.B -f
+[.NET] Filter (include) on the (comma separated) exception name(s).
+.TP
+.B -pf
+Polling frequency.
+.TP
+.B -o
+Overwrite existing dump file.
+.TP
+.B -log
+Writes extended ProcDump tracing to syslog.
+.TP
+.B -w
+Wait for the specified process to launch if it's not running.
+.TP
+.B -pgid
+Process ID specified refers to a process group ID.
+.SH COPYRIGHT
+Copyright (C) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
