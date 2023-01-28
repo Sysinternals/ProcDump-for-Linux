@@ -1477,7 +1477,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
             }
            else if(status=='H')
             {
-                Trace("WaitForProfilerCompletion: Recieved health check ping from profiler");
+                Trace("WaitForProfilerCompletion: Received health check ping from profiler");
             }
 
             free(dump);
