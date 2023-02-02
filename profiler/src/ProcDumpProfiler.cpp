@@ -589,7 +589,7 @@ std::string CorProfiler::GetProcessName()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GetDumpName
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
+std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionName)
 {
     LOG(TRACE) << "CorProfiler::GetDumpName: Enter";
     std::ostringstream tmp;
@@ -616,7 +616,7 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
         strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
         LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
 
-        tmp << fullDumpPath << processName.c_str() << "_exception_" << date;
+        tmp << fullDumpPath << processName.c_str() << "_" << dumpCount << "_" << exceptionName << "_" << date;
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
     }
     else
@@ -640,7 +640,8 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount)
 HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 {
     LOG(TRACE) << "CorProfiler::ExceptionThrown: Enter";
-
+    
+    String exceptionNameAndMsg;
     String exceptionName = GetExceptionName(thrownObjectId);
     if(exceptionName.Length() == 0)
     {
@@ -648,9 +649,22 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
         return E_FAIL;
     }
 
-    LOG(TRACE) << "CorProfiler::ExceptionThrown: exception name: " << exceptionName.ToCStr();
-  
-    WCHAR* exceptionWCHARs = getWCHARs(exceptionName);
+    String exceptionMsg = GetExceptionMessage(thrownObjectId);
+    
+    if(exceptionMsg.Length() == 0)
+    {
+        exceptionNameAndMsg += exceptionName;
+        LOG(TRACE) << "CorProfiler::ExceptionThrown: exception name: " << exceptionNameAndMsg.ToCStr();
+    }
+    else
+    {
+        exceptionNameAndMsg += exceptionName;
+        exceptionNameAndMsg += WCHAR(": ");
+        exceptionNameAndMsg += exceptionMsg;
+        LOG(TRACE) << "CorProfiler::ExceptionThrown: exception name: " << exceptionNameAndMsg.ToCStr();
+    }
+
+    WCHAR* exceptionWCHARs = getWCHARs(exceptionNameAndMsg);
 
     // Check to see if we have any matches on exceptions
     for (auto & element : exceptionMonitorList)
@@ -677,7 +691,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
             LOG(TRACE) << "CorProfiler::ExceptionThrown: Starting dump generation for exception " << exceptionName.ToCStr() << " with dump count set to " << std::to_string(element.dumpsToCollect);
 
-            std::string dump = GetDumpName(element.collectedDumps);
+            std::string dump = GetDumpName(element.collectedDumps,convertString<std::string,std::wstring>(exceptionName.ToWString()));
 
             // Invoke coreclr dump generation
             char* socketName = NULL;
@@ -815,6 +829,161 @@ String CorProfiler::GetExceptionName(ObjectID objectId)
 
     LOG(TRACE) << "CorProfiler::GetExceptionName: Exit";
     return name;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetExceptionMesssage
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+String CorProfiler::GetExceptionMessage(ObjectID objectId)
+{
+    LOG(TRACE) << "CorProfiler::GetExceptionMessage: Enter with objectId =" << objectId;
+
+    ClassID classId;
+    ClassID parentClassId = NULL;
+    ClassID systemExceptionClassId = NULL;
+    ModuleID moduleId;
+    mdTypeDef typeDefToken;
+    IMetaDataImport* metadata = NULL;
+    ULONG read = 0;
+    WCHAR exceptionName[256];
+    ULONG fieldCount;
+    COR_FIELD_OFFSET* pFieldOffsets = NULL;
+    WCHAR fieldName[256];
+    ULONG stringLengthOffset;
+    ULONG stringBufferOffset;
+    LONG_PTR msgField;
+    INT32 stringLength;
+    WCHAR * stringBuffer = NULL;
+    String msg;
+
+    HRESULT hRes = corProfilerInfo8->GetClassFromObject(objectId, &classId);
+    if(FAILED(hRes))
+    {
+        LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassFromObject " << hRes;
+        return WCHAR("");
+    }
+
+    //
+    // Loop to find the classId for "System.Exception"
+    //
+    do
+    {
+        hRes = corProfilerInfo8->GetClassIDInfo2(classId, &moduleId, &typeDefToken, &parentClassId, 0, nullptr, nullptr);
+        if(FAILED(hRes))
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassIDInfo2 " << hRes;
+            return WCHAR("");
+        }
+    
+        hRes = corProfilerInfo8->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**) (&metadata));
+        if(FAILED(hRes))
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetModuleMetaData " << hRes;
+            return WCHAR("");
+        }
+    
+        hRes = metadata->GetTypeDefProps(typeDefToken, exceptionName, 256, &read, NULL, NULL);
+        if(FAILED(hRes))
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetTypeDefProps " << hRes;
+            metadata->Release();
+            return WCHAR("");
+        }
+        
+        if(wcscmp(u"System.Exception",exceptionName)==0)
+        {
+            systemExceptionClassId = classId;
+            break;
+        }
+        else
+        {
+            classId = parentClassId;
+        }
+    }while(parentClassId != NULL);
+
+    if(systemExceptionClassId != NULL)
+    {
+        hRes = corProfilerInfo8->GetClassLayout(systemExceptionClassId, NULL, 0, &fieldCount, NULL);;
+        if(FAILED(hRes))
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassLayout " << hRes;
+            if(metadata != NULL) metadata->Release();
+            return WCHAR("");
+        } 
+        if(fieldCount == 0) 
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: GetClassLayout returned zero fieldCount";
+            if(metadata != NULL) metadata->Release();
+            return WCHAR("");            
+        }     
+
+        pFieldOffsets = new COR_FIELD_OFFSET[fieldCount];
+        if(pFieldOffsets==NULL)
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed memory allocation for pFieldOffsets";
+            if(metadata != NULL) metadata->Release();
+            return WCHAR("");;
+        }
+        
+        hRes = corProfilerInfo8->GetClassLayout(systemExceptionClassId, pFieldOffsets, fieldCount, &fieldCount, NULL);
+        if(FAILED(hRes))
+        {
+            LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassLayout " << hRes;
+            if(metadata != NULL) metadata->Release();
+            delete pFieldOffsets;
+            return WCHAR("");
+        }      
+
+        //
+        // Loop to lcoate the "_message" field
+        // Get stringLength from the "_message" field stringLengthOffset
+        // Copy the number of (stringLength+1) WCHARs from the "_message" field stringBufferOffset to our stringBuffer 
+        //
+        for (ULONG fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++)
+        {
+            hRes = metadata->GetFieldProps(pFieldOffsets[fieldIndex].ridOfField, NULL, fieldName, 256, NULL, NULL, 
+                                    NULL, NULL, NULL, NULL, NULL);
+            if(FAILED(hRes))
+            {
+                LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetFieldProps " << hRes;
+                if(metadata != NULL) metadata->Release();
+                delete pFieldOffsets;
+                return WCHAR("");
+            }   
+
+            if(wcscmp(u"_message",fieldName)==0)
+            {
+                hRes = corProfilerInfo8->GetStringLayout2(&stringLengthOffset, &stringBufferOffset);
+                if(FAILED(hRes))
+                {
+                    LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetStringLayout2 " << hRes;
+                    if(metadata != NULL) metadata->Release();
+                    delete pFieldOffsets;
+                    return WCHAR("");
+                }  
+                msgField = *(PLONG_PTR)(((BYTE *)objectId) + pFieldOffsets[fieldIndex].ulOffset);
+                stringLength = *(PINT32)((BYTE *)msgField + stringLengthOffset);
+                stringBuffer = new WCHAR[stringLength+1];
+                if(stringBuffer==NULL)
+                {
+                    LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed memory allocation for stringBuffer";
+                    if(metadata != NULL) metadata->Release();
+                    delete pFieldOffsets;
+                    return WCHAR("");;
+                }
+                memcpy(stringBuffer, (BYTE *)msgField+stringBufferOffset,(stringLength+1)*sizeof(WCHAR));
+                msg+=stringBuffer;
+                break;
+            }
+        }
+    }
+
+    if(metadata != NULL) metadata->Release();
+    if(pFieldOffsets != NULL) delete pFieldOffsets;
+    if(stringBuffer != NULL) delete stringBuffer;
+
+    LOG(TRACE) << "CorProfiler::GetExceptionMessage: Exit";
+    return msg;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -109,9 +109,10 @@ private:
     pthread_mutex_t endDumpCondition;
 
     String GetExceptionName(ObjectID objectId);
+    String GetExceptionMessage(ObjectID objectId);
     bool ParseClientData(char* fw);
     WCHAR* GetUint16(char* buffer);
-    std::string GetDumpName(uint16_t dumpCount);
+    std::string GetDumpName(uint16_t dumpCount,std::string exceptionName);
     std::string GetProcessName();
     bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
     bool IsCoreClrProcess(pid_t pid, char** socketName);
