@@ -5,10 +5,11 @@ TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
 cd $TESTWEBAPIPATH
+rm -rf *TestWebApi_exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sleep 10s
-sudo $PROCDUMPPATH -e TestWebApi testdump&
+sudo $PROCDUMPPATH -e TestWebApi&
 PDPID=$!
 sudo kill -2 ${PDPID}
 popd
