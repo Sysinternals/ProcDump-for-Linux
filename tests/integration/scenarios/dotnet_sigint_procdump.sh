@@ -5,7 +5,7 @@ TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
 cd $TESTWEBAPIPATH
-rm -rf *TestWebApi_exception*
+rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sleep 10s

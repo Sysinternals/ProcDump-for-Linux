@@ -5,7 +5,7 @@ TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
 cd $TESTWEBAPIPATH
-rm -rf *TestWebApi_exception*
+rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sudo $PROCDUMPPATH -e -f on*Existing -w TestWebApi&
@@ -14,10 +14,10 @@ sleep 30s
 wget http://localhost:5032/throwinvalidoperation
 
 sudo pkill -9 procdump
-COUNT=( $(ls *TestWebApi_exception* | wc -l) )
+COUNT=( $(ls *TestWebApi_*Exception* | wc -l) )
 
 if [[ "$COUNT" -ne 0 ]]; then
-    rm -rf *TestWebApi_exception*
+    rm -rf *TestWebApi_*Exception*
     sudo pkill -9 TestWebApi
     popd
     exit 1
