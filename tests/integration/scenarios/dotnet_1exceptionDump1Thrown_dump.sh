@@ -5,15 +5,30 @@ TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 
 pushd .
 cd $TESTWEBAPIPATH
+rm -rf *TestWebApi_exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
-sleep 10s
-sudo $PROCDUMPPATH -e -f System.InvalidOperationException TestWebApi testdump&
-sleep 5s
-wget http://localhost:5032/throwinvalidoperation
-sleep 5s
-if [ -f "testdump_0" ]; then
-    rm -rf testdump_0
+sudo $PROCDUMPPATH -e -f System.InvalidOperationException -w TestWebApi&
+i=0
+while ! wget http://localhost:5032/throwinvalidoperation
+do
+    if [ -f *TestWebApi_exception* ]; then
+        break
+    fi
+
+    ((i=i+1))
+    if [[ "$i" -gt 10 ]]; then
+        break
+    fi
+
+    sleep 5s
+done
+
+sudo pkill -9 procdump
+COUNT=( $(ls *TestWebApi_exception* | wc -l) )
+
+if [[ "$COUNT" -eq 1 ]]; then
+    rm -rf *TestWebApi_exception*
     popd
 
     #check to make sure profiler so is unloaded
