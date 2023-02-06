@@ -34,7 +34,7 @@ function runProcDumpAndValidate {
 		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $childpid $dumpParam "
 		echo [`date +"%T.%3N"`] Starting ProcDump
-		$PROCDUMPPATH $2 $3 $childpid $dumpParam&
+		$PROCDUMPPATH -log $2 $3 $childpid $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
 		sleep 10s
@@ -58,7 +58,7 @@ function runProcDumpAndValidate {
 		# We launch procdump in background and wait for 10 secs to complete the monitoring
 		echo "$PROCDUMPPATH $2 $3 $dumpParam $TESTPROGNAME"
 		echo [`date +"%T.%3N"`] Starting ProcDump
-		$PROCDUMPPATH $2 $3 $dumpParam "$TESTPROGNAME"&
+		$PROCDUMPPATH -log $2 $3 $dumpParam "$TESTPROGNAME"&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
 		sleep 10s

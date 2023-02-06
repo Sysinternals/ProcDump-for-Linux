@@ -460,6 +460,9 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
         return -1;
     }
 
+    // make sure the procdump listening on sockect before try to connect 
+    while(access(tmpFolder,F_OK)!=0) usleep(10);
+
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Trying to connect...";
 
     remote.sun_family = AF_UNIX;

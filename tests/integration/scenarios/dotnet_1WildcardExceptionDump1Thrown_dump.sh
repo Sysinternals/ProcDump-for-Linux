@@ -8,21 +8,25 @@ cd $TESTWEBAPIPATH
 rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
-sudo $PROCDUMPPATH -e -f Invali*xception -w TestWebApi&
-i=0
-while ! wget http://localhost:5032/throwinvalidoperation
-do
-    if [ -f *TestWebApi_*Exception* ]; then
-        break
-    fi
 
+#waiting TestWebApi ready to service
+i=0
+wget http://localhost:5032/throwinvalidoperation
+while  [ $? -ne 8 ]
+do
     ((i=i+1))
     if [[ "$i" -gt 10 ]]; then
-        break
+        pkill -9 TestWebApi
+        popd
+        exit 1
     fi
-
-    sleep 5s
+    sleep 3s
+    wget http://localhost:5032/throwinvalidoperation
 done
+
+sudo $PROCDUMPPATH -log -e -f Invali*xception -w TestWebApi&
+sleep 6s
+wget http://localhost:5032/throwinvalidoperation
 
 sudo pkill -9 procdump
 COUNT=( $(ls *TestWebApi_*Exception* | wc -l) )

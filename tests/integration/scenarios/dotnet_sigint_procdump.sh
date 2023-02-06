@@ -9,7 +9,7 @@ rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
 sleep 10s
-sudo $PROCDUMPPATH -e TestWebApi&
+sudo $PROCDUMPPATH -log -e TestWebApi&
 PDPID=$!
 sudo kill -2 ${PDPID}
 popd
