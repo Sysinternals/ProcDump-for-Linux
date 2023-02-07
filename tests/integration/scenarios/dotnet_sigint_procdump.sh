@@ -8,15 +8,78 @@ cd $TESTWEBAPIPATH
 rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
 TESTPID=$!
-sleep 10s
+
+#waiting TestWebApi ready to service
+i=0
+wget http://localhost:5032/throwinvalidoperation
+while  [ $? -ne 8 ]
+do
+    ((i=i+1))
+    if [[ "$i" -gt 10 ]]; then
+        pkill -9 TestWebApi
+        popd
+        exit 1
+    fi
+    sleep 2s
+    wget http://localhost:5032/throwinvalidoperation
+done
+
 sudo $PROCDUMPPATH -log -e TestWebApi&
-PDPID=$!
-sudo kill -2 ${PDPID}
+PROCDUMPPID=$!
+
+i=0
+PROCDUMPCHILDPID=$(ps -o pid= --ppid ${PROCDUMPPID})
+while [ ! $PROCDUMPCHILDPID ]
+do
+    ((i=i+1))
+    if [[ "$i" -gt 10 ]]; then
+        pkill -9 TestWebApi
+        pkill -9 procdump
+        popd
+        exit 1
+    fi
+    sleep 1s
+    echo waiting for procdump child process started for about $i seconds...
+    PROCDUMPCHILDPID=$(ps -o pid= --ppid ${PROCDUMPPID})
+done
+
+TESTCHILDPID=$(ps -o pid= --ppid ${TESTPID})
+
+if [[ -v TMPDIR ]];
+then
+    TMPFOLDER=$TMPDIR
+else
+    TMPFOLDER="/tmp"
+fi
+PREFIXNAME="/procdump/procdump-status-"
+SOCKETPATH=$TMPFOLDER$PREFIXNAME$PROCDUMPCHILDPID"-"$TESTCHILDPID
+
+#make sure procdump ready to capture before kill it by checking if socket created
+i=0
+while  [ ! -S $SOCKETPATH ]
+do
+    ((i=i+1))
+    if [[ "$i" -gt 10 ]]; then
+        pkill -9 TestWebApi
+        pkill -9 procdump
+        popd
+        exit 1
+    fi
+    echo $SOCKETPATH 
+    sleep 1s
+done
+
+sudo kill -2 ${PROCDUMPPID}
 popd
-sleep 5s
+
+sleep 1s
+if [ -S $SOCKETPATH ];
+then 
+    rm $SOCKETPATH 
+fi
 
 #check to make sure profiler so is unloaded
-PROF="$(cat /proc/${TESTPID}/maps | awk '{print $6}' | grep '\procdumpprofiler.so' | uniq)"
+PROF="$(cat /proc/${TESTCHILDPID}/maps | awk '{print $6}' | grep '\procdumpprofiler.so' | uniq)"
 pkill -9 TestWebApi
 if [[ "$PROF" == "procdumpprofiler.so" ]]; then
     exit 1

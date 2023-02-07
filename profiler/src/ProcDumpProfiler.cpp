@@ -460,8 +460,20 @@ int CorProfiler::SendDumpCompletedStatus(std::string dump, char status)
         return -1;
     }
 
-    // make sure the procdump listening on sockect before try to connect 
-    while(access(tmpFolder,F_OK)!=0) usleep(10);
+    // make sure the procdump listening on sockect before try to connect
+    int retryCount = 0;
+    while(access(tmpFolder,F_OK)!=0)
+    {
+        usleep(10);
+        retryCount++;
+        if(retryCount == 5)
+        {
+            LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Socket path " << tmpFolder << " not found";
+            delete[] tmpFolder;
+            close(s);
+            return -1;
+        }
+    }
 
     LOG(TRACE) << "CorProfiler::SendDumpCompletedStatus: Trying to connect...";
 
@@ -901,12 +913,14 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
         else
         {
             classId = parentClassId;
+            metadata->Release();
+            metadata = NULL;
         }
     }while(parentClassId != NULL);
 
     if(systemExceptionClassId != NULL)
     {
-        hRes = corProfilerInfo8->GetClassLayout(systemExceptionClassId, NULL, 0, &fieldCount, NULL);;
+        hRes = corProfilerInfo8->GetClassLayout(systemExceptionClassId, NULL, 0, &fieldCount, NULL);
         if(FAILED(hRes))
         {
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassLayout " << hRes;
@@ -933,7 +947,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
         {
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassLayout " << hRes;
             if(metadata != NULL) metadata->Release();
-            delete pFieldOffsets;
+            delete [] pFieldOffsets;
             return WCHAR("");
         }      
 
@@ -950,7 +964,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             {
                 LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetFieldProps " << hRes;
                 if(metadata != NULL) metadata->Release();
-                delete pFieldOffsets;
+                delete [] pFieldOffsets;
                 return WCHAR("");
             }   
 
@@ -961,7 +975,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
                 {
                     LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetStringLayout2 " << hRes;
                     if(metadata != NULL) metadata->Release();
-                    delete pFieldOffsets;
+                    delete [] pFieldOffsets;
                     return WCHAR("");
                 }  
                 msgField = *(PLONG_PTR)(((BYTE *)objectId) + pFieldOffsets[fieldIndex].ulOffset);
@@ -971,7 +985,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
                 {
                     LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed memory allocation for stringBuffer";
                     if(metadata != NULL) metadata->Release();
-                    delete pFieldOffsets;
+                    delete [] pFieldOffsets;
                     return WCHAR("");;
                 }
                 memcpy(stringBuffer, (BYTE *)msgField+stringBufferOffset,(stringLength+1)*sizeof(WCHAR));
@@ -982,7 +996,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
     }
 
     if(metadata != NULL) metadata->Release();
-    if(pFieldOffsets != NULL) delete pFieldOffsets;
+    if(pFieldOffsets != NULL) delete [] pFieldOffsets;
     if(stringBuffer != NULL) delete stringBuffer;
 
     LOG(TRACE) << "CorProfiler::GetExceptionMessage: Exit";
