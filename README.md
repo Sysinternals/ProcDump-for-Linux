@@ -68,7 +68,7 @@ Options:
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).
+   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s).
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.
@@ -121,6 +121,14 @@ sudo procdump -sig 11 1234
 The following will create a core dump when the target .NET application throws a System.InvalidOperationException
 ```
 sudo procdump -e -f System.InvalidOperationException 1234
+```
+The include filter supports partial and wildcard matching, so the following will create a core dump too for a System.InvalidOperationException
+```
+sudo procdump -e -f InvalidOperation 1234
+```
+or
+```
+sudo procdump -e -f "*Invali*Operation*" 1234
 ```
 > All options can also be used with `-w`, to wait for any process with the given name.
 

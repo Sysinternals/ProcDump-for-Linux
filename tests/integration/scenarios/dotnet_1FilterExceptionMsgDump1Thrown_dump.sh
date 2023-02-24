@@ -24,7 +24,7 @@ do
     wget http://localhost:5032/throwinvalidoperation
 done
 
-sudo $PROCDUMPPATH -log -e -f System.InvalidOperationException -w TestWebApi&
+sudo $PROCDUMPPATH -log -e -f "current state" -w TestWebApi&
 PROCDUMPPID=$!
 
 i=0
@@ -69,7 +69,6 @@ do
     sleep 1s
 done
 
-wget http://localhost:5032/throwinvalidoperation
 wget http://localhost:5032/throwinvalidoperation
 
 sudo pkill -9 procdump

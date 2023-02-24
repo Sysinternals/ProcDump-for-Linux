@@ -85,6 +85,14 @@ inline int wcslwr(char16_t *str, size_t len)
 
 #endif // defined(__WIN32)
 
+template<typename TARGET, typename SOURCE>
+TARGET convertString(const SOURCE &s)
+{
+    TARGET result;
+    result.assign(s.begin(), s.end());
+    return result;
+}
+
 // 16 bit string type that works cross plat and doesn't require changing widths
 // on non-windows platforms
 class String

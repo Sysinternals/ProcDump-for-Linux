@@ -752,7 +752,7 @@ int PrintUsage()
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");
     printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
-    printf("   -f      [.NET] Filter (include) on the (comma seperated) exception name(s).\n");
+    printf("   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception messages(s).\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to syslog.\n");
