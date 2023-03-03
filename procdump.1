@@ -1,5 +1,5 @@
 .\" Manpage for procdump.
-.TH man 8 "12/12/2022" "1.4" "procdump manpage"
+.TH man 8 "3/3/2023" "1.4.1" "procdump manpage"
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
@@ -30,7 +30,7 @@ Options:
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s).
+   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s). Supports wildcards.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.

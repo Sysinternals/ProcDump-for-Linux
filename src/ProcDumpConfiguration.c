@@ -707,8 +707,8 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v1.4 - Sysinternals process dump utility\n");
-    printf("Copyright (C) 2022 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
+    printf("\nProcDump v1.4.1 - Sysinternals process dump utility\n");
+    printf("Copyright (C) 2023 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
 
@@ -752,7 +752,7 @@ int PrintUsage()
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");
     printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
-    printf("   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception messages(s).\n");
+    printf("   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception messages(s). Supports wildcards.\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to syslog.\n");
