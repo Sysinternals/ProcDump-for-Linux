@@ -54,6 +54,10 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Fri Mar 3 2023 Mario Hewardt <marioh@microsoft.com> - 1.4.1
+- added the capability to dump on .NET 1st chance exception messages
+- added wildcard support for .NET exception filters
+
 * Mon Dec 12 2022 Mario Hewardt <marioh@microsoft.com> - 1.4
 - added the capability to dump on .NET 1st chance exceptions (-e and -f)
 
