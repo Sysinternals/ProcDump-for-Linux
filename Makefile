@@ -63,7 +63,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 $(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
-$(OUT): $(OBJS) | $(BINDIR)
+$(OUT): $(OBJS) | $(BINDIR) $(OBJDIR)/ProcDumpProfiler.so
 	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS)
 
 $(TESTOUT): $(TESTOBJS) | $(BINDIR)
