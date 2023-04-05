@@ -40,7 +40,7 @@ struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDum
 //--------------------------------------------------------------------
 char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type)
 {
-    char *name = sanitize(procName);
+    auto_free char *name = sanitize(procName);
     time_t rawTime = {0};
     struct tm* timerInfo = NULL;
     char date[DATE_LENGTH];
@@ -287,12 +287,6 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
 
-
-            for(int j = 0; j < i; j++) {
-                free(outputBuffer[j]);
-            }
-            free(outputBuffer);
-
             rc = gcoreStatus;
         }
         else
@@ -323,6 +317,11 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
             }
         }
     }
+
+    for(int j = 0; j < i; j++) {
+        free(outputBuffer[j]);
+    }
+    free(outputBuffer);
 
     free(name);
 

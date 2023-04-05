@@ -30,7 +30,7 @@ sudo $PROCDUMPPATH -log -e -w TestWebApi&
 PROCDUMPPID=$!
 
 i=0
-PROCDUMPCHILDPID=$(ps -o pid= --ppid ${PROCDUMPPID})
+PROCDUMPCHILDPID=$(ps -o pid= -C "procdump" | tr -d ' ')
 while [ ! $PROCDUMPCHILDPID ]
 do
     ((i=i+1))
@@ -42,10 +42,10 @@ do
     fi
     sleep 1s
     echo waiting for procdump child process started for about $i seconds...
-    PROCDUMPCHILDPID=$(ps -o pid= --ppid ${PROCDUMPPID})
+    PROCDUMPCHILDPID=$(ps -o pid= -C "procdump" | tr -d ' ')
 done
 
-TESTCHILDPID=$(ps -o pid= --ppid ${TESTPID})
+TESTCHILDPID=$(ps -o pid= --ppid ${TESTPID} | tr -d ' ')
 
 if [[ -v TMPDIR ]];
 then
@@ -58,7 +58,7 @@ SOCKETPATH=$TMPFOLDER$PREFIXNAME$PROCDUMPCHILDPID"-"$TESTCHILDPID
 
 #make sure procdump ready to capture before throw exception by checking if socket created
 i=0
-while  [ ! -S $SOCKETPATH ]
+while [ ! -S $SOCKETPATH ]
 do
     ((i=i+1))
     if [[ "$i" -gt 10 ]]; then
@@ -67,7 +67,6 @@ do
         popd
         exit 1
     fi
-    echo $SOCKETPATH 
     sleep 1s
 done
 
@@ -76,8 +75,8 @@ wget http://localhost:5032/throwinvalidoperation
 sudo pkill -9 procdump
 COUNT=( $(ls *TestWebApi_*Exception* | wc -l) )
 if [ -S $SOCKETPATH ];
-then 
-    rm $SOCKETPATH 
+then
+    rm $SOCKETPATH
 fi
 
 if [[ "$COUNT" -eq 1 ]]; then

@@ -58,13 +58,13 @@ $(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/Proc
 	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
-	$(CC) -c -g -o $@ $< $(CCFLAGS)
+	$(CC) -c -g -o $@ $< $(CCFLAGS) $(OPT_CCFLAGS)
 
 $(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
 $(OUT): $(OBJS) | $(BINDIR)
-	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS)
+	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS) $(OPT_CCFLAGS)
 
 $(TESTOUT): $(TESTOBJS) | $(BINDIR)
 	$(CC) -o $@ $^ $(CCFLAGS)
