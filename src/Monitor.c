@@ -164,13 +164,18 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             // Set the process ID so the monitor can target.
             self->ProcessId = LookupProcessPidByName(g_config.ProcessName);
         }
-        else if (self->ProcessId != NO_PID && !LookupProcessByPid(self->ProcessId))
+        else
         {
-            Log(error, "No process matching the specified PID (%d) can be found.", self->ProcessId);
-            return;
+            if (self->ProcessId != NO_PID && LookupProcessByPid(self->ProcessId))
+            {
+                self->ProcessName = GetProcessName(self->ProcessId);
+            }
+            else
+            {
+                Log(error, "No process matching the specified PID (%d) can be found.", self->ProcessId);
+                return;
+            }
         }
-
-        self->ProcessName = GetProcessName(self->ProcessId);
 
         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
         item->config = CopyProcDumpConfiguration(self);
@@ -870,7 +875,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("CommitMonitoringThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -919,7 +924,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
     }
 
     Trace("ThreadCountMonitoringThread: Exiting Thread trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 
@@ -970,7 +975,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     }
 
     Trace("FileDescriptorCountMonitoringThread: Exiting Filedescriptor trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //
@@ -1075,7 +1080,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("SignalMonitoringThread: Exiting SignalMonitoring Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1138,7 +1143,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     }
 
     Trace("CpuTCpuMonitoringThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1176,7 +1181,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     }
 
     Trace("TimerThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1275,7 +1280,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //-------------------------------------------------------------------------------------

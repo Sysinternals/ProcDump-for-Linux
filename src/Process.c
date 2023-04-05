@@ -671,13 +671,17 @@ bool LookupProcessByPid(pid_t pid)
 //--------------------------------------------------------------------
 bool LookupProcessByPgid(pid_t pid)
 {
+    bool ret = false;
+
     // check to see if pid is an actual process running
-    if(pid != NO_PID) {
+    if(pid != NO_PID)
+    {
         struct dirent ** nameList;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
         // evaluate all running processes
-        for (int i = 0; i < numEntries; i++) {
+        for (int i = 0; i < numEntries; i++)
+        {
             pid_t procPid;
             if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
             pid_t procPgid;
@@ -685,12 +689,21 @@ bool LookupProcessByPgid(pid_t pid)
             procPgid = GetProcessPgid(procPid);
 
             if(procPgid != NO_PID && procPgid == pid)
-                return true;
+            {
+                ret = true;
+                break;
+            }
         }
+
+        for (int i = 0; i < numEntries; i++)
+        {
+            free(nameList[i]);
+        }
+        free(nameList);
     }
 
     // if we have ran through all the running processes then supplied PGID is invalid
-    return false;
+    return ret;
 }
 
 //--------------------------------------------------------------------
@@ -701,11 +714,13 @@ bool LookupProcessByPgid(pid_t pid)
 bool LookupProcessByName(const char *procName)
 {
     // check to see if name is an actual process running
+    bool ret = false;
     struct dirent ** nameList;
     int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
     // evaluate all running processes
-    for (int i = 0; i < numEntries; i++) {
+    for (int i = 0; i < numEntries; i++)
+    {
         pid_t procPid;
         if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
 
@@ -714,14 +729,21 @@ bool LookupProcessByName(const char *procName)
         if(processName && strcasecmp(processName, procName)==0)
         {
             free(processName);
-            return true;
+            ret = true;
+            break;
         }
 
         if(processName) free(processName);
     }
 
+    for (int i = 0; i < numEntries; i++)
+    {
+        free(nameList[i]);
+    }
+    free(nameList);
+
     // if we have ran through all the running processes then supplied PGID is invalid
-    return false;
+    return ret;
 }
 
 //--------------------------------------------------------------------
@@ -732,6 +754,7 @@ bool LookupProcessByName(const char *procName)
 pid_t LookupProcessPidByName(const char* name)
 {
     // check to see if name is an actual process running
+    pid_t ret = NO_PID;
     struct dirent ** nameList;
     int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
@@ -746,19 +769,25 @@ pid_t LookupProcessPidByName(const char* name)
             struct ProcessStat stat;
             free(procName);
 
-            if(!GetProcessStat(procPid, &stat))
+            if(GetProcessStat(procPid, &stat))
             {
-                return NO_PID;
+                ret = stat.pid;
             }
 
-            return stat.pid;
+            break;
         }
 
         if(procName) free(procName);
     }
 
+    for (int i = 0; i < numEntries; i++)
+    {
+        free(nameList[i]);
+    }
+    free(nameList);
+
     // if we have ran through all the running processes then supplied name is not found
-    return NO_PID;
+    return ret;
 }
 
 //--------------------------------------------------------------------
