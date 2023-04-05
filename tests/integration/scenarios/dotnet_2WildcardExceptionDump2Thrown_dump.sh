@@ -43,7 +43,7 @@ do
     PROCDUMPCHILDPID=$(ps -o pid= -C "procdump" | tr -d ' ')
 done
 
-TESTCHILDPID=$(ps -o pid= --ppid ${TESTPID} | tr -d ' ')
+TESTCHILDPID=$(ps -o pid= -C "TestWebApi" | tr -d ' ')
 
 if [[ -v TMPDIR ]];
 then
