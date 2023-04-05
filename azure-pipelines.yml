@@ -23,6 +23,8 @@ stages:
         displayName: 'Setup build environment'
       
       - template: templates/build.yaml
+        parameters:
+          ccopts: '-fsanitize=address'
 
       - script: |
           sudo ./tests/integration/run.sh
