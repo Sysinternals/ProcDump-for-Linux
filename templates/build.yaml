@@ -1,4 +1,10 @@
+parameters:
+- name: ccopts
+  type: string
+  default: ''
+
 steps:
 - script: |
+    export OPT_CCFLAGS=${{ parameters.ccopts }}
     make
   displayName: "Build ProcDump binaries"
