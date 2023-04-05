@@ -24,7 +24,7 @@ stages:
       
       - template: templates/build.yaml
         parameters:
-          ccopts: '-fsanitize=address'      
+          ccopts: '-fsanitize=address'
 
       - script: |
           sudo ./tests/integration/run.sh
