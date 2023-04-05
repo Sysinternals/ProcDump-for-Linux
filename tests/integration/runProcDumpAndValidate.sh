@@ -37,7 +37,7 @@ function runProcDumpAndValidate {
 		$PROCDUMPPATH -log $2 $3 $childpid $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
-		sleep 10s
+		sleep 30s
 		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
@@ -61,7 +61,7 @@ function runProcDumpAndValidate {
 		$PROCDUMPPATH -log $2 $3 $dumpParam "$TESTPROGNAME"&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
-		sleep 10s
+		sleep 30s
 		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
