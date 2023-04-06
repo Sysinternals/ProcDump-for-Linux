@@ -56,6 +56,9 @@ function waitforprocdumpsocket {
   prefixname="/procdump/procdump-status-"
   socketpath=$tmpfolder$prefixname$procdumpchildpid"-"$testchildpid
 
+  echo "ProcDump .NET status socket: "$socketpath
+  sudo ls /tmp/procdump
+
   i=0
   while [ ! -S $socketpath ]
   do
