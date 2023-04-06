@@ -1,3 +1,6 @@
+# Max number of seconds for programs to be available in test run.
+MAX_WAIT=60
+
 #
 # Waits until the specified URL is reachable.
 #
@@ -9,10 +12,10 @@ function waitforurl() {
   while  [ $? -ne 8 ]
   do
       ((i=i+1))
-      if [[ "$i" -gt 10 ]]; then
+      if [[ "$i" -gt $MAX_WAIT ]]; then
           return -1
       fi
-      sleep 2s
+      sleep 1s
       wget $url
   done
 
@@ -28,8 +31,9 @@ function waitforprocdump() {
   while [ ! $pid ]
   do
       ((i=i+1))
-      if [[ "$i" -gt 10 ]]; then
-          return -1
+      if [[ "$i" -gt $MAX_WAIT ]]; then
+          echo -1
+          return
       fi
       sleep 1s
       pid=$(ps -o pid= -C "procdump" | tr -d ' ')
@@ -44,6 +48,7 @@ function waitforprocdump() {
 function waitforprocdumpsocket {
   local procdumpchildpid=$1
   local testchildpid=$2
+  local -n result=$3
 
   ps -A -l
 
@@ -63,11 +68,16 @@ function waitforprocdumpsocket {
   while [ ! -S $socketpath ]
   do
       ((i=i+1))
-      if [[ "$i" -gt 20 ]]; then
-        return -1
+      if [[ "$i" -gt $MAX_WAIT ]]; then
+        sudo ls /tmp/procdump
+        echo "ProcDump .NET status socket not available within alloted time"
+        result=-1
+        return
       fi
       sleep 1s
   done
 
-  return 0
+  sudo ls /tmp/procdump
+  echo "ProcDump .NET status socket found"
+  result=$socketpath
 }
