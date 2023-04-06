@@ -22,7 +22,8 @@ fi
 sudo $PROCDUMPPATH -log -e -f System.NonExistingException -w TestWebApi&
 
 # waiting for procdump child process
-PROCDUMPCHILDPID=$(waitforprocdump)
+PROCDUMPCHILDPID=-1
+waitforprocdump PROCDUMPCHILDPID
 if [ $PROCDUMPCHILDPID -eq -1 ]; then
     pkill -9 TestWebApi
     pkill -9 procdump
@@ -35,13 +36,13 @@ TESTCHILDPID=$(ps -o pid= -C "TestWebApi" | tr -d ' ')
 #make sure procdump ready to capture before throw exception by checking if socket created
 SOCKETPATH=-1
 waitforprocdumpsocket "$PROCDUMPCHILDPID" "$TESTCHILDPID" SOCKETPATH
-echo "\n\nRETURN "$SOCKETPATH
 if [ $SOCKETPATH -eq -1 ]; then
     pkill -9 TestWebApi
     pkill -9 procdump
     popd
     exit 1
 fi
+echo "SOCKETPATH: "$SOCKETPATH
 
 wget http://localhost:5032/throwinvalidoperation
 

@@ -4,7 +4,7 @@ MAX_WAIT=60
 #
 # Waits until the specified URL is reachable.
 #
-function waitforurl() {
+function waitforurl {
   local url=$1
 
   i=0
@@ -25,21 +25,23 @@ function waitforurl() {
 #
 # Waits until the procdump child process has become available
 #
-function waitforprocdump() {
+function waitforprocdump {
+  local -n result=$1
+
   i=0
   pid=$(ps -o pid= -C "procdump" | tr -d ' ')
   while [ ! $pid ]
   do
       ((i=i+1))
       if [[ "$i" -gt $MAX_WAIT ]]; then
-          echo -1
+          result=-1
           return
       fi
       sleep 1s
       pid=$(ps -o pid= -C "procdump" | tr -d ' ')
   done
 
-  echo $pid
+  result=$pid
 }
 
 #
@@ -62,6 +64,7 @@ function waitforprocdumpsocket {
   socketpath=$tmpfolder$prefixname$procdumpchildpid"-"$testchildpid
 
   echo "ProcDump .NET status socket: "$socketpath
+  echo "List of ProcDump sockets:"
   sudo ls /tmp/procdump
 
   i=0
@@ -69,6 +72,7 @@ function waitforprocdumpsocket {
   do
       ((i=i+1))
       if [[ "$i" -gt $MAX_WAIT ]]; then
+        echo "List of ProcDump sockets:"
         sudo ls /tmp/procdump
         echo "ProcDump .NET status socket not available within alloted time"
         result=-1
