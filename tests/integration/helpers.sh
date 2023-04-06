@@ -52,7 +52,7 @@ function waitforprocdumpsocket {
   local testchildpid=$2
   local -n result=$3
 
-  ps -A -l
+  ps -A -l -T
 
   if [[ -v TMPDIR ]];
   then
