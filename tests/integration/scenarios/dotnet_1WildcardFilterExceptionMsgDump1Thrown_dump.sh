@@ -2,72 +2,44 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 PROCDUMPPATH=$(readlink -m "$DIR/../../../bin/procdump");
 TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
+HELPERS=$(readlink -m "$DIR/../helpers.sh");
+
+source $HELPERS
 
 pushd .
 cd $TESTWEBAPIPATH
 rm -rf *TestWebApi_*Exception*
 dotnet run --urls=http://localhost:5032&
-TESTPID=$!
 
-#waiting TestWebApi ready to service
-i=0
-wget http://localhost:5032/throwinvalidoperation
-while  [ $? -ne 8 ]
-do
-    ((i=i+1))
-    if [[ "$i" -gt 10 ]]; then
-        pkill -9 TestWebApi
-        popd
-        exit 1
-    fi
-    sleep 2s
-    wget http://localhost:5032/throwinvalidoperation
-done
+# waiting TestWebApi ready to service
+waitforurl http://localhost:5032/throwinvalidoperation
+if [ $? -eq -1 ]; then
+    pkill -9 TestWebApi
+    popds
+    exit 1
+fi
 
 sudo $PROCDUMPPATH -log -e -f "*current*sta*" -w TestWebApi&
-PROCDUMPPID=$!
 
-i=0
-PROCDUMPCHILDPID=$(ps -o pid= -C "procdump" | tr -d ' ')
-while [ ! $PROCDUMPCHILDPID ]
-do
-    ((i=i+1))
-    if [[ "$i" -gt 10 ]]; then
-        pkill -9 TestWebApi
-        pkill -9 procdump
-        popd
-        exit 1
-    fi
-    sleep 1s
-    echo waiting for procdump child process started for about $i seconds...
-    PROCDUMPCHILDPID=$(ps -o pid= -C "procdump" | tr -d ' ')
-done
+# waiting for procdump child process
+PROCDUMPCHILDPID=$(waitforprocdump)
+if [ $PROCDUMPCHILDPID -eq -1 ]; then
+    pkill -9 TestWebApi
+    pkill -9 procdump
+    popd
+    exit 1
+fi
 
 TESTCHILDPID=$(ps -o pid= -C "TestWebApi" | tr -d ' ')
 
-if [[ -v TMPDIR ]];
-then
-    TMPFOLDER=$TMPDIR
-else
-    TMPFOLDER="/tmp"
-fi
-PREFIXNAME="/procdump/procdump-status-"
-SOCKETPATH=$TMPFOLDER$PREFIXNAME$PROCDUMPCHILDPID"-"$TESTCHILDPID
-
 #make sure procdump ready to capture before throw exception by checking if socket created
-i=0
-while  [ ! -S $SOCKETPATH ]
-do
-    ((i=i+1))
-    if [[ "$i" -gt 10 ]]; then
-        pkill -9 TestWebApi
-        pkill -9 procdump
-        popd
-        exit 1
-    fi
-    echo $SOCKETPATH
-    sleep 1s
-done
+waitforprocdumpsocket $PROCDUMPCHILDPID $TESTCHILDPID
+if [ $? -eq -1 ]; then
+    pkill -9 TestWebApi
+    pkill -9 procdump
+    popd
+    exit 1
+fi
 
 wget http://localhost:5032/throwinvalidoperation
 
