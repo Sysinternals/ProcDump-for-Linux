@@ -159,6 +159,10 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     self->socketPath =                  NULL;
     self->statusSocket =                -1;
+
+    self->bSocketInitialized =          false;
+    pthread_mutex_init(&self->dotnetMutex, NULL);
+    pthread_cond_init(&self->dotnetCond, NULL);
 }
 
 //--------------------------------------------------------------------
@@ -178,6 +182,9 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     pthread_mutex_destroy(&self->ptrace_mutex);
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
+
+    pthread_mutex_destroy(&self->dotnetMutex);
+    pthread_cond_destroy(&self->dotnetCond);
 
     if(self->ProcessName)
     {
