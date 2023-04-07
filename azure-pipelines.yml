@@ -31,12 +31,14 @@ stages:
         displayName: 'Run unit tests'
 
       - task: CopyFiles@2
+        condition: always()
         inputs:
           Contents: '/var/log/syslog'
           TargetFolder: '$(Build.ArtifactStagingDirectory)/syslog'
         displayName: 'Copy syslog artifact to staging'
 
       - task: PublishBuildArtifacts@1
+        condition: always()
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)/syslog'
           ArtifactName: 'syslog'
