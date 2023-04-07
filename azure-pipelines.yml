@@ -22,7 +22,7 @@ stages:
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
 
-        - template: templates/build.yaml
+      - template: templates/build.yaml
         parameters:
           ccopts: '-fsanitize=address'
 
