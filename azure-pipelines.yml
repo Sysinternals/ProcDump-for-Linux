@@ -31,10 +31,10 @@ stages:
         displayName: 'Run unit tests'
 
       - script: |
-        condition: always()
           mkdir $(Build.ArtifactStagingDirectory)/syslog
           cp /var/log/syslog $(Build.ArtifactStagingDirectory)/syslog
         displayName: 'Copy syslog artifact to staging'
+        condition: always()
 
       - task: PublishBuildArtifacts@1
         condition: always()
