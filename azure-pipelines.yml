@@ -22,6 +22,10 @@ stages:
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
 
+      - script: |
+          ls /var/log/
+        displayName: 'Test'
+
       - template: templates/build.yaml
         parameters:
           ccopts: '-fsanitize=address'
