@@ -22,10 +22,6 @@ stages:
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
 
-      - script: |
-          ls /var/log/
-        displayName: 'Test'
-
       - template: templates/build.yaml
         parameters:
           ccopts: '-fsanitize=address'
@@ -34,11 +30,10 @@ stages:
           sudo ./tests/integration/run.sh
         displayName: 'Run unit tests'
 
-      - task: CopyFiles@2
+      - script: |
         condition: always()
-        inputs:
-          Contents: '/var/log/syslog'
-          TargetFolder: '$(Build.ArtifactStagingDirectory)/syslog'
+          mkdir $(Build.ArtifactStagingDirectory)/syslog
+          cp /var/log/syslog $(Build.ArtifactStagingDirectory)/syslog
         displayName: 'Copy syslog artifact to staging'
 
       - task: PublishBuildArtifacts@1
