@@ -118,6 +118,9 @@ struct ProcDumpConfiguration {
     struct TriggerThread Threads[MAX_TRIGGERS];
     struct Handle semAvailableDumpSlots;
     pthread_mutex_t ptrace_mutex;
+    pthread_cond_t dotnetCond;
+    pthread_mutex_t dotnetMutex;
+    bool bSocketInitialized;
 
     // Events
     // use these to mimic WaitForSingleObject/MultibleObjects from WinApi

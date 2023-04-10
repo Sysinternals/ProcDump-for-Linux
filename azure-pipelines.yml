@@ -21,14 +21,35 @@ stages:
           sudo apt update
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
-      
+
       - template: templates/build.yaml
         parameters:
           ccopts: '-fsanitize=address'
 
       - script: |
           sudo ./tests/integration/run.sh
-        displayName: 'Run unit tests'   
+        displayName: 'Run unit tests'
+
+      - script: |
+          mkdir $(Build.ArtifactStagingDirectory)/logs
+          cp /var/log/syslog $(Build.ArtifactStagingDirectory)/logs
+          cp /var/tmp/procdumpprofiler.log $(Build.ArtifactStagingDirectory)/logs
+        displayName: 'Copy log artifacts to staging'
+        condition: always()
+
+      - task: PublishBuildArtifacts@1
+        condition: always()
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)/logs/syslog'
+          ArtifactName: 'syslog'
+          publishLocation: 'Container'
+
+      - task: PublishBuildArtifacts@1
+        condition: always()
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)/logs/procdumpprofiler.log'
+          ArtifactName: 'procdumpprofiler.log'
+          publishLocation: 'Container'
 
     - job: "Build_ProcDump"
       pool:

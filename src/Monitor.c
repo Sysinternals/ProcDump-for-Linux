@@ -1269,6 +1269,14 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             return NULL;
         }
 
+        // Wait for the socket to be available from WaitForProfilerCompletion thread
+        pthread_mutex_lock(&config->dotnetMutex);
+        while(!config->bSocketInitialized)
+        {
+            pthread_cond_wait(&config->dotnetCond, &config->dotnetMutex);
+        }
+        pthread_mutex_unlock(&config->dotnetMutex);
+
         // Inject the profiler into the target process
         if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)!=0)
         {
@@ -1368,6 +1376,14 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
         config->socketPath = NULL;
         return NULL;
     }
+
+    //
+    // Notify that the socket is now available for the target process to communicate with
+    //
+    pthread_mutex_lock(&config->dotnetMutex);
+    config->bSocketInitialized = true;
+    pthread_cond_signal(&config->dotnetCond);
+    pthread_mutex_unlock(&config->dotnetMutex);
 
     while(true)
     {
