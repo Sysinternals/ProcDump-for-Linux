@@ -90,6 +90,11 @@ uint16_t* GetUint16(char* buffer)
     if(buffer!=NULL)
     {
         dumpFileNameW = malloc((strlen(buffer)+1)*sizeof(uint16_t));
+        if(dumpFileNameW==NULL)
+        {
+            return NULL;
+        }
+
         for(int i=0; i<(strlen(buffer)+1); i++)
         {
             dumpFileNameW[i] = (uint16_t) buffer[i];
@@ -208,6 +213,11 @@ char *sanitize(char * processName)
     }
 
     char *sanitizedProcessName = strdup(processName);
+    if(sanitizedProcessName==NULL)
+    {
+        return NULL;
+    }
+
     for (int i = 0; i < strlen(sanitizedProcessName); i++)
     {
         if (!isalnum(sanitizedProcessName[i]))

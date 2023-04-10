@@ -1,7 +1,7 @@
 ROOT=.
 CC=gcc
 CFLAGS ?= -Wall
-CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -D_FORTIFY_SOURCE=3
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -D_FORTIFY_SOURCE=3 -fanalyzer
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src

@@ -447,6 +447,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         {
             if( i+1 >= argc ) return PrintUsage();
             self->ExceptionFilter = strdup(argv[i+1]);
+            if(self->ExceptionFilter==NULL)
+            {
+                Log(error, INTERNAL_ERROR);
+                Trace("GetOptions: failed to strdup ExceptionFilter");
+                return -1;
+            }
             if( tolower( self->ExceptionFilter[0] ) >  'z' || ( self->ExceptionFilter[0] != '*' && tolower( self->ExceptionFilter[0] ) <  'a' ) ) return PrintUsage();
             i++;
         }
@@ -492,7 +498,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 {
 
                     self->ProcessName = strdup(argv[i]);
-
+                    if(self->ProcessName==NULL)
+                    {
+                        Log(error, INTERNAL_ERROR);
+                        Trace("GetOptions: failed to strdup ProcessName");
+                        return -1;
+                    }
                 } else
                 {
                     if(self->bProcessGroup)
@@ -517,6 +528,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             {
                 char *tempOutputPath = NULL;
                 tempOutputPath = strdup(argv[i]);
+                if(tempOutputPath==NULL)
+                {
+                    Log(error, INTERNAL_ERROR);
+                    Trace("GetOptions: failed to strdup tempOutputPath");
+                    return -1;
+                }
+
                 struct stat statbuf;
 
                 // Check if the user provided an existing directory or a path
@@ -529,8 +547,28 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 } else {
                     self->CoreDumpPath = strdup(dirname(tempOutputPath));
                     free(tempOutputPath);
+                    if(self->CoreDumpPath==NULL)
+                    {
+                        Log(error, INTERNAL_ERROR);
+                        Trace("GetOptions: failed to strdup CoreDumpPath");
+                        return -1;
+                    }
+
                     tempOutputPath = strdup(argv[i]);
+                    if(tempOutputPath==NULL)
+                    {
+                        Log(error, INTERNAL_ERROR);
+                        Trace("GetOptions: failed to strdup tempOutputPath");
+                        return -1;
+                    }
                     self->CoreDumpName = strdup(basename(tempOutputPath));
+                    if(self->CoreDumpName==NULL)
+                    {
+                        Log(error, INTERNAL_ERROR);
+                        Trace("GetOptions: failed to strdup CoreDumpName");
+                        return -1;
+                    }
+
                     free(tempOutputPath);
                 }
 
@@ -558,6 +596,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // If no path was provided, assume the current directory
     if (self->CoreDumpPath == NULL) {
         self->CoreDumpPath = strdup(".");
+        if(self->CoreDumpPath==NULL)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("GetOptions: failed to strdup CoreDumpPath");
+            return -1;
+        }
+
     }
 
     // Wait
