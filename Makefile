@@ -1,7 +1,7 @@
 ROOT=.
 CC=gcc
 CFLAGS ?= -Wall
-CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
