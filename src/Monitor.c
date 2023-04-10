@@ -178,6 +178,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         }
 
         item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+        if(item==NULL)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("MonitorProcesses: failed to allocate memory for item");
+            free(monitoredProcessMap);
+            ExitProcDump();
+            return;
+        }
+
         item->config = CopyProcDumpConfiguration(self);
 
         if(item->config == NULL)
@@ -257,6 +266,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            if(item==NULL)
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                free(monitoredProcessMap);
+                                ExitProcDump();
+                                return;
+                            }
+
                             item->config = CopyProcDumpConfiguration(self);
 
                             if(item->config == NULL)
@@ -308,6 +326,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            if(item==NULL)
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                free(monitoredProcessMap);
+                                ExitProcDump();
+                                return;
+                            }
+
                             item->config = CopyProcDumpConfiguration(self);
 
                             if(item->config == NULL)
