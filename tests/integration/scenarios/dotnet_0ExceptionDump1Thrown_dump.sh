@@ -37,7 +37,7 @@ TESTCHILDPID=$(ps -o pid= -C "TestWebApi" | tr -d ' ')
 
 #make sure procdump ready to capture before throw exception by checking if socket created
 SOCKETPATH=-1
-waitforprocdumpsocket "$PROCDUMPCHILDPID" "$TESTCHILDPID" SOCKETPATH
+waitforprocdumpsocket $PROCDUMPCHILDPID $TESTCHILDPID SOCKETPATH
 if [ $SOCKETPATH -eq -1 ]; then
     pkill -9 TestWebApi
     pkill -9 procdump
