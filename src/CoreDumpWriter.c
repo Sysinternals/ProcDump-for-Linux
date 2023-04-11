@@ -164,7 +164,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     char coreDumpFileName[PATH_MAX+1] = {0};
     auto_free char* gcorePrefixName = NULL;
     int  lineLength;
-    int  i;
+    int  i = 0;
     int  rc = 0;
     pid_t gcorePid;
     FILE *commandPipe = NULL;
@@ -316,12 +316,13 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
         }
+
+        for(int j = 0; j < i; j++) {
+            free(outputBuffer[j]);
+        }
+        free(outputBuffer);
     }
 
-    for(int j = 0; j < i; j++) {
-        free(outputBuffer[j]);
-    }
-    free(outputBuffer);
 
     free(name);
 

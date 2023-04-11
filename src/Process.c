@@ -683,7 +683,11 @@ bool LookupProcessByPgid(pid_t pid)
         for (int i = 0; i < numEntries; i++)
         {
             pid_t procPid;
-            if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+            if(!ConvertToInt(nameList[i]->d_name, &procPid))
+            {
+                continue;
+            }
+
             pid_t procPgid;
 
             procPgid = GetProcessPgid(procPid);
@@ -722,7 +726,10 @@ bool LookupProcessByName(const char *procName)
     for (int i = 0; i < numEntries; i++)
     {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* processName = GetProcessName(procPid);
 
@@ -761,7 +768,10 @@ pid_t LookupProcessPidByName(const char* name)
     // evaluate all running processes
     for (int i = 0; i < numEntries; i++) {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* procName = GetProcessName(procPid);
         if(procName && strcasecmp(name, procName)==0)

@@ -250,7 +250,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             for (int i = 0; i < numEntries; i++)
             {
                 pid_t procPid;
-                if(!ConvertToInt(nameList[i]->d_name, &procPid)) return;
+                if(!ConvertToInt(nameList[i]->d_name, &procPid))
+                {
+                    continue;
+                }
 
                 if(self->bProcessGroup)
                 {
