@@ -703,7 +703,10 @@ bool LookupProcessByPgid(pid_t pid)
         {
             free(nameList[i]);
         }
-        free(nameList);
+        if(numEntries!=-1)
+        {
+            free(nameList);
+        }
     }
 
     // if we have ran through all the running processes then supplied PGID is invalid
@@ -747,7 +750,10 @@ bool LookupProcessByName(const char *procName)
     {
         free(nameList[i]);
     }
-    free(nameList);
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
 
     // if we have ran through all the running processes then supplied PGID is invalid
     return ret;
@@ -792,9 +798,12 @@ pid_t LookupProcessPidByName(const char* name)
 
     for (int i = 0; i < numEntries; i++)
     {
-        free(nameList[i]);
+        free(nameList[i]);          // Note: Analyzer incorrectly states that there is a double-free here which is incorrect and can be ignored.
     }
-    free(nameList);
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
 
     // if we have ran through all the running processes then supplied name is not found
     return ret;
@@ -809,17 +818,18 @@ pid_t LookupProcessPidByName(const char* name)
 int GetMaximumPID()
 {
     auto_free_file FILE * pidMaxFile = NULL;
-    int maxPIDs;
+    int maxPIDs = -1;
 
     pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
+    if(pidMaxFile != NULL)
+    {
+        if(fscanf(pidMaxFile, "%d", &maxPIDs) == EOF)
+        {
+            maxPIDs = -1;
+        }
+    }
 
-    if(pidMaxFile != NULL){
-        fscanf(pidMaxFile, "%d", &maxPIDs);
-        return maxPIDs;
-    }
-    else {
-        return -1;
-    }
+    return maxPIDs;
 }
 
 //--------------------------------------------------------------------

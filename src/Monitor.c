@@ -380,7 +380,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             {
                 free(nameList[i]);
             }
-            free(nameList);
+            if(numEntries!=-1)
+            {
+                free(nameList);
+            }
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
             pthread_mutex_lock(&queue_mutex);

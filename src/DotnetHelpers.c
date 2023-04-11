@@ -41,26 +41,27 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     procFile = fopen("/proc/net/unix", "r");
     if(procFile != NULL)
     {
-        fgets(lineBuf, sizeof(lineBuf), procFile); // Skip first line with column headers.
-
-        while(fgets(lineBuf, 4096, procFile) != NULL)
+        if(fgets(lineBuf, sizeof(lineBuf), procFile) != NULL)
         {
-            char* ptr = GetPath(lineBuf);
-            if(ptr!=NULL)
+            while(fgets(lineBuf, 4096, procFile) != NULL)
             {
-                if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
+                char* ptr = GetPath(lineBuf);
+                if(ptr!=NULL)
                 {
-                    // Found the correct socket...copy the name to the out param
-                    *socketName = malloc(sizeof(char)*strlen(ptr)+1);
-                    if(*socketName!=NULL)
+                    if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
                     {
-                        memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
-                        if(strncpy(*socketName, ptr, sizeof(char)*strlen(ptr)+1)!=NULL)
+                        // Found the correct socket...copy the name to the out param
+                        *socketName = malloc(sizeof(char)*strlen(ptr)+1);
+                        if(*socketName!=NULL)
                         {
-                            Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", socketName);
-                            bRet = true;
+                            memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
+                            if(strcpy(*socketName, ptr) != NULL)
+                            {
+                                Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", socketName);
+                                bRet = true;
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
