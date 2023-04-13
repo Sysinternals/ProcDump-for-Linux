@@ -164,7 +164,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     char coreDumpFileName[PATH_MAX+1] = {0};
     auto_free char* gcorePrefixName = NULL;
     int  lineLength;
-    int  i;
+    int  i = 0;
     int  rc = 0;
     pid_t gcorePid;
     FILE *commandPipe = NULL;
@@ -247,9 +247,9 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         for(i = 0; i < MAX_LINES && fgets(lineBuffer, sizeof(lineBuffer), commandPipe) != NULL; i++) {
             lineLength = strlen(lineBuffer);                                // get # of characters read
 
-            outputBuffer[i] = (char*)malloc(sizeof(char) * lineLength);
+            outputBuffer[i] = (char*)malloc(sizeof(char) * lineLength+1);
             if(outputBuffer[i] != NULL) {
-                strncpy(outputBuffer[i], lineBuffer, lineLength - 1);           // trim newline off
+                strcpy(outputBuffer[i], lineBuffer);
                 outputBuffer[i][lineLength-1] = '\0';                           // append null character
             }
             else {
@@ -316,12 +316,13 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                 }
             }
         }
+
+        for(int j = 0; j < i; j++) {
+            free(outputBuffer[j]);
+        }
+        free(outputBuffer);
     }
 
-    for(int j = 0; j < i; j++) {
-        free(outputBuffer[j]);
-    }
-    free(outputBuffer);
 
     free(name);
 

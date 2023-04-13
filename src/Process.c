@@ -683,7 +683,11 @@ bool LookupProcessByPgid(pid_t pid)
         for (int i = 0; i < numEntries; i++)
         {
             pid_t procPid;
-            if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+            if(!ConvertToInt(nameList[i]->d_name, &procPid))
+            {
+                continue;
+            }
+
             pid_t procPgid;
 
             procPgid = GetProcessPgid(procPid);
@@ -699,7 +703,10 @@ bool LookupProcessByPgid(pid_t pid)
         {
             free(nameList[i]);
         }
-        free(nameList);
+        if(numEntries!=-1)
+        {
+            free(nameList);
+        }
     }
 
     // if we have ran through all the running processes then supplied PGID is invalid
@@ -722,7 +729,10 @@ bool LookupProcessByName(const char *procName)
     for (int i = 0; i < numEntries; i++)
     {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* processName = GetProcessName(procPid);
 
@@ -740,7 +750,10 @@ bool LookupProcessByName(const char *procName)
     {
         free(nameList[i]);
     }
-    free(nameList);
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
 
     // if we have ran through all the running processes then supplied PGID is invalid
     return ret;
@@ -761,7 +774,10 @@ pid_t LookupProcessPidByName(const char* name)
     // evaluate all running processes
     for (int i = 0; i < numEntries; i++) {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* procName = GetProcessName(procPid);
         if(procName && strcasecmp(name, procName)==0)
@@ -782,9 +798,15 @@ pid_t LookupProcessPidByName(const char* name)
 
     for (int i = 0; i < numEntries; i++)
     {
-        free(nameList[i]);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-double-free"
+        free(nameList[i]);          // Note: Analyzer incorrectly states that there is a double-free here which is incorrect and can be ignored.
+#pragma GCC diagnostic pop
     }
-    free(nameList);
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
 
     // if we have ran through all the running processes then supplied name is not found
     return ret;
@@ -799,17 +821,18 @@ pid_t LookupProcessPidByName(const char* name)
 int GetMaximumPID()
 {
     auto_free_file FILE * pidMaxFile = NULL;
-    int maxPIDs;
+    int maxPIDs = -1;
 
     pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
+    if(pidMaxFile != NULL)
+    {
+        if(fscanf(pidMaxFile, "%d", &maxPIDs) == EOF)
+        {
+            maxPIDs = -1;
+        }
+    }
 
-    if(pidMaxFile != NULL){
-        fscanf(pidMaxFile, "%d", &maxPIDs);
-        return maxPIDs;
-    }
-    else {
-        return -1;
-    }
+    return maxPIDs;
 }
 
 //--------------------------------------------------------------------

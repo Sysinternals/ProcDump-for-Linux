@@ -75,6 +75,13 @@ void InitProcDump()
     {
         int len = strlen(prefixTmpFolder) + strlen("/procdump") + 1;
         char* t = malloc(len);
+        if(t == NULL)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("InitProcDump: failed to allocate memory.");
+            exit(-1);
+        }
+
         sprintf(t, "%s%s", prefixTmpFolder, "/procdump");
         createDir(t, 0777);
         free(t);
