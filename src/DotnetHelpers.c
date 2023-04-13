@@ -51,10 +51,10 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
                     if(strncmp(ptr, tmpFolder, strlen(tmpFolder)) == 0)
                     {
                         // Found the correct socket...copy the name to the out param
-                        *socketName = malloc(sizeof(char)*strlen(ptr)+1);
+                        int len = strlen(ptr)+1;
+                        *socketName = calloc(len, sizeof(char));
                         if(*socketName!=NULL)
                         {
-                            memset(*socketName, 0, sizeof(char)*strlen(ptr)+1);
                             if(strcpy(*socketName, ptr) != NULL)
                             {
                                 Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", socketName);

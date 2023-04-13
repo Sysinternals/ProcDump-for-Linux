@@ -798,7 +798,10 @@ pid_t LookupProcessPidByName(const char* name)
 
     for (int i = 0; i < numEntries; i++)
     {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-double-free"
         free(nameList[i]);          // Note: Analyzer incorrectly states that there is a double-free here which is incorrect and can be ignored.
+#pragma GCC diagnostic pop
     }
     if(numEntries!=-1)
     {

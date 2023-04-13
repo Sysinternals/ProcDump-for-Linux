@@ -57,6 +57,4 @@ int main(int argc, char *argv[])
         // monitor for all specified processes
         MonitorProcesses(&g_config);
     }
-
-    ExitProcDump();
 }
