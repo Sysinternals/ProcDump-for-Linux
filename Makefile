@@ -1,5 +1,5 @@
 ROOT=.
-CC=gcc
+CC ?= gcc
 CFLAGS ?= -Wall
 CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -O2 -fanalyzer -Werror
 LIBDIR=lib

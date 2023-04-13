@@ -16,11 +16,18 @@ stages:
     - job: "ProcDump_Run_Unit_Tests"
       pool:
        vmImage: 'ubuntu-latest'
+      variables:
+       CC: gcc-10
       steps:
       - script: |
           sudo apt update
           sudo apt install -y gdb stress-ng zlib1g-dev
         displayName: 'Setup build environment'
+
+      - script: |
+          gcc --version
+          dpkg --list | grep compiler
+        displayName: 'List compiler versions'
 
       - template: templates/build.yaml
         parameters:
@@ -54,6 +61,8 @@ stages:
     - job: "Build_ProcDump"
       pool:
        vmImage: 'ubuntu-latest'
+      variables:
+       CC: gcc-10
       steps:
       - template: templates/build.yaml
       displayName: 'Build ProcDump'
