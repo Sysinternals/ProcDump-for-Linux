@@ -1,5 +1,5 @@
 # ProcDump [![Build Status](https://dev.azure.com/sysinternals/Tools/_apis/build/status/Sysinternals.ProcDump-for-Linux?branchName=master)](https://dev.azure.com/sysinternals/Tools/_build/latest?definitionId=341&branchName=master)
-ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
+ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers. ProcDump for Linux is part of [Sysinternals](https://sysinternals.com).
 
 ![ProcDump in use](procdump.gif "Procdump in use")
 
@@ -11,32 +11,12 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
   * Fedora 29
   * Ubuntu 16.04 LTS
 * `gdb` >= 7.6.1
-* `zlib` (build-time only)
-* `clang`
 
 ## Install ProcDump
-Checkout our [install instructions](INSTALL.md) for distribution specific steps to install Procdump.
+Please see installation instructions [here](INSTALL.md).
 
-## Build ProcDump from Scratch
-To build from scratch you'll need to have a C compiler (supporting C11), `zlib`, and a `make` utility installed. Then simply run:
-
-```
-make
-make install
-```
-
-### Building Procdump Packages
-The distribution packages for Procdump for Linux are constructed utilizing `debbuild` for Debian targets and `rpmbuild` for Fedora targets.
-
-To build a `deb` package of Procdump on Ubuntu simply run:
-```sh
-make && make deb
-```
-
-To build a `rpm` package of Procdump on Fedora simply run:
-```sh
-make && make rpm
-```
+## Build
+Please see build instructions [here](BUILD.md).
 
 ## Usage
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
@@ -161,4 +141,3 @@ Please see also our [Code of Conduct](CODE_OF_CONDUCT.md).
 Copyright (c) Microsoft Corporation. All rights reserved.
 
 Licensed under the MIT License.
-
