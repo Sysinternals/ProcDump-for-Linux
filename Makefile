@@ -64,7 +64,7 @@ $(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)
 
 $(OUT): $(OBJS) | $(BINDIR) $(OBJDIR)/ProcDumpProfiler.so
-	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS)
+	$(CC) -o $@ $^ $(OBJDIR)/ProcDumpProfiler.o $(CCFLAGS) $(OPT_CCFLAGS)
 
 $(TESTOUT): $(TESTOBJS) | $(BINDIR)
 	$(CC) -o $@ $^ $(CCFLAGS)
