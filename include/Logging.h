@@ -19,7 +19,7 @@
 #include <stdarg.h>
 #include <time.h>
 
-#define INTERNAL_ERROR "Internal Error has occurred. If problem continues to occur run procdump with -d flag to trace issue (traces go into syslog)"
+#define INTERNAL_ERROR "Internal Error has occurred. If problem continues to occur run procdump with -log flag to trace issue (traces go into syslog)"
 
 // double-macro-stringify to expand __FILE__ and __LINE__ properly when they are injected in files
 #define S1(x) #x
@@ -40,7 +40,7 @@ void Log(enum LogLevel logLevel, const char *message, ...);
 void DiagTrace(const char* message, ...);
 
 /*
- * Summary: Used similarly to printf, but requires a format string for all input.  
+ * Summary: Used similarly to printf, but requires a format string for all input.
  *          This macro appends line number and file information at the end of the format string and va_args.
  * Params:
  * - format: printf style format string literal

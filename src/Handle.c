@@ -184,12 +184,25 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
     int retVal;
 
     threads = (pthread_t *)malloc(sizeof(pthread_t) * Count);
-    thread_args = (struct thread_args **)malloc(sizeof(struct thread_args *) * Count);
+    if(threads==NULL)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("ERROR: Failed to malloc in %s\n",__FILE__);
+        exit(-1);
+    }
 
+    thread_args = (struct thread_args **)malloc(sizeof(struct thread_args *) * Count);
+    if(thread_args==NULL)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("ERROR: Failed to malloc in %s\n",__FILE__);
+        exit(-1);
+    }
 
     coordinator = (struct coordinator *)malloc(sizeof(struct coordinator));
     if (coordinator == NULL) {
-        printf("ERROR: Failed to malloc in %s\n",__FILE__);
+        Log(error, INTERNAL_ERROR);
+        Trace("ERROR: Failed to malloc in %s\n",__FILE__);
         exit(-1);
     }
 
@@ -226,8 +239,8 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
         thread_args[t]->coordinator = coordinator;
         rc = pthread_create(&threads[t], NULL, WaiterThread, (void *)thread_args[t]);
         if (rc) {
-            // uh oh :(
-            printf("ERROR: pthread_create failed in %s with error %d\n",__FILE__,rc);
+            Log(error, INTERNAL_ERROR);
+            Trace("ERROR: pthread_create failed in %s with error %d\n",__FILE__,rc);
             exit(-1);
         }
     }
@@ -274,5 +287,9 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
         retVal = (WaitAll) ? rc : results[0].retVal + results[0].threadIndex;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+    // Analyzer false positive: 'coordinator' is freed on a different thread.
     return retVal;
+#pragma GCC diagnostic pop
 }

@@ -671,26 +671,46 @@ bool LookupProcessByPid(pid_t pid)
 //--------------------------------------------------------------------
 bool LookupProcessByPgid(pid_t pid)
 {
+    bool ret = false;
+
     // check to see if pid is an actual process running
-    if(pid != NO_PID) {
+    if(pid != NO_PID)
+    {
         struct dirent ** nameList;
         int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
         // evaluate all running processes
-        for (int i = 0; i < numEntries; i++) {
+        for (int i = 0; i < numEntries; i++)
+        {
             pid_t procPid;
-            if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+            if(!ConvertToInt(nameList[i]->d_name, &procPid))
+            {
+                continue;
+            }
+
             pid_t procPgid;
 
             procPgid = GetProcessPgid(procPid);
 
             if(procPgid != NO_PID && procPgid == pid)
-                return true;
+            {
+                ret = true;
+                break;
+            }
+        }
+
+        for (int i = 0; i < numEntries; i++)
+        {
+            free(nameList[i]);
+        }
+        if(numEntries!=-1)
+        {
+            free(nameList);
         }
     }
 
     // if we have ran through all the running processes then supplied PGID is invalid
-    return false;
+    return ret;
 }
 
 //--------------------------------------------------------------------
@@ -701,27 +721,42 @@ bool LookupProcessByPgid(pid_t pid)
 bool LookupProcessByName(const char *procName)
 {
     // check to see if name is an actual process running
+    bool ret = false;
     struct dirent ** nameList;
     int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
     // evaluate all running processes
-    for (int i = 0; i < numEntries; i++) {
+    for (int i = 0; i < numEntries; i++)
+    {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* processName = GetProcessName(procPid);
 
         if(processName && strcasecmp(processName, procName)==0)
         {
             free(processName);
-            return true;
+            ret = true;
+            break;
         }
 
         if(processName) free(processName);
     }
 
+    for (int i = 0; i < numEntries; i++)
+    {
+        free(nameList[i]);
+    }
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
+
     // if we have ran through all the running processes then supplied PGID is invalid
-    return false;
+    return ret;
 }
 
 //--------------------------------------------------------------------
@@ -732,13 +767,17 @@ bool LookupProcessByName(const char *procName)
 pid_t LookupProcessPidByName(const char* name)
 {
     // check to see if name is an actual process running
+    pid_t ret = NO_PID;
     struct dirent ** nameList;
     int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
 
     // evaluate all running processes
     for (int i = 0; i < numEntries; i++) {
         pid_t procPid;
-        if(!ConvertToInt(nameList[i]->d_name, &procPid)) return false;
+        if(!ConvertToInt(nameList[i]->d_name, &procPid))
+        {
+            continue;
+        }
 
         char* procName = GetProcessName(procPid);
         if(procName && strcasecmp(name, procName)==0)
@@ -746,19 +785,31 @@ pid_t LookupProcessPidByName(const char* name)
             struct ProcessStat stat;
             free(procName);
 
-            if(!GetProcessStat(procPid, &stat))
+            if(GetProcessStat(procPid, &stat))
             {
-                return NO_PID;
+                ret = stat.pid;
             }
 
-            return stat.pid;
+            break;
         }
 
         if(procName) free(procName);
     }
 
+    for (int i = 0; i < numEntries; i++)
+    {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-double-free"
+        free(nameList[i]);          // Note: Analyzer incorrectly states that there is a double-free here which is incorrect and can be ignored.
+#pragma GCC diagnostic pop
+    }
+    if(numEntries!=-1)
+    {
+        free(nameList);
+    }
+
     // if we have ran through all the running processes then supplied name is not found
-    return NO_PID;
+    return ret;
 }
 
 //--------------------------------------------------------------------
@@ -770,17 +821,18 @@ pid_t LookupProcessPidByName(const char* name)
 int GetMaximumPID()
 {
     auto_free_file FILE * pidMaxFile = NULL;
-    int maxPIDs;
+    int maxPIDs = -1;
 
     pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
+    if(pidMaxFile != NULL)
+    {
+        if(fscanf(pidMaxFile, "%d", &maxPIDs) == EOF)
+        {
+            maxPIDs = -1;
+        }
+    }
 
-    if(pidMaxFile != NULL){
-        fscanf(pidMaxFile, "%d", &maxPIDs);
-        return maxPIDs;
-    }
-    else {
-        return -1;
-    }
+    return maxPIDs;
 }
 
 //--------------------------------------------------------------------

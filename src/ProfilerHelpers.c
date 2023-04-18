@@ -321,6 +321,7 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
     exceptionFilter = malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2+2)); // +1 for : seperator +1 for ; seperator +2 for 2 '*' wildcard
     if(exceptionFilter==NULL)
     {
+        free(cpy);
         return NULL;
     }
 

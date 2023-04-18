@@ -17,6 +17,8 @@ Source0:        %{url}/releases/download/%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  gcc, make
 
+%undefine _annotated_build
+
 %if "%{_vendor}" == "debbuild"
 BuildRequires:  zlib1g-dev
 %else

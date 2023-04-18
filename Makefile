@@ -1,7 +1,7 @@
 ROOT=.
-CC=gcc
+CC ?= gcc
 CFLAGS ?= -Wall
-CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -fanalyzer -Werror
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
@@ -58,7 +58,7 @@ $(OBJDIR)/ProcDumpProfiler.so: $(PROFSRCDIR)/ClassFactory.cpp $(PROFSRCDIR)/Proc
 	ld -r -b binary -o $(OBJDIR)/ProcDumpProfiler.o $(OBJDIR)/ProcDumpProfiler.so
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
-	$(CC) -c -g -o $@ $< $(CCFLAGS)
+	$(CC) -c -g -o $@ $< $(CCFLAGS) $(OPT_CCFLAGS)
 
 $(OBJDIR)/%.o: $(TESTDIR)/%.c | $(OBJDIR)
 	$(CC) -c -g -o $@ $< $(CCFLAGS)

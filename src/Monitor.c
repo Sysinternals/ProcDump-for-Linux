@@ -17,11 +17,30 @@ extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
 
-//--------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------
 //
 // SignalThread - Thread for handling graceful Async signals (e.g., SIGINT, SIGTERM)
 //
-//--------------------------------------------------------------------
+// Turn off address sanitation for this function as a result of a likely bug with pthread_cancel. The
+// incorrect error that the address sanitizer gives is:
+//==314250==AddressSanitizer CHECK failed: ../../../../src/libsanitizer/asan/asan_thread.cpp:367 "((ptr[0] == kCurrentStackFrameMagic)) != (0)" (0x0, 0x0)
+//    #0 0x7f6cd0a30988 in AsanCheckFailed ../../../../src/libsanitizer/asan/asan_rtl.cpp:74
+//    #1 0x7f6cd0a5130e in __sanitizer::CheckFailed(char const*, int, char const*, unsigned long long, unsigned long long) ../../../../src/libsanitizer/sanitizer_common/sanitizer_termination.cpp:78
+//    #2 0x7f6cd0a3610c in __asan::AsanThread::GetStackFrameAccessByAddr(unsigned long, __asan::AsanThread::StackFrameAccess*) ../../../../src/libsanitizer/asan/asan_thread.cpp:367
+//    #3 0x7f6cd09a0e9b in __asan::GetStackAddressInformation(unsigned long, unsigned long, __asan::StackAddressDescription*) ../../../../src/libsanitizer/asan/asan_descriptions.cpp:203
+//    #4 0x7f6cd09a22d8 in __asan::AddressDescription::AddressDescription(unsigned long, unsigned long, bool) ../../../../src/libsanitizer/asan/asan_descriptions.cpp:455
+//    #5 0x7f6cd09a22d8 in __asan::AddressDescription::AddressDescription(unsigned long, unsigned long, bool) ../../../../src/libsanitizer/asan/asan_descriptions.cpp:439
+//    #6 0x7f6cd09a4a84 in __asan::ErrorGeneric::ErrorGeneric(unsigned int, unsigned long, unsigned long, unsigned long, unsigned long, bool, unsigned long) ../../../../src/libsanitizer/asan/asan_errors.cpp:389
+//    #7 0x7f6cd0a2ffa5 in __asan::ReportGenericError(unsigned long, unsigned long, unsigned long, unsigned long, bool, unsigned long, unsigned int, bool) ../../../../src/libsanitizer/asan/asan_report.cpp:476
+//    #8 0x7f6cd09c6fe8 in __interceptor_sigaltstack ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:9986
+//    #9 0x7f6cd0a45867 in __sanitizer::UnsetAlternateSignalStack() ../../../../src/libsanitizer/sanitizer_common/sanitizer_posix_libcdep.cpp:195
+//    #10 0x7f6cd0a3560c in __asan::AsanThread::Destroy() ../../../../src/libsanitizer/asan/asan_thread.cpp:104
+//    #11 0x7f6cd07dc710 in __GI___nptl_deallocate_tsd nptl/nptl_deallocate_tsd.c:73
+//    #12 0x7f6cd07dc710 in __GI___nptl_deallocate_tsd nptl/nptl_deallocate_tsd.c:22
+//    #13 0x7f6cd07df9c9 in start_thread nptl/pthread_create.c:453
+//    #14 0x7f6cd08719ff  (/lib/x86_64-linux-gnu/libc.so.6+0x1269ff)
+//------------------------------------------------------------------------------------------------------
+__attribute__((no_sanitize("address")))
 void *SignalThread(void *input)
 {
     Trace("SignalThread: Enter");
@@ -35,58 +54,58 @@ void *SignalThread(void *input)
 
     switch (sig_caught)
     {
-    case SIGINT:
-        Trace("SignalThread: Got a SIGINT");
+        case SIGINT:
+            Trace("SignalThread: Got a SIGINT");
 
-        // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
-        pthread_mutex_lock(&queue_mutex);
-        TAILQ_FOREACH(item, &configQueueHead, element)
-        {
-            if(!IsQuit(item->config)) SetQuit(item->config, 1);
-
-            if(item->config->gcorePid != NO_PID) {
-                Log(info, "Shutting down gcore");
-                if((rc = kill(-item->config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
-                    Log(error, "Failed to shutdown gcore.");
-                }
-            }
-
-            // Need to make sure we detach from ptrace (if not attached it will silently fail)
-            // To avoid situations where we have intercepted a signal and CTRL-C is hit, we synchronize
-            // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
-            // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
-            // break it out of waitpid call.
-            if(item->config->SignalNumber != -1)
+            // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
+            pthread_mutex_lock(&queue_mutex);
+            TAILQ_FOREACH(item, &configQueueHead, element)
             {
-                for(int i=0; i<item->config->nThreads; i++)
-                {
-                    if(item->config->Threads[i].trigger == Signal)
-                    {
-                        pthread_mutex_lock(&item->config->ptrace_mutex);
-                        ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
-                        pthread_mutex_unlock(&item->config->ptrace_mutex);
+                if(!IsQuit(item->config)) SetQuit(item->config, 1);
 
-                        if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
-                            Log(error, "An error occurred while cancelling SignalMonitorThread.\n");
-                            exit(-1);
+                if(item->config->gcorePid != NO_PID) {
+                    Log(info, "Shutting down gcore");
+                    if((rc = kill(-item->config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
+                        Log(error, "Failed to shutdown gcore.");
+                    }
+                }
+
+                // Need to make sure we detach from ptrace (if not attached it will silently fail)
+                // To avoid situations where we have intercepted a signal and CTRL-C is hit, we synchronize
+                // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
+                // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
+                // break it out of waitpid call.
+                if(item->config->SignalNumber != -1)
+                {
+                    for(int i=0; i<item->config->nThreads; i++)
+                    {
+                        if(item->config->Threads[i].trigger == Signal)
+                        {
+                            pthread_mutex_lock(&item->config->ptrace_mutex);
+                            ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
+                            pthread_mutex_unlock(&item->config->ptrace_mutex);
+
+                            if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
+                                Log(error, "An error occurred while cancelling SignalMonitorThread.\n");
+                                exit(-1);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Log(info, "Quit");
-        SetQuit(&g_config, 1);                  // Make sure to signal the global config
-        pthread_mutex_unlock(&queue_mutex);
-        break;
+            Log(info, "Quit");
+            SetQuit(&g_config, 1);                  // Make sure to signal the global config
+            pthread_mutex_unlock(&queue_mutex);
+            break;
 
         default:
             Trace("Unexpected signal %d", sig_caught);
-        break;
+            break;
     }
 
     Trace("SignalThread: Exit");
-    exit(0);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -125,7 +144,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     {
         Log(error, INTERNAL_ERROR);
         Trace("CreateMonitorThreads: failed to allocate memory for monitorProcessMap.");
-        ExitProcDump();
         return;
     }
 
@@ -136,7 +154,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         Log(error, INTERNAL_ERROR);
         Trace("CreateMonitorThreads: failed to create SignalThread.");
         free(monitoredProcessMap);
-        ExitProcDump();
         return;
     }
 
@@ -164,15 +181,28 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             // Set the process ID so the monitor can target.
             self->ProcessId = LookupProcessPidByName(g_config.ProcessName);
         }
-        else if (self->ProcessId != NO_PID && !LookupProcessByPid(self->ProcessId))
+        else
         {
-            Log(error, "No process matching the specified PID (%d) can be found.", self->ProcessId);
+            if (self->ProcessId != NO_PID && LookupProcessByPid(self->ProcessId))
+            {
+                self->ProcessName = GetProcessName(self->ProcessId);
+            }
+            else
+            {
+                Log(error, "No process matching the specified PID (%d) can be found.", self->ProcessId);
+                return;
+            }
+        }
+
+        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+        if(item==NULL)
+        {
+            Log(error, INTERNAL_ERROR);
+            Trace("MonitorProcesses: failed to allocate memory for item");
+            free(monitoredProcessMap);
             return;
         }
 
-        self->ProcessName = GetProcessName(self->ProcessId);
-
-        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
         item->config = CopyProcDumpConfiguration(self);
 
         if(item->config == NULL)
@@ -180,7 +210,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to alloc struct for process.");
             free(monitoredProcessMap);
-            ExitProcDump();
             return;
         }
 
@@ -198,7 +227,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Trace("MonitorProcesses: Failed to start the monitor.");
             Log(error, "MonitorProcesses: Failed to start the monitor.");
             free(monitoredProcessMap);
-            ExitProcDump();
             return;
         }
 
@@ -236,7 +264,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             for (int i = 0; i < numEntries; i++)
             {
                 pid_t procPid;
-                if(!ConvertToInt(nameList[i]->d_name, &procPid)) return;
+                if(!ConvertToInt(nameList[i]->d_name, &procPid))
+                {
+                    continue;
+                }
 
                 if(self->bProcessGroup)
                 {
@@ -252,6 +283,14 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            if(item==NULL)
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                free(monitoredProcessMap);
+                                return;
+                            }
+
                             item->config = CopyProcDumpConfiguration(self);
 
                             if(item->config == NULL)
@@ -259,7 +298,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for process.");
                                 free(monitoredProcessMap);
-                                ExitProcDump();
                                 return;
                             }
 
@@ -279,7 +317,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
                                 free(monitoredProcessMap);
-                                ExitProcDump();
                                 return;
                             }
 
@@ -303,6 +340,14 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         {
                             // allocate for new queue entry
                             item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
+                            if(item==NULL)
+                            {
+                                Log(error, INTERNAL_ERROR);
+                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                free(monitoredProcessMap);
+                                return;
+                            }
+
                             item->config = CopyProcDumpConfiguration(self);
 
                             if(item->config == NULL)
@@ -310,7 +355,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for named process.");
                                 free(monitoredProcessMap);
-                                ExitProcDump();
                                 return;
                             }
 
@@ -330,7 +374,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
                                 free(monitoredProcessMap);
-                                ExitProcDump();
                                 return;
                             }
 
@@ -345,7 +388,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             {
                 free(nameList[i]);
             }
-            free(nameList);
+            if(numEntries!=-1)
+            {
+                free(nameList);
+            }
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
             pthread_mutex_lock(&queue_mutex);
@@ -363,7 +409,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             {
                 Log(error, INTERNAL_ERROR);
                 Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-                ExitProcDump();
                 return;
             }
 
@@ -427,7 +472,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             Log(error, INTERNAL_ERROR);
             Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
             free(monitoredProcessMap);
-            ExitProcDump();
             return;
         }
 
@@ -870,7 +914,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("CommitMonitoringThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -919,7 +963,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
     }
 
     Trace("ThreadCountMonitoringThread: Exiting Thread trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 
@@ -970,7 +1014,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     }
 
     Trace("FileDescriptorCountMonitoringThread: Exiting Filedescriptor trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //
@@ -1075,7 +1119,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("SignalMonitoringThread: Exiting SignalMonitoring Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1138,7 +1182,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     }
 
     Trace("CpuTCpuMonitoringThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1176,7 +1220,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     }
 
     Trace("TimerThread: Exiting Trigger Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //--------------------------------------------------------------------
@@ -1264,6 +1308,14 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             return NULL;
         }
 
+        // Wait for the socket to be available from WaitForProfilerCompletion thread
+        pthread_mutex_lock(&config->dotnetMutex);
+        while(!config->bSocketInitialized)
+        {
+            pthread_cond_wait(&config->dotnetCond, &config->dotnetMutex);
+        }
+        pthread_mutex_unlock(&config->dotnetMutex);
+
         // Inject the profiler into the target process
         if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)!=0)
         {
@@ -1275,7 +1327,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     }
 
     Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 //-------------------------------------------------------------------------------------
@@ -1363,6 +1415,14 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
         config->socketPath = NULL;
         return NULL;
     }
+
+    //
+    // Notify that the socket is now available for the target process to communicate with
+    //
+    pthread_mutex_lock(&config->dotnetMutex);
+    config->bSocketInitialized = true;
+    pthread_cond_signal(&config->dotnetCond);
+    pthread_mutex_unlock(&config->dotnetMutex);
 
     while(true)
     {
