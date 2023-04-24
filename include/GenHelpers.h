@@ -38,13 +38,24 @@ static inline void cleanup_void(void* val)
 //-------------------------------------------------------------------------------------
 // Auto clean up of file descriptors using close
 //-------------------------------------------------------------------------------------
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-fd-leak"
+#endif
 static inline void cleanup_fd(int* val)
 {
     if (*val)
     {
         close(*val);
     }
+    else
+    {
+        // Make static analyzer happy, otherwise it thinks we leak when *val == 0
+    }
 }
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic pop
+#endif
 
 //-------------------------------------------------------------------------------------
 // Auto clean up of dir using closedir

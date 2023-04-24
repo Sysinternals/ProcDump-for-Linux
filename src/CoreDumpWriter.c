@@ -245,9 +245,9 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
         // read all output from gcore command
         for(i = 0; i < MAX_LINES && fgets(lineBuffer, sizeof(lineBuffer), commandPipe) != NULL; i++) {
-            lineLength = strlen(lineBuffer);                                // get # of characters read
+            lineLength = strlen(lineBuffer) + 1;                                // get # of characters read
 
-            outputBuffer[i] = (char*)malloc(sizeof(char) * lineLength+1);
+            outputBuffer[i] = (char*)malloc(sizeof(char) * lineLength);
             if(outputBuffer[i] != NULL) {
                 strcpy(outputBuffer[i], lineBuffer);
                 outputBuffer[i][lineLength-1] = '\0';                           // append null character
