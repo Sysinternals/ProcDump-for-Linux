@@ -1550,7 +1550,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
     config->socketPath = NULL;
 
     Trace("WaitForProfilerCompletion: Exiting WaitForProfilerCompletion Thread");
-    pthread_exit(NULL);
+    return NULL;
 }
 
 

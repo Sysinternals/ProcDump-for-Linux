@@ -163,6 +163,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->nQuit =                       0;
     self->bDumpOnException =            false;
     self->bDumpOnException =            NULL;
+    self->ExceptionFilter =             NULL;
 
     self->socketPath =                  NULL;
     self->statusSocket =                -1;
@@ -452,7 +453,16 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/f" ) ||
                    0 == strcasecmp( argv[i], "-f" ))
         {
-            if( i+1 >= argc ) return PrintUsage();
+            if( i+1 >= argc || self->ExceptionFilter)
+            {
+                if(self->ExceptionFilter)
+                {
+                    free(self->ExceptionFilter);
+                }
+
+                return PrintUsage();
+            }
+
             self->ExceptionFilter = strdup(argv[i+1]);
             if(self->ExceptionFilter==NULL)
             {
@@ -460,7 +470,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 Trace("GetOptions: failed to strdup ExceptionFilter");
                 return -1;
             }
-            if( tolower( self->ExceptionFilter[0] ) >  'z' || ( self->ExceptionFilter[0] != '*' && tolower( self->ExceptionFilter[0] ) <  'a' ) ) return PrintUsage();
+            if( tolower( self->ExceptionFilter[0] ) >  'z' || ( self->ExceptionFilter[0] != '*' && tolower( self->ExceptionFilter[0] ) <  'a' ) )
+            {
+                free(self->ExceptionFilter);
+                return PrintUsage();
+            }
+
             i++;
         }
 

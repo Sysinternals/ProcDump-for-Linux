@@ -202,5 +202,12 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
         }
     }
 
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-fd-leak"
+#endif
     return bRet;
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic pop
+#endif
 }

@@ -66,7 +66,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     struct CLSID profilerGuid = {0};
     unsigned int clientDataSize = 0;
 
-    auto_free_fd int fd = 0;
+    auto_free_fd int fd = -1;
     auto_free char* socketName = NULL;
     auto_free char* clientData = NULL;
     auto_free char* dumpPath = NULL;
@@ -237,8 +237,15 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
         }
     }
 
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-fd-leak"
+#endif
     return 0;
 }
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic pop
+#endif
 
 //--------------------------------------------------------------------
 //

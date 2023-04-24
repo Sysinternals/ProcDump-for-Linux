@@ -195,7 +195,15 @@ FILE *popen2(const char *command, const char *type, pid_t *pid)
         }
 
     }
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-fd-leak"
+#endif
 }
+#if (__GNUC__ >= 13)
+#pragma GCC diagnostic pop
+#endif
+
 
 //--------------------------------------------------------------------
 //
