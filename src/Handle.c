@@ -179,9 +179,9 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
 
     struct timespec ts;
 
-    int t;
-    int rc;
-    int retVal;
+    int t = 0;
+    int rc = -1;
+    int retVal = -1;
 
     threads = (pthread_t *)malloc(sizeof(pthread_t) * Count);
     if(threads==NULL)
