@@ -61,7 +61,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
                         {
                             if(strcpy(*socketName, ptr) != NULL)
                             {
-                                Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", socketName);
+                                Trace("IsCoreClrProcess: CoreCLR diagnostics socket: %s", *socketName);
                                 bRet = true;
                             }
                             break;
@@ -106,7 +106,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
     {
         if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
         {
-            Trace("GenerateCoreClrDump: Failed to create socket for .NET Core dump generation.");
+            Trace("GenerateCoreClrDump: Failed to create socket for .NET Core dump generation [%d].", errno);
         }
         else
         {
@@ -117,7 +117,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
             if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
             {
-                Trace("GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation.");
+                Trace("GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation [%d].", errno);
             }
             else
             {

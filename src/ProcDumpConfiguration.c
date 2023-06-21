@@ -62,7 +62,7 @@ void InitProcDump()
     sigaddset (&sig_set, SIGTERM);
     pthread_sigmask (SIG_BLOCK, &sig_set, NULL);
 
-    auto_free char* prefixTmpFolder = NULL;
+    char* prefixTmpFolder = NULL;
 
     // Create the directories where our sockets will be stored
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
