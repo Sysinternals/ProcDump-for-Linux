@@ -5,9 +5,9 @@ Procdump is a powerful production diagnostics tool that allows you to monitor pr
 
 In order to understand how a core dump can help resolve production issues, we first have to understand what a core dump is. Essentially, a core dump is nothing more than a static snapshot of the contents of an applications memory. This content is written to a file that can later be loaded into a debugger and other tools to analyze the contents of memory and see if root cause can be determined. What makes core dumps great production debugging tools is that we don't have to worry about the application stopping while debugging is taking place (as is the case with live debugging where a debugger is attached to the application). How big are these dump files? Well, that depends on how much memory your application is consuming (remember, it roughly writes the contents of the application memory usage to the file). As you can imagine, if you are running a massive database application you could result in a core dump file that is many GB in size. Furthermore, on Linux, core dumps tend to be larger than on Windows. This presents a new challenge of how to effectively manage large core dump files. If you intend to copy the core dump file between production and development machines, it can be pretty time consuming.
 
-With the release of Procdump 1.1, we now recognize if the target application is a .NET Core application and use a special core dumping mechanism built into the runtime itself. This renders core dump files that are much smaller than normal while still maintaining all the neccessary information to troubleshoot the .NET Core application. You don't have to specify any new switches to use this new capability, Procdump automatically figures out if the capability is available and uses it.
+With the release of Procdump 1.1, we now recognize if the target application is a .NET application and use a special core dumping mechanism built into the runtime itself. This renders core dump files that are much smaller than normal while still maintaining all the neccessary information to troubleshoot the .NET application. You don't have to specify any new switches to use this new capability, Procdump automatically figures out if the capability is available and uses it.
 
-To get a feel for the size difference, let's take a look at a simple example. We created and ran a new .NET Core app using the webapp template:
+To get a feel for the size difference, let's take a look at a simple example. We created and ran a new .NET app using the webapp template:
 
 ```console
 dotnet new webapp -o TestWebApp
@@ -28,7 +28,7 @@ Using the same web app, let's use Procdump **1.1** to generate the core dump. Th
 
 _Please note that by default the core dump will be placed into the same directory that the target application is running in._
 
-This time the core dump file size is only about 273MB. Much better and much more managable. To convince ourselves that the core dump still contains all the neccessary data to debug .NET Core applications, we can try it out with dotnet-dump analyze (which is a REPL for SOS debugging):
+This time the core dump file size is only about 273MB. Much better and much more managable. To convince ourselves that the core dump still contains all the neccessary data to debug .NET  applications, we can try it out with dotnet-dump analyze (which is a REPL for SOS debugging):
 
 ```console
 dotnet-dump analyze TestWebApp_time_2019-12-04_11:44:03.3066
@@ -49,7 +49,7 @@ Total 32581 objects
 
 How does Procdump achieve this magic? Turns out that .NET introduced the notion of a diagnostics server which at a high level enables external (out of process) tools to send diagnostics commands to the target process. In our case, we used the dump commands that are available but you can also use the diagnostics server to issue trace commands. For more information, please see the following documentation:
 
-[.NET Core Diagnostics](https://github.com/dotnet/diagnostics)
+[.NET Diagnostics](https://github.com/dotnet/diagnostics)
 
 ## Monitoring for exceptions
 Often times, it's super useful to be able to get a core dump when a .NET application throws an exception. Starting in ProcDump **1.4** it now has the capability to do so by using the

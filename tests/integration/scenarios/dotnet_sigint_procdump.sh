@@ -56,6 +56,7 @@ fi
 #check to make sure profiler so is unloaded
 PROF="$(cat /proc/${TESTCHILDPID}/maps | awk '{print $6}' | grep '\procdumpprofiler.so' | uniq)"
 pkill -9 TestWebApi
+pkill -9 procdump
 if [[ "$PROF" == "procdumpprofiler.so" ]]; then
     exit 1
 else
