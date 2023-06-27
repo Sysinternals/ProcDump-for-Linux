@@ -72,7 +72,7 @@ bool CorProfiler::WildcardSearch(WCHAR* szClassName, WCHAR* szSearch)
         free(szClassLowerMalloc);
         return false;
     }
-    
+
     WCHAR* szClassLower = szClassLowerMalloc;
     wcscpy(szClassLower, (wcslen(szClassName)+1), szClassName);
     wcslwr(szClassLower, (wcslen(szClassName)+1));
@@ -160,7 +160,7 @@ ContinueWildcard:
         szClassLower += (ss + cc);
     }
 
-    // Do we have a trailing wildcard? 
+    // Do we have a trailing wildcard?
     // This happens when Class = ABC.XYZ and Search = *XYZ*
     // Needed as the trailing wildcard code (above) doesn't run after the ss/cc search as Class is null
     while (*szSearchLower == u'*')
@@ -655,7 +655,7 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionNa
 HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 {
     LOG(TRACE) << "CorProfiler::ExceptionThrown: Enter";
-    
+
     String exceptionNameAndMsg;
     String exceptionName = GetExceptionName(thrownObjectId);
     if(exceptionName.Length() == 0)
@@ -665,7 +665,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     }
 
     String exceptionMsg = GetExceptionMessage(thrownObjectId);
-    
+
     if(exceptionMsg.Length() == 0)
     {
         exceptionNameAndMsg += exceptionName;
@@ -889,14 +889,14 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassIDInfo2 " << hRes;
             return WCHAR("");
         }
-    
+
         hRes = corProfilerInfo8->GetModuleMetaData(moduleId, ofRead, IID_IMetaDataImport, (IUnknown**) (&metadata));
         if(FAILED(hRes))
         {
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetModuleMetaData " << hRes;
             return WCHAR("");
         }
-    
+
         hRes = metadata->GetTypeDefProps(typeDefToken, exceptionName, 256, &read, NULL, NULL);
         if(FAILED(hRes))
         {
@@ -904,7 +904,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             metadata->Release();
             return WCHAR("");
         }
-        
+
         if(wcscmp(u"System.Exception",exceptionName)==0)
         {
             systemExceptionClassId = classId;
@@ -926,13 +926,13 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed in call to GetClassLayout " << hRes;
             if(metadata != NULL) metadata->Release();
             return WCHAR("");
-        } 
-        if(fieldCount == 0) 
+        }
+        if(fieldCount == 0)
         {
             LOG(TRACE) << "CorProfiler::GetExceptionMessage: GetClassLayout returned zero fieldCount";
             if(metadata != NULL) metadata->Release();
-            return WCHAR("");            
-        }     
+            return WCHAR("");
+        }
 
         pFieldOffsets = new COR_FIELD_OFFSET[fieldCount];
         if(pFieldOffsets==NULL)
@@ -941,7 +941,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             if(metadata != NULL) metadata->Release();
             return WCHAR("");;
         }
-        
+
         hRes = corProfilerInfo8->GetClassLayout(systemExceptionClassId, pFieldOffsets, fieldCount, &fieldCount, NULL);
         if(FAILED(hRes))
         {
@@ -949,16 +949,16 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
             if(metadata != NULL) metadata->Release();
             delete [] pFieldOffsets;
             return WCHAR("");
-        }      
+        }
 
         //
         // Loop to lcoate the "_message" field
         // Get stringLength from the "_message" field stringLengthOffset
-        // Copy the number of (stringLength+1) WCHARs from the "_message" field stringBufferOffset to our stringBuffer 
+        // Copy the number of (stringLength+1) WCHARs from the "_message" field stringBufferOffset to our stringBuffer
         //
         for (ULONG fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++)
         {
-            hRes = metadata->GetFieldProps(pFieldOffsets[fieldIndex].ridOfField, NULL, fieldName, 256, NULL, NULL, 
+            hRes = metadata->GetFieldProps(pFieldOffsets[fieldIndex].ridOfField, NULL, fieldName, 256, NULL, NULL,
                                     NULL, NULL, NULL, NULL, NULL);
             if(FAILED(hRes))
             {
@@ -966,7 +966,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
                 if(metadata != NULL) metadata->Release();
                 delete [] pFieldOffsets;
                 return WCHAR("");
-            }   
+            }
 
             if(wcscmp(u"_message",fieldName)==0)
             {
@@ -977,7 +977,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
                     if(metadata != NULL) metadata->Release();
                     delete [] pFieldOffsets;
                     return WCHAR("");
-                }  
+                }
                 msgField = *(PLONG_PTR)(((BYTE *)objectId) + pFieldOffsets[fieldIndex].ulOffset);
                 stringLength = *(PINT32)((BYTE *)msgField + stringLengthOffset);
                 stringBuffer = new WCHAR[stringLength+1];
@@ -1021,7 +1021,7 @@ bool CorProfiler::IsCoreClrProcess(pid_t pid, char** socketName)
     tmpFolder = GetSocketPath("dotnet-diagnostic-", pid, 0);
 
     // Enumerate all open domain sockets exposed from the process. If one
-    // exists by the following prefix, we assume its a .NET Core process:
+    // exists by the following prefix, we assume its a .NET process:
     //    dotnet-diagnostic-{%d:PID}
     // The sockets are found in /proc/net/unix
     if(tmpFolder!=NULL)
@@ -1140,11 +1140,11 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
     {
         if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
         {
-            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to create socket for .NET Core dump generation.";
+            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to create socket for .NET dump generation.";
         }
         else
         {
-            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success creating socket for .NET Core dump generation.";
+            LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success creating socket for .NET dump generation.";
 
             // Create socket to diagnostics server
             memset(&addr, 0, sizeof(struct sockaddr_un));
@@ -1153,11 +1153,11 @@ bool CorProfiler::GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
             if (connect(fd, (struct sockaddr*) (&addr), sizeof(struct sockaddr_un)) == -1)
             {
-                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation.";
+                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Failed to connect to socket for .NET dump generation.";
             }
             else
             {
-                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success connecting to socket for .NET Core dump generation.";
+                LOG(TRACE) << "CorProfiler::GenerateCoreClrDump: Success connecting to socket for .NET dump generation.";
 
                 unsigned int dumpFileNameLen = ((strlen(dumpFileName)+1));
                 int payloadSize = sizeof(dumpFileNameLen);

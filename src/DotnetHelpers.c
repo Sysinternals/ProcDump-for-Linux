@@ -10,15 +10,15 @@
 
 //--------------------------------------------------------------------
 //
-// IsCoreClrProcess - Checks to see whether the process is a .NET Core
+// IsCoreClrProcess - Checks to see whether the process is a .NET
 // process by checking the availability of a diagnostics server exposed
 // as a Unix domain socket. If the pipe is available, we assume its a
-// .NET Core process
+// .NET process
 //
-// Returns: true   - if the process is a .NET Core process,[out] socketName
+// Returns: true   - if the process is a .NET process,[out] socketName
 //                   will contain the full socket name. Caller owns the
 //                   memory allocated for the socketName
-//          false  - if the process is NOT a .NET Core process,[out] socketName
+//          false  - if the process is NOT a .NET process,[out] socketName
 //                   will be NULL.
 //
 //--------------------------------------------------------------------
@@ -39,7 +39,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
     }
 
     // Enumerate all open domain sockets exposed from the process. If one
-    // exists by the following prefix, we assume its a .NET Core process:
+    // exists by the following prefix, we assume its a .NET process:
     //    dotnet-diagnostic-{%d:PID}
     // The sockets are found in /proc/net/unix
     procFile = fopen("/proc/net/unix", "r");
@@ -87,7 +87,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
 
 //--------------------------------------------------------------------
 //
-// GenerateCoreClrDump - Generates the .NET core dump using the
+// GenerateCoreClrDump - Generates the .NET dump using the
 // diagnostics server.
 //
 // Returns: true   - if core dump was generated
@@ -106,7 +106,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
     {
         if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
         {
-            Trace("GenerateCoreClrDump: Failed to create socket for .NET Core dump generation [%d].", errno);
+            Trace("GenerateCoreClrDump: Failed to create socket for .NET dump generation [%d].", errno);
         }
         else
         {
@@ -117,7 +117,8 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
 
             if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
             {
-                Trace("GenerateCoreClrDump: Failed to connect to socket for .NET Core dump generation [%d].", errno);
+                Trace("GenerateCoreClrDump: Failed to connect to socket for .NET dump generation [%d].", errno);
+                Log(error, "Failed to connect to the target .NET process diagnostics socket at %s [%d].", socketName, errno);
             }
             else
             {

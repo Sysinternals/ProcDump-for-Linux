@@ -81,7 +81,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
     {
-        Trace("LoadProfiler: Failed to create socket for .NET Core dump generation.");
+        Trace("LoadProfiler: Failed to create socket for .NET dump generation.");
         return -1;
     }
 
@@ -92,7 +92,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     if (connect(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_un)) == -1)
     {
-        Trace("LoadProfiler: Failed to connect to socket for .NET Core profiler load.");
+        Trace("LoadProfiler: Failed to connect to socket for .NET profiler load.");
         return -1;
     }
 

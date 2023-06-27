@@ -205,10 +205,10 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
     if(socketName!=NULL)
     {
-        // If we have a socket name, we're dumping a .NET Core 3+ process....
+        // If we have a socket name, we're dumping a .NET process....
         if(GenerateCoreClrDump(socketName, coreDumpFileName)==false)
         {
-            Log(error, "An error occurred while generating the core dump for .NET 3.x+ process");
+            Log(error, "An error occurred while generating the core dump for the specified .NET process");
         }
         else
         {
@@ -233,7 +233,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         }
 
         // Oterwise, we use gcore dump generation   TODO@FUTURE: We might consider adding a forcegcore flag in cases where
-        // someone wants to use gcore even for .NET Core 3.x+ processes.
+        // someone wants to use gcore even for .NET processes.
         commandPipe = popen2(command, "r", &gcorePid);
         self->Config->gcorePid = gcorePid;
 
