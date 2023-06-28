@@ -3,7 +3,7 @@
 ## Prerequisites
 - clang/llvm v10+
 - gcc v10+
-- zlib
+- zlib (Debian: zlib1g-dev, Rocky: zlib-devel)
 - make
 
 ## Build

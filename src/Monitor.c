@@ -552,7 +552,7 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
             }
     }
 
-    if (self->MemoryThreshold != -1 && !tooManyTriggers)
+    if (self->MemoryThreshold != NULL && !tooManyTriggers)
     {
         if (self->nThreads < MAX_TRIGGERS)
         {
@@ -817,17 +817,20 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 bool ContinueMonitoring(struct ProcDumpConfiguration *self)
 {
     // Have we reached the dump limit?
-    if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect) {
+    if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect)
+    {
         return false;
     }
 
     // Do we already know the process is terminated?
-    if (self->bTerminated) {
+    if (self->bTerminated)
+    {
         return false;
     }
 
     // check if any process are running with PGID
-    if(self->bProcessGroup && kill(-1 * self->ProcessGroup, 0)) {
+    if(self->bProcessGroup && kill(-1 * self->ProcessGroup, 0))
+    {
         self->bTerminated = true;
         return false;
     }
@@ -835,7 +838,8 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
     // Let's check to make sure the process is still alive then
     // note: kill([pid], 0) doesn't send a signal but does perform error checking
     //       therefore, if it returns 0, the process is still alive, -1 means it errored out
-    if (self->ProcessId != NO_PID && kill(self->ProcessId, 0)) {
+    if (self->ProcessId != NO_PID && kill(self->ProcessId, 0))
+    {
         self->bTerminated = true;
         Log(warn, "Target process %d is no longer alive", self->ProcessId);
         return false;
@@ -889,8 +893,8 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 memUsage += (proc.nswap * pageSize_kb) >> 10; // get Swap size
 
                 // Commit Trigger
-                if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold)) ||
-                    (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold)))
+                if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold[config->MemoryCurrentThreshold])) ||
+                    (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold[config->MemoryCurrentThreshold])))
                 {
                     Log(info, "Trigger: Commit usage:%ldMB on process ID: %d", memUsage, config->ProcessId);
                     rc = WriteCoreDump(writer);
@@ -898,6 +902,8 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     {
                         SetQuit(config, 1);
                     }
+
+                    config->MemoryCurrentThreshold++;
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {

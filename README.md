@@ -22,33 +22,33 @@ Please see build instructions [here](BUILD.md).
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
 ```
 procdump [-n Count]
-         [-s Seconds]
-         [-c|-cl CPU_Usage]
-         [-m|-ml Commit_Usage]
-         [-tc Thread_Threshold]
-         [-fc FileDescriptor_Threshold]
-         [-sig Signal_Number]
-         [-e]
-         [-f Include_Filter,...]
-         [-pf Polling_Frequency]
-         [-o]
-         [-log]
-         {
+        [-s Seconds]
+        [-c|-cl CPU_Usage]
+        [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
+        [-tc Thread_Threshold]
+        [-fc FileDescriptor_Threshold]
+        [-sig Signal_Number]
+        [-e]
+        [-f Include_Filter,...]
+        [-pf Polling_Frequency]
+        [-o]
+        [-log]
+        {
           {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-         }
+        }
 
 Options:
    -n      Number of dumps to write before exiting.
    -s      Consecutive seconds before dump is written (default is 10).
    -c      CPU threshold above which to create a dump of the process.
    -cl     CPU threshold below which to create a dump of the process.
-   -m      Memory commit threshold in MB at which to create a dump.
-   -ml     Trigger when memory commit drops below specified MB value.
+   -m      Memory commit thresholds (MB) above which to create dumps.
+   -ml     Memory commit thresholds (MB) below which to create dumps.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s).
+   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s). Supports wildcards.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.
@@ -85,6 +85,10 @@ sudo procdump -cl 10 -c 65 1234
 The following will create a core dump when CPU usage is >= 65% or memory usage is >= 100 MB.
 ```
 sudo procdump -c 65 -m 100 1234
+```
+The following will create a core dump when memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
+```
+sudo procdump -m 100,200 1234
 ```
 The following will create a core dump in the `/tmp` directory immediately.
 ```

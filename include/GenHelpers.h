@@ -96,6 +96,7 @@ static inline void cancel_pthread(unsigned long* val)
 #define auto_free_file __attribute__ ((__cleanup__(cleanup_file)))
 #define auto_cancel_thread __attribute__ ((__cleanup__(cancel_pthread)))
 
+int* GetSeparatedValues(char* src, char separator, int* numValues);
 bool ConvertToInt(const char* src, int* conv);
 bool IsValidNumberArg(const char *arg);
 bool CheckKernelVersion();
