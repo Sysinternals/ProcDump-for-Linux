@@ -649,7 +649,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage();
     }
 
-    if(numThresholds != 1)
+    if(numThresholds != -1)
     {
         self->NumberOfDumpsToCollect = numThresholds;
     }
