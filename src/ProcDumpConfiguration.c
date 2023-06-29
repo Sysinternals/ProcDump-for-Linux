@@ -329,6 +329,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 {
     bool bProcessSpecified = false;
+    int numThresholds = -1;
 
     if (argc < 2) {
         Trace("GetOptions: Invalid number of command line arguments.");
@@ -367,12 +368,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "/ml" ) ||
                     0 == strcasecmp( argv[i], "-ml" ))
         {
-            if( i+1 >= argc || self->NumberOfDumpsToCollect != -1 ) return PrintUsage();
-            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ',', &self->NumberOfDumpsToCollect);
+            if( i+1 >= argc || numThresholds != -1 ) return PrintUsage();
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ',', &numThresholds);
 
-            if(self->MemoryThreshold == NULL || self->NumberOfDumpsToCollect == 0) return PrintUsage();
+            if(self->MemoryThreshold == NULL || numThresholds == 0) return PrintUsage();
 
-            for(int i=0; i<self->NumberOfDumpsToCollect; i++)
+            for(int i=0; i<numThresholds; i++)
             {
                 if(self->MemoryThreshold[i] < 0)
                 {
@@ -444,7 +445,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/n" ) ||
                     0 == strcasecmp( argv[i], "-n" ))
         {
-            if( i+1 >= argc || self->NumberOfDumpsToCollect != -1 ) return PrintUsage();
+            if( i+1 >= argc || self->NumberOfDumpsToCollect != -1) return PrintUsage();
             if(!ConvertToInt(argv[i+1], &self->NumberOfDumpsToCollect)) return PrintUsage();
             if(self->NumberOfDumpsToCollect < 0)
             {
@@ -640,6 +641,18 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     //
     // Validate multi arguments
     //
+
+    // Ensure consistency between number of thresholds specified and the -n switch
+    if(numThresholds > 1 && self->NumberOfDumpsToCollect != -1)
+    {
+        Log(error, "When specifying more than one memory threshold the number of dumps switch (-n) is invalid.");
+        return PrintUsage();
+    }
+
+    if(numThresholds != 1)
+    {
+        self->NumberOfDumpsToCollect = numThresholds;
+    }
 
     // If exception filter is provided with no -e switch exit
     if((self->ExceptionFilter && self->bDumpOnException == false))
