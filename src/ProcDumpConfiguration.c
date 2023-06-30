@@ -147,7 +147,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->NumberOfDumpsToCollect =      -1;
     self->CpuThreshold =                -1;
     self->bCpuTriggerBelowValue =       false;
-    self->MemoryThreshold =             -1;
+    self->MemoryThreshold =             NULL;
+    self->MemoryCurrentThreshold =      0;
     self->ThreadThreshold =             -1;
     self->FileDescriptorThreshold =     -1;
     self->SignalNumber =                -1;
@@ -231,6 +232,12 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->CoreDumpName = NULL;
     }
 
+    if(self->MemoryThreshold)
+    {
+        free(self->MemoryThreshold);
+        self->MemoryThreshold = NULL;
+    }
+
     Trace("FreeProcDumpConfiguration: Exit");
 }
 
@@ -244,7 +251,8 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 {
     struct ProcDumpConfiguration * copy = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
 
-    if(copy != NULL) {
+    if(copy != NULL)
+    {
         // Init new struct
         InitProcDumpConfiguration(copy);
 
@@ -267,7 +275,25 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         // copy options from original config
         copy->CpuThreshold = self->CpuThreshold;
         copy->bCpuTriggerBelowValue = self->bCpuTriggerBelowValue;
-        copy->MemoryThreshold = self->MemoryThreshold;
+        if(self->MemoryThreshold != NULL)
+        {
+            copy->NumberOfDumpsToCollect = self->NumberOfDumpsToCollect;
+            copy->MemoryCurrentThreshold = self->MemoryCurrentThreshold;
+            copy->MemoryThreshold = malloc(self->NumberOfDumpsToCollect*sizeof(int));
+            if(copy->MemoryThreshold == NULL)
+            {
+                Trace("Failed to alloc memory for MemoryThreshold");
+                if(copy->ProcessName)
+                {
+                    free(copy->ProcessName);
+                }
+
+                return NULL;
+            }
+
+            memcpy(copy->MemoryThreshold, self->MemoryThreshold, self->NumberOfDumpsToCollect*sizeof(int));
+        }
+
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
         copy->ThresholdSeconds = self->ThresholdSeconds;
         copy->bTimerThreshold = self->bTimerThreshold;
@@ -287,7 +313,8 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 
         return copy;
     }
-    else {
+    else
+    {
         Trace("Failed to alloc memory for Procdump config copy");
         return NULL;
     }
@@ -302,6 +329,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 {
     bool bProcessSpecified = false;
+    int numThresholds = -1;
 
     if (argc < 2) {
         Trace("GetOptions: Invalid number of command line arguments.");
@@ -340,13 +368,19 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "/ml" ) ||
                     0 == strcasecmp( argv[i], "-ml" ))
         {
-            if( i+1 >= argc || self->MemoryThreshold != -1 ) return PrintUsage();
-            if(!ConvertToInt(argv[i+1], &self->MemoryThreshold)) return PrintUsage();
+            if( i+1 >= argc || numThresholds != -1 ) return PrintUsage();
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &numThresholds);
 
-            if(self->MemoryThreshold < 0)
+            if(self->MemoryThreshold == NULL || numThresholds == 0) return PrintUsage();
+
+            for(int i = 0; i < numThresholds; i++)
             {
-                Log(error, "Invalid memory threshold count specified.");
-                return PrintUsage();
+                if(self->MemoryThreshold[i] < 0)
+                {
+                    Log(error, "Invalid memory threshold specified.");
+                    free(self->MemoryThreshold);
+                    return PrintUsage();
+                }
             }
 
             if( 0 == strcasecmp( argv[i], "/ml" ) || 0 == strcasecmp( argv[i], "-ml" ))
@@ -411,7 +445,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/n" ) ||
                     0 == strcasecmp( argv[i], "-n" ))
         {
-            if( i+1 >= argc || self->NumberOfDumpsToCollect != -1 ) return PrintUsage();
+            if( i+1 >= argc || self->NumberOfDumpsToCollect != -1) return PrintUsage();
             if(!ConvertToInt(argv[i+1], &self->NumberOfDumpsToCollect)) return PrintUsage();
             if(self->NumberOfDumpsToCollect < 0)
             {
@@ -608,6 +642,18 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // Validate multi arguments
     //
 
+    // Ensure consistency between number of thresholds specified and the -n switch
+    if(numThresholds > 1 && self->NumberOfDumpsToCollect != -1)
+    {
+        Log(error, "When specifying more than one memory threshold the number of dumps switch (-n) is invalid.");
+        return PrintUsage();
+    }
+
+    if(numThresholds != -1)
+    {
+        self->NumberOfDumpsToCollect = numThresholds;
+    }
+
     // If exception filter is provided with no -e switch exit
     if((self->ExceptionFilter && self->bDumpOnException == false))
     {
@@ -636,7 +682,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
     // If number of dumps to collect is set, but there is no other criteria, enable Timer here...
     if ((self->CpuThreshold == -1) &&
-        (self->MemoryThreshold == -1) &&
+        (self->MemoryThreshold == NULL) &&
         (self->ThreadThreshold == -1) &&
         (self->FileDescriptorThreshold == -1))
     {
@@ -646,7 +692,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // Signal trigger can only be specified alone
     if(self->SignalNumber != -1 || self->bDumpOnException)
     {
-        if(self->CpuThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != -1)
+        if(self->CpuThreshold != -1 || self->ThreadThreshold != -1 || self->FileDescriptorThreshold != -1 || self->MemoryThreshold != NULL)
         {
             Log(error, "Signal/Exception trigger must be the only trigger specified.");
             return PrintUsage();
@@ -684,72 +730,108 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 //--------------------------------------------------------------------
 bool PrintConfiguration(struct ProcDumpConfiguration *self)
 {
-    if (WaitForSingleObject(&self->evtConfigurationPrinted,0) == WAIT_TIMEOUT) {
-        if(self->SignalNumber != -1) {
+    if (WaitForSingleObject(&self->evtConfigurationPrinted,0) == WAIT_TIMEOUT)
+    {
+        if(self->SignalNumber != -1)
+        {
             printf("** NOTE ** Signal triggers use PTRACE which will impact the performance of the target process\n\n");
         }
 
-        if (self->bProcessGroup) {
+        if (self->bProcessGroup)
+        {
             printf("%-40s%d\n", "Process Group:", self->ProcessGroup);
         }
-        else if (self->WaitingForProcessName) {
+        else if (self->WaitingForProcessName)
+        {
             printf("%-40s%s\n", "Process Name:", self->ProcessName);
         }
-        else {
+        else
+        {
             printf("%-40s%s (%d)\n", "Process:", self->ProcessName, self->ProcessId);
         }
 
         // CPU
-        if (self->CpuThreshold != -1) {
-            if (self->bCpuTriggerBelowValue) {
+        if (self->CpuThreshold != -1)
+        {
+            if (self->bCpuTriggerBelowValue)
+            {
                 printf("%-40s< %d%%\n", "CPU Threshold:", self->CpuThreshold);
-            } else {
+            }
+            else
+            {
                 printf("%-40s>= %d%%\n", "CPU Threshold:", self->CpuThreshold);
             }
-        } else {
+        }
+        else
+        {
             printf("%-40s%s\n", "CPU Threshold:", "n/a");
         }
 
         // Memory
-        if (self->MemoryThreshold != -1) {
-            if (self->bMemoryTriggerBelowValue) {
-                printf("%-40s<%d MB\n", "Commit Threshold:", self->MemoryThreshold);
-            } else {
-                printf("%-40s>=%d MB\n", "Commit Threshold:", self->MemoryThreshold);
+        if (self->MemoryThreshold != NULL)
+        {
+            if (self->bMemoryTriggerBelowValue)
+            {
+                printf("%-40s< ", "Commit Threshold:");
             }
-        } else {
+            else
+            {
+                printf("%-40s>= ", "Commit Threshold:");
+            }
+
+            for(int i=0; i<self->NumberOfDumpsToCollect; i++)
+            {
+                printf("%d MB", self->MemoryThreshold[i]);
+                if(i < self->NumberOfDumpsToCollect -1)
+                {
+                    printf(",");
+                }
+            }
+
+            printf("\n");
+        }
+        else
+        {
             printf("%-40s%s\n", "Commit Threshold:", "n/a");
         }
 
         // Thread
-        if (self->ThreadThreshold != -1) {
+        if (self->ThreadThreshold != -1)
+        {
             printf("%-40s%d\n", "Thread Threshold:", self->ThreadThreshold);
         }
-        else {
+        else
+        {
             printf("%-40s%s\n", "Thread Threshold:", "n/a");
         }
 
         // File descriptor
-        if (self->FileDescriptorThreshold != -1) {
+        if (self->FileDescriptorThreshold != -1)
+        {
             printf("%-40s%d\n", "File Descriptor Threshold:", self->FileDescriptorThreshold);
         }
-        else {
+        else
+        {
             printf("%-40s%s\n", "File Descriptor Threshold:", "n/a");
         }
 
         // Signal
-        if (self->SignalNumber != -1) {
+        if (self->SignalNumber != -1)
+        {
             printf("%-40s%d\n", "Signal:", self->SignalNumber);
         }
-        else {
+        else
+        {
             printf("%-40s%s\n", "Signal:", "n/a");
         }
         // Signal
-        if (self->bDumpOnException) {
+        if (self->bDumpOnException)
+        {
             printf("%-40s%s\n", "Exception monitor", "On");
             printf("%-40s%s\n", "Exception filter", self->ExceptionFilter);
         }
-        else {
+        else
+        {
             printf("%-40s%s\n", "Exception monitor", "Off");
         }
 
@@ -764,13 +846,15 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 
         // Output directory and filename
         printf("%-40s%s\n", "Output directory:", self->CoreDumpPath);
-        if (self->CoreDumpName != NULL) {
+        if (self->CoreDumpName != NULL)
+        {
             printf("%-40s%s_<counter>\n", "Custom name for core dumps:", self->CoreDumpName);
         }
 
         SetEvent(&self->evtConfigurationPrinted.event);
         return true;
     }
+
     return false;
 }
 
@@ -802,7 +886,7 @@ int PrintUsage()
     printf("   procdump [-n Count]\n");
     printf("            [-s Seconds]\n");
     printf("            [-c|-cl CPU_Usage]\n");
-    printf("            [-m|-ml Commit_Usage]\n");
+    printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");

@@ -10,6 +10,74 @@
 
 //--------------------------------------------------------------------
 //
+// GetSeparatedValues -
+// Returns a list of values separated by the specified separator.
+//
+//--------------------------------------------------------------------
+int* GetSeparatedValues(char* src, char* separator, int* numValues)
+{
+    int* ret = NULL;
+    int i = 0;
+
+    if(src == NULL || numValues == NULL)
+    {
+        return NULL;
+    }
+
+    char* dup = strdup(src);        // Duplicate to avoid changing the original using strtok
+    if(dup == NULL)
+    {
+        return NULL;
+    }
+
+    char* token = strtok((char*)dup, separator);
+    while (token != NULL)
+    {
+        i++;
+        token = strtok(NULL, separator);
+    }
+
+    free(dup);
+
+    if(i > 0)
+    {
+        ret = malloc(i*sizeof(int));
+        if(ret)
+        {
+            i = 0;
+            dup = strdup(src);
+            if(dup == NULL)
+            {
+                free(ret);
+                ret = NULL;
+                return NULL;
+            }
+
+            token = strtok((char*)dup, separator);
+            while (token != NULL)
+            {
+                if(!ConvertToInt(token, &ret[i]))
+                {
+                    free(ret);
+                    ret = NULL;
+                    return NULL;
+                }
+
+                i++;
+                token = strtok(NULL, separator);
+            }
+
+            free(dup);
+        }
+    }
+
+    *numValues = i;
+    return ret;
+}
+
+
+//--------------------------------------------------------------------
+//
 // ConvertToInt - Helper to convert from a char* to int
 //
 //--------------------------------------------------------------------

@@ -95,8 +95,9 @@ struct ProcDumpConfiguration {
     // Options
     int CpuThreshold;               // -c
     bool bCpuTriggerBelowValue;     // -cl
-    int MemoryThreshold;            // -m
-    bool bMemoryTriggerBelowValue;  // -m
+    int* MemoryThreshold;           // -m
+    int MemoryCurrentThreshold;
+    bool bMemoryTriggerBelowValue;  // -m or -ml
     int ThresholdSeconds;           // -s
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n
