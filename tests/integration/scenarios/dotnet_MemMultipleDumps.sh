@@ -50,8 +50,8 @@ done
 sudo pkill -9 procdump
 pkill -9 TestWebApi
 
+rm -rf *TestWebApi_*commit*
 if [[ "$COUNT" -eq 3 ]]; then
-    rm -rf *TestWebApi_*commit*
     popd
     exit 0
 else

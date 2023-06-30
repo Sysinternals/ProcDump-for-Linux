@@ -14,7 +14,7 @@
 // Returns a list of values separated by the specified separator.
 //
 //--------------------------------------------------------------------
-int* GetSeparatedValues(char* src, char separator, int* numValues)
+int* GetSeparatedValues(char* src, char* separator, int* numValues)
 {
     int* ret = NULL;
     int i = 0;
@@ -30,11 +30,11 @@ int* GetSeparatedValues(char* src, char separator, int* numValues)
         return NULL;
     }
 
-    char* token = strtok((char*)dup, &separator);
+    char* token = strtok((char*)dup, separator);
     while (token != NULL)
     {
         i++;
-        token = strtok(NULL, &separator);
+        token = strtok(NULL, separator);
     }
 
     free(dup);
@@ -53,7 +53,7 @@ int* GetSeparatedValues(char* src, char separator, int* numValues)
                 return NULL;
             }
 
-            token = strtok((char*)dup, &separator);
+            token = strtok((char*)dup, separator);
             while (token != NULL)
             {
                 if(!ConvertToInt(token, &ret[i]))
@@ -64,7 +64,7 @@ int* GetSeparatedValues(char* src, char separator, int* numValues)
                 }
 
                 i++;
-                token = strtok(NULL, &separator);
+                token = strtok(NULL, separator);
             }
 
             free(dup);

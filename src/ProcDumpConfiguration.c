@@ -369,11 +369,11 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "-ml" ))
         {
             if( i+1 >= argc || numThresholds != -1 ) return PrintUsage();
-            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ',', &numThresholds);
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &numThresholds);
 
             if(self->MemoryThreshold == NULL || numThresholds == 0) return PrintUsage();
 
-            for(int i=0; i<numThresholds; i++)
+            for(int i = 0; i < numThresholds; i++)
             {
                 if(self->MemoryThreshold[i] < 0)
                 {
@@ -781,7 +781,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 
             for(int i=0; i<self->NumberOfDumpsToCollect; i++)
             {
-                printf("%dMB", self->MemoryThreshold[i]);
+                printf("%d MB", self->MemoryThreshold[i]);
                 if(i < self->NumberOfDumpsToCollect -1)
                 {
                     printf(",");
