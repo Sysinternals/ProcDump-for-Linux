@@ -1,0 +1,56 @@
+FROM ubuntu:20.04
+
+# To make it easier for build and release pipelines to run apt-get,
+# configure apt to not require confirmation (assume the -y argument by default)
+ENV DEBIAN_FRONTEND=noninteractive
+RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/90assumeyes
+
+RUN apt-get update
+RUN apt -y install software-properties-common
+RUN add-apt-repository "deb http://security.ubuntu.com/ubuntu xenial-security main"
+RUN apt-get update
+
+RUN apt upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        jq \
+        git \
+        iputils-ping \
+        libcurl4 \
+        libicu55 \
+        libunwind8 \
+        netcat \
+        gdb \
+        zlib1g-dev \
+        stress-ng \
+        gcc-10 \
+        g++-10 \
+        cpp-10 \
+        wget \
+        dpkg-dev \
+        fakeroot \
+        lsb-release \
+        gettext \
+        liblocale-gettext-perl \
+        clang \
+        pax
+
+# prefer gcc-10 over the already installed version
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+
+# install debbuild
+RUN wget https://github.com/debbuild/debbuild/releases/download/22.02.1/debbuild_22.02.1-0ubuntu20.04_all.deb \
+    && dpkg -i debbuild_22.02.1-0ubuntu20.04_all.deb
+
+# install .NET 6 for signing process and integration tests
+RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+RUN dpkg -i packages-microsoft-prod.deb
+RUN rm packages-microsoft-prod.deb
+RUN apt -y update && apt-get install -y dotnet-runtime-6.0
+RUN apt-get install -y dotnet-sdk-6.0
+
+# Make sure we use gcc-10 when building
+ENV CC=gcc-10
+
+WORKDIR /azp
