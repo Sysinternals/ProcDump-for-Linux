@@ -1242,8 +1242,12 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
     auto_free char* exceptionFilter = NULL;
     auto_free char* fullDumpPath = NULL;
     auto_cancel_thread pthread_t waitForProfilerCompletion = -1;
+    auto_free char* clientData = NULL;
 
     int rc = 0;
+    unsigned int clientDataSize = 0;
+
+    enum TriggerType type = Exception;
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
@@ -1323,7 +1327,20 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         pthread_mutex_unlock(&config->dotnetMutex);
 
         // Inject the profiler into the target process
-        if(InjectProfiler(config->ProcessId, exceptionFilter, fullDumpPath)!=0)
+
+        // client data in the following format:
+        // exception_trigger;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+        clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%s", type, fullDumpPath, getpid(), exceptionFilter) + 1;
+        clientData = malloc(clientDataSize);
+        if(clientData==NULL)
+        {
+            Trace("ExceptionMonitoringThread: Failed to allocate memory for client data.");
+            return NULL;
+        }
+
+        sprintf(clientData, "%d;%s;%d;%s", type, fullDumpPath, getpid(), exceptionFilter);
+
+        if(InjectProfiler(config->ProcessId, clientData)!=0)
         {
             Trace("ExceptionMonitoring: Failed to inject the profiler.");
             pthread_cancel(waitForProfilerCompletion);

@@ -43,17 +43,6 @@
 // Structs
 // -------------------
 
-enum TriggerType
-{
-    Processor,
-    Commit,
-    Timer,
-    Signal,
-    ThreadCount,
-    FileDescriptorCount,
-    Exception
-};
-
 struct TriggerThread
 {
     pthread_t thread;

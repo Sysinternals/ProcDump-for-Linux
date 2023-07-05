@@ -310,9 +310,11 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// CorProfiler::ParseExceptionList
+// CorProfiler::ParseClientData
 //
-// Syntax of client data: <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+// Syntax of client data: <trigger_type><fullpathtodumplocation>;...
+//
+//      DOTNET_EXCEPTION_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(char* filter)
@@ -321,6 +323,8 @@ bool CorProfiler::ParseClientData(char* filter)
     std::stringstream exceptionFilter(filter);
     std::string segment;
     std::vector<std::string> exclist;
+    enum TriggerType trigger_type;
+
 
     while(std::getline(exceptionFilter, segment, ';'))
     {
@@ -331,10 +335,20 @@ bool CorProfiler::ParseClientData(char* filter)
     int i=0;
     for(std::string exception : exclist)
     {
-        if(i==0)
+        if(i == 0)
         {
             //
-            // First part of the exception list is either:
+            // First part of list is the type of trigger that is being invoked.
+            //
+            trigger_type = static_cast<enum TriggerType>(std::stoi(exception));
+            LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << trigger_type;
+            i++;
+            continue;
+        }
+        if(i == 1)
+        {
+            //
+            // Second part of the list is either:
             //    > base path to dump location (if it ends with '/')
             //    > full path to dump file
             //
@@ -344,10 +358,10 @@ bool CorProfiler::ParseClientData(char* filter)
             i++;
             continue;
         }
-        if(i==1)
+        if(i == 2)
         {
             //
-            // Second part of the exception list is always the procdump pid.
+            // Third part of the list is always the procdump pid.
             // we we need this to communicate back status to procdump
             //
             procDumpPid = std::stoi(exception);
@@ -356,20 +370,22 @@ bool CorProfiler::ParseClientData(char* filter)
             continue;
         }
 
+        if(trigger_type == Exception)
+        {
+            // exception filter
+            std::string segment2;
+            std::stringstream stream(exception);
+            ExceptionMonitorEntry entry;
+            entry.exceptionID = NULL;
+            entry.collectedDumps = 0;
+            std::getline(stream, segment2, ':');
 
-        // exception filter
-        std::string segment2;
-        std::stringstream stream(exception);
-        ExceptionMonitorEntry entry;
-        entry.exceptionID = NULL;
-        entry.collectedDumps = 0;
-        std::getline(stream, segment2, ':');
+            entry.exception = segment2;
+            std::getline(stream, segment2, ':');
+            entry.dumpsToCollect = std::stoi(segment2);
 
-        entry.exception = segment2;
-        std::getline(stream, segment2, ':');
-        entry.dumpsToCollect = std::stoi(segment2);
-
-        exceptionMonitorList.push_back(entry);
+            exceptionMonitorList.push_back(entry);
+        }
     }
 
     for (auto & element : exceptionMonitorList)

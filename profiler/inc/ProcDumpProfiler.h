@@ -19,6 +19,7 @@
 #include "cor.h"
 #include "corprof.h"
 #include "profilerstring.h"
+#include "profilercommon.h"
 #include "easylogging++.h"
 
 #define DETACH_TIMEOUT  30000

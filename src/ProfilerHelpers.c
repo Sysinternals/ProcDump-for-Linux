@@ -59,7 +59,7 @@ int ExtractProfiler()
 // process instructing the runtime to load the profiler.
 //
 //--------------------------------------------------------------------
-int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
+int LoadProfiler(pid_t pid, char* clientData)
 {
     struct sockaddr_un addr = {0};
     uint32_t attachTimeout = 5000;
@@ -68,7 +68,6 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 
     auto_free_fd int fd = -1;
     auto_free char* socketName = NULL;
-    auto_free char* clientData = NULL;
     auto_free char* dumpPath = NULL;
     auto_free uint16_t* profilerPathW = NULL;
     auto_free void* temp_buffer = NULL;
@@ -119,19 +118,9 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
     payloadSize += profilerPathLen*sizeof(uint16_t);
 
     // client data
-    if(filter)
+    if(clientData)
     {
-        // client data in the following format:
-        // <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
-        clientDataSize = snprintf(NULL, 0, "%s;%d;%s", fullDumpPath, getpid(), filter) + 1;
-        clientData = malloc(clientDataSize);
-        if(clientData==NULL)
-        {
-            Trace("LoadProfiler: Failed to allocate memory for client data.");
-            return -1;
-        }
-
-        sprintf(clientData, "%s;%d;%s", fullDumpPath, getpid(), filter);
+        clientDataSize = strlen(clientData) + 1;
     }
     else
     {
@@ -261,7 +250,7 @@ int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath)
 //    cancellation requests to.
 //
 //--------------------------------------------------------------------
-int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath)
+int InjectProfiler(pid_t pid, char* clientData)
 {
     int ret = ExtractProfiler();
     if(ret != 0)
@@ -271,7 +260,7 @@ int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath)
         return ret;
     }
 
-    ret = LoadProfiler(pid, filter, fullDumpPath);
+    ret = LoadProfiler(pid, clientData);
     if(ret != 0)
     {
         Log(error, "Failed to load profiler. Please make sure you are running elevated and targetting a .NET process.");
