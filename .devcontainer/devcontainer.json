@@ -3,6 +3,6 @@
 {
 	"name": "ProcDump - Ubuntu",
 	"build": {
-		"dockerfile": "Dockerfile_Rocky"
+		"dockerfile": "Dockerfile_Ubuntu"
 	}
 }
