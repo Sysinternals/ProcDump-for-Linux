@@ -1,0 +1,41 @@
+FROM rockylinux:8
+
+# install all needed packges to build .rpm packages
+RUN echo "assumeyes=1" >> /etc/yum.conf
+
+# install endpoint for git > 2.0
+RUN yum install http://opensource.wandisco.com/rhel/8/git/x86_64/wandisco-git-release-8-1.noarch.rpm
+
+# Enable powertools and extra repos
+RUN dnf install dnf-plugins-core && dnf install epel-release && dnf config-manager --set-enabled powertools && dnf update
+
+# install all needed packages for builds
+RUN yum install git \
+    gdb \
+    zlib-devel \
+    gcc-toolset-10 \
+    rpm-build \
+    make \
+    curl \
+    libcurl-devel \
+    libicu-devel \
+    libunwind-devel \
+    nmap \
+    wget \
+    clang \
+    redhat-lsb
+
+# Make sure gcc-10 is enabled
+RUN echo "source scl_source enable gcc-toolset-10" > /etc/profile.d/gcc.sh
+
+# install JQ since it doesn't have a .rpm package
+RUN curl https://stedolan.github.io/jq/download/linux64/jq > /usr/bin/jq && chmod +x /usr/bin/jq
+
+# install .net core 6 for ESRP signing and integration tests
+RUN yum install dotnet-runtime-6.0
+RUN yum install dotnet-sdk-6.0
+
+# Update packages to latest
+RUN yum update
+
+WORKDIR /azp
