@@ -731,6 +731,7 @@ uint64_t CorProfiler::GetGCHeapSize()
         if (FAILED(hr) || nObjectRanges != nObjectRanges2)
         {
             LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to call GetGenerationBounds with allocated memory";
+            delete[] pObjectRanges;
             return E_FAIL;
         }
     }
@@ -738,6 +739,11 @@ uint64_t CorProfiler::GetGCHeapSize()
     for (int i = nObjectRanges - 1; i >= 0; i--)
     {
         gcHeapSize += pObjectRanges[i].rangeLength;
+    }
+
+    if(fHeapAlloc == true)
+    {
+        delete[] pObjectRanges;
     }
 
     LOG(TRACE) << "CorProfiler::GetGCHeapSize: Exit";
