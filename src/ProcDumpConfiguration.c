@@ -148,7 +148,9 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->CpuThreshold =                -1;
     self->bCpuTriggerBelowValue =       false;
     self->MemoryThreshold =             NULL;
+    self->MemoryThresholdCount =        -1;
     self->MemoryCurrentThreshold =      0;
+    self->bMonitoringGCMemory =         false;
     self->ThreadThreshold =             -1;
     self->FileDescriptorThreshold =     -1;
     self->SignalNumber =                -1;
@@ -295,6 +297,8 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         }
 
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
+        copy->MemoryThresholdCount = self->MemoryThresholdCount;
+        copy->bMonitoringGCMemory = self->bMonitoringGCMemory;
         copy->ThresholdSeconds = self->ThresholdSeconds;
         copy->bTimerThreshold = self->bTimerThreshold;
         copy->NumberOfDumpsToCollect = self->NumberOfDumpsToCollect;
@@ -329,7 +333,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 {
     bool bProcessSpecified = false;
-    int numThresholds = -1;
+    int monitorDotnet = false;
 
     if (argc < 2) {
         Trace("GetOptions: Invalid number of command line arguments.");
@@ -368,12 +372,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "/ml" ) ||
                     0 == strcasecmp( argv[i], "-ml" ))
         {
-            if( i+1 >= argc || numThresholds != -1 ) return PrintUsage();
-            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &numThresholds);
+            if( i+1 >= argc || self->MemoryThresholdCount != -1 ) return PrintUsage();
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
 
-            if(self->MemoryThreshold == NULL || numThresholds == 0) return PrintUsage();
+            if(self->MemoryThreshold == NULL || self->MemoryThresholdCount == 0) return PrintUsage();
 
-            for(int i = 0; i < numThresholds; i++)
+            for(int i = 0; i < self->MemoryThresholdCount; i++)
             {
                 if(self->MemoryThreshold[i] < 0)
                 {
@@ -388,6 +392,27 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 self->bMemoryTriggerBelowValue = true;
             }
 
+            i++;
+        }
+        else if( 0 == strcasecmp( argv[i], "/gcm" ) ||
+                    0 == strcasecmp( argv[i], "-gcm" ))
+        {
+            if( i+1 >= argc || self->MemoryThresholdCount != -1 || monitorDotnet == true ) return PrintUsage();
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
+
+            if(self->MemoryThreshold == NULL || self->MemoryThresholdCount == 0) return PrintUsage();
+
+            for(int i = 0; i < self->MemoryThresholdCount; i++)
+            {
+                if(self->MemoryThreshold[i] < 0)
+                {
+                    Log(error, "Invalid memory threshold specified.");
+                    free(self->MemoryThreshold);
+                    return PrintUsage();
+                }
+            }
+
+            self->bMonitoringGCMemory = true;
             i++;
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
@@ -482,6 +507,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/e" ) ||
                     0 == strcasecmp( argv[i], "-e" ))
         {
+            if( i+1 >= argc || monitorDotnet == true ) return PrintUsage();
             self->bDumpOnException = true;
         }
         else if( 0 == strcasecmp( argv[i], "/f" ) ||
@@ -643,15 +669,15 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     //
 
     // Ensure consistency between number of thresholds specified and the -n switch
-    if(numThresholds > 1 && self->NumberOfDumpsToCollect != -1)
+    if(self->MemoryThresholdCount > 1 && self->NumberOfDumpsToCollect != -1)
     {
         Log(error, "When specifying more than one memory threshold the number of dumps switch (-n) is invalid.");
         return PrintUsage();
     }
 
-    if(numThresholds != -1)
+    if(self->MemoryThresholdCount != -1)
     {
-        self->NumberOfDumpsToCollect = numThresholds;
+        self->NumberOfDumpsToCollect = self->MemoryThresholdCount;
     }
 
     // If exception filter is provided with no -e switch exit
@@ -776,7 +802,14 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             }
             else
             {
-                printf("%-40s>= ", "Commit Threshold:");
+                if(self->bMonitoringGCMemory == true)
+                {
+                    printf("%-40s>= ", ".NET GC Commit Threshold:");
+                }
+                else
+                {
+                    printf("%-40s>= ", "Commit Threshold:");
+                }
             }
 
             for(int i=0; i<self->NumberOfDumpsToCollect; i++)
@@ -887,6 +920,7 @@ int PrintUsage()
     printf("            [-s Seconds]\n");
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
+    printf("            [-gcm Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
@@ -906,6 +940,7 @@ int PrintUsage()
     printf("   -cl     CPU threshold below which to create a dump of the process.\n");
     printf("   -m      Memory commit threshold in MB at which to create a dump.\n");
     printf("   -ml     Trigger when memory commit drops below specified MB value.\n");
+    printf("   -gcm    [.NET] GC memory commit threshold in MB at which to create a dump.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");

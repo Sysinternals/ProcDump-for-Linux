@@ -17,7 +17,8 @@ enum TriggerType
     Signal,
     ThreadCount,
     FileDescriptorCount,
-    Exception
+    Exception,
+    GCThreshold
 };
 
 #endif // PROFILERCOMMON_H

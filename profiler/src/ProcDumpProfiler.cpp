@@ -217,24 +217,24 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 {
     LOG(TRACE) << "CorProfiler::InitializeForAttach: Enter";
 
-    char* filter = new char[cbClientData+1];
-    if(filter==NULL)
+    char* clientData = new char[cbClientData+1];
+    if(clientData == NULL)
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to allocate memory for exception filter";
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to allocate memory for clientData filter";
         return E_FAIL;
     }
 
-    memcpy(filter, pvClientData, cbClientData);
-    filter[cbClientData]='\0';
+    memcpy(clientData, pvClientData, cbClientData);
+    clientData[cbClientData]='\0';
 
-    if(ParseClientData(filter)==false)
+    if(ParseClientData(clientData)==false)
     {
         LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to parse client data";
-        delete[] filter;
+        delete[] clientData;
         return E_FAIL;
     }
 
-    delete[] filter;
+    delete[] clientData;
 
     processName = GetProcessName();
     if(processName.empty())
@@ -264,11 +264,27 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         return E_FAIL;
     }
 
-    DWORD eventMask = COR_PRF_MONITOR_EXCEPTIONS;
-    HRESULT hr = this->corProfilerInfo8->SetEventMask(eventMask);
-    if(FAILED(hr))
+    if(triggerType == Exception)
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask";
+        HRESULT hr = this->corProfilerInfo8->SetEventMask(COR_PRF_MONITOR_EXCEPTIONS);
+        if(FAILED(hr))
+        {
+            LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask: COR_PRF_MONITOR_EXCEPTIONS";
+            return E_FAIL;
+        }
+    }
+    else if(triggerType == GCThreshold)
+    {
+        HRESULT hr = this->corProfilerInfo8->SetEventMask2(0, COR_PRF_HIGH_BASIC_GC);
+        if(FAILED(hr))
+        {
+            LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask: COR_PRF_HIGH_BASIC_GC";
+            return E_FAIL;
+        }
+    }
+    else
+    {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Invalid trigger type found";
         return E_FAIL;
     }
 
@@ -323,8 +339,6 @@ bool CorProfiler::ParseClientData(char* filter)
     std::stringstream exceptionFilter(filter);
     std::string segment;
     std::vector<std::string> exclist;
-    enum TriggerType trigger_type;
-
 
     while(std::getline(exceptionFilter, segment, ';'))
     {
@@ -340,8 +354,8 @@ bool CorProfiler::ParseClientData(char* filter)
             //
             // First part of list is the type of trigger that is being invoked.
             //
-            trigger_type = static_cast<enum TriggerType>(std::stoi(exception));
-            LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << trigger_type;
+            triggerType = static_cast<enum TriggerType>(std::stoi(exception));
+            LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << triggerType;
             i++;
             continue;
         }
@@ -370,7 +384,7 @@ bool CorProfiler::ParseClientData(char* filter)
             continue;
         }
 
-        if(trigger_type == Exception)
+        if(triggerType == Exception)
         {
             // exception filter
             std::string segment2;
@@ -386,11 +400,20 @@ bool CorProfiler::ParseClientData(char* filter)
 
             exceptionMonitorList.push_back(entry);
         }
+        else if (triggerType == GCThreshold)
+        {
+            gcMemoryThresholdMonitorList.push_back(std::stoi(exception));
+        }
     }
 
     for (auto & element : exceptionMonitorList)
     {
         LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << element.exception << " with dump count set to " << std::to_string(element.dumpsToCollect);
+    }
+
+    for (auto & element : gcMemoryThresholdMonitorList)
+    {
+        LOG(TRACE) << "CorProfiler::ParseClientData:GCMemoryThreshold filter " << element;
     }
 
     LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
@@ -663,6 +686,93 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionNa
 
     LOG(TRACE) << "CorProfiler::GetDumpName: Exit";
     return tmp.str();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetGCHeapSize
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+uint64_t CorProfiler::GetGCHeapSize()
+{
+    LOG(TRACE) << "CorProfiler::GetGCHeapSize: Enter";
+    uint64_t gcHeapSize = 0;
+
+    ULONG nObjectRanges = 0;
+    bool fHeapAlloc = false;
+    COR_PRF_GC_GENERATION_RANGE* pObjectRanges = NULL;
+    const ULONG cRanges = 32;
+    COR_PRF_GC_GENERATION_RANGE objectRangesStackBuffer[cRanges];
+
+    HRESULT hr = corProfilerInfo8->GetGenerationBounds(cRanges, &nObjectRanges, objectRangesStackBuffer);
+    if (FAILED(hr))
+    {
+        LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed calling GetGenerationBounds " << hr;
+        return E_FAIL;
+    }
+
+    if (nObjectRanges <= cRanges)
+    {
+        pObjectRanges = objectRangesStackBuffer;
+    }
+
+    if (pObjectRanges == NULL)
+    {
+        pObjectRanges = new COR_PRF_GC_GENERATION_RANGE[nObjectRanges];
+        if (pObjectRanges == NULL)
+        {
+            LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to allocate memory for object ranges ";
+            return E_FAIL;
+        }
+
+        fHeapAlloc = true;
+
+        ULONG nObjectRanges2 = 0;
+        HRESULT hr = corProfilerInfo8->GetGenerationBounds(nObjectRanges, &nObjectRanges2, pObjectRanges);
+        if (FAILED(hr) || nObjectRanges != nObjectRanges2)
+        {
+            LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to call GetGenerationBounds with allocated memory";
+            return E_FAIL;
+        }
+    }
+
+    LOG(TRACE) << "#######################CorProfiler::GetGCHeapSize: nObjectRanges " << nObjectRanges;
+
+    for (int i = nObjectRanges - 1; i >= 0; i--)
+    {
+        LOG(TRACE) << "Range " << i << " Length " << pObjectRanges[i].rangeLength;
+        gcHeapSize += pObjectRanges[i].rangeLength;
+    }
+
+    return gcHeapSize;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GarbageCollectionStarted
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCollected[], COR_PRF_GC_REASON reason)
+{
+    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Enter";
+
+    uint64_t size = GetGCHeapSize();
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Total heap size " << size;
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
+    return S_OK;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GarbageCollectionFinished
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
+{
+    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Enter";
+
+    uint64_t size = GetGCHeapSize();
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << size;
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Exit";
+    return S_OK;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1686,17 +1796,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ThreadNameChanged(ThreadID threadId, ULON
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCollected[], COR_PRF_GC_REASON reason)
-{
-    return S_OK;
-}
-
 HRESULT STDMETHODCALLTYPE CorProfiler::SurvivingReferences(ULONG cSurvivingObjectIDRanges, ObjectID objectIDRangeStart[], ULONG cObjectIDRangeLength[])
-{
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
 {
     return S_OK;
 }

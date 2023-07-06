@@ -6,6 +6,12 @@ app.MapGet("/throwinvalidoperation", () =>
     throw new System.InvalidOperationException();
 });
 
+app.MapGet("/fullgc", () =>
+{
+    System.GC.Collect();
+});
+
+
 app.MapGet("/throwandcatchinvalidoperation", () =>
 {
     try

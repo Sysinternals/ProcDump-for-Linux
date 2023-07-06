@@ -500,6 +500,20 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     }
 }
 
+//--------------------------------------------------------------------
+//
+// MonitorDotNet - Returns true if we are monitoring a dotnet process
+//
+//--------------------------------------------------------------------
+bool MonitorDotNet(struct ProcDumpConfiguration *self)
+{
+    if(self->bDumpOnException || self->bMonitoringGCMemory)
+    {
+        return true;
+    }
+
+    return false;
+}
 
 //--------------------------------------------------------------------
 //
@@ -513,13 +527,13 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
     bool tooManyTriggers = false;
 
     // create threads
-    if (self->bDumpOnException)
+    if (MonitorDotNet(self) == true)
     {
         if (self->nThreads < MAX_TRIGGERS)
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ExceptionMonitoringThread, (void *)self)) != 0)
+            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, DotNetMonitoringThread, (void *)self)) != 0)
             {
-                Trace("CreateMonitorThreads: failed to create ExceptionMonitoringThread.");
+                Trace("CreateMonitorThreads: failed to create DotNetMonitoringThread.");
                 return rc;
             }
 
@@ -1231,42 +1245,36 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
 //--------------------------------------------------------------------
 //
-// ExceptionMonitoringThread - Thread that creates dumps based on
-// exception filter. NOTE: .NET only.
+// DotNetMonitoringThread - Thread that creates dumps based on
+// dotnet triggers.
+//
+// NOTE: .NET only.
+// NOTE: At the moment, .NET triggers are mutually exclusive meaning
+// only one can specified at a time. For example, you cannot specify
+// both exception based monitoring and GC based monitoring.
 //
 //--------------------------------------------------------------------
-void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
+void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
-    Trace("ExceptionMonitoring: Starting ExceptionMonitoring Thread");
+    Trace("DotNetMonitoringThread: Starting DotNetMonitoringThread Thread");
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
-    auto_free char* exceptionFilter = NULL;
     auto_free char* fullDumpPath = NULL;
     auto_cancel_thread pthread_t waitForProfilerCompletion = -1;
     auto_free char* clientData = NULL;
 
     int rc = 0;
-    unsigned int clientDataSize = 0;
-
-    enum TriggerType type = Exception;
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        exceptionFilter = GetEncodedExceptionFilter(config->ExceptionFilter, config->NumberOfDumpsToCollect);
-        if(exceptionFilter==NULL)
-        {
-            Trace("ExceptionMonitoring: Failed to get exception filter.");
-            return NULL;
-        }
-
-        if(config->CoreDumpName==NULL)
+        if(config->CoreDumpName == NULL)
         {
             // We don't have a dump name so we just use the path (append a '/' to indicate its a base path)
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)-1] != '/')
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
-                if(fullDumpPath==NULL)
+                if(fullDumpPath == NULL)
                 {
-                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    Trace("DotNetMonitoringThread: Failed to allocate memory.");
                     return NULL;
                 }
 
@@ -1275,9 +1283,9 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             else
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + 1);
-                if(fullDumpPath==NULL)
+                if(fullDumpPath == NULL)
                 {
-                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    Trace("DotNetMonitoringThread: Failed to allocate memory.");
                     return NULL;
                 }
 
@@ -1290,9 +1298,9 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)] != '/')
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
-                if(fullDumpPath==NULL)
+                if(fullDumpPath == NULL)
                 {
-                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    Trace("DotNetMonitoringThread: Failed to allocate memory.");
                     return NULL;
                 }
 
@@ -1301,9 +1309,9 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
             else
             {
                 fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0', +1 = '/'
-                if(fullDumpPath==NULL)
+                if(fullDumpPath == NULL)
                 {
-                    Trace("ExceptionMonitoring: Failed to allocate memory.");
+                    Trace("DotNetMonitoringThread: Failed to allocate memory.");
                     return NULL;
                 }
 
@@ -1314,7 +1322,7 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         // Create thread to wait for profiler completion
         if ((pthread_create(&waitForProfilerCompletion, NULL, WaitForProfilerCompletion, (void *) config)) != 0)
         {
-            Trace("ExceptionMonitoring: failed to create WaitForProfilerCompletion thread.");
+            Trace("DotNetMonitoringThread: failed to create WaitForProfilerCompletion thread.");
             return NULL;
         }
 
@@ -1326,31 +1334,144 @@ void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguratio
         }
         pthread_mutex_unlock(&config->dotnetMutex);
 
-        // Inject the profiler into the target process
-
-        // client data in the following format:
-        // exception_trigger;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
-        clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%s", type, fullDumpPath, getpid(), exceptionFilter) + 1;
-        clientData = malloc(clientDataSize);
-        if(clientData==NULL)
+        // Get the corresponding client data to be sent to profiler
+        clientData = GetClientData(config, fullDumpPath);
+        if(clientData == NULL)
         {
-            Trace("ExceptionMonitoringThread: Failed to allocate memory for client data.");
+            Trace("DotNetMonitoringThread: Failed to get client data.");
             return NULL;
         }
 
-        sprintf(clientData, "%d;%s;%d;%s", type, fullDumpPath, getpid(), exceptionFilter);
-
+        // Inject the profiler into the target process
         if(InjectProfiler(config->ProcessId, clientData)!=0)
         {
-            Trace("ExceptionMonitoring: Failed to inject the profiler.");
+            Trace("DotNetMonitoringThread: Failed to inject the profiler.");
             pthread_cancel(waitForProfilerCompletion);
         }
 
         pthread_join(waitForProfilerCompletion, NULL);
     }
 
-    Trace("ExceptionMonitoring: Exiting ExceptionMonitoring Thread");
+    Trace("DotNetMonitoringThread: Exiting DotNetMonitoringThread Thread");
     return NULL;
+}
+
+//-------------------------------------------------------------------------------------
+//
+// GetClientData
+//
+// Gets the client data string depending on which triggers were requested in the
+// specified config.
+//
+//-------------------------------------------------------------------------------------
+char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
+{
+    Trace("GetClientData: Entering GetClientData");
+    char* clientData = NULL;
+    auto_free char* exceptionFilter = NULL;
+    auto_free char* thresholds = NULL;
+    unsigned int clientDataSize = 0;
+
+    if(self->bDumpOnException)
+    {
+        // exception_trigger;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+        exceptionFilter = GetEncodedExceptionFilter(self->ExceptionFilter, self->NumberOfDumpsToCollect);
+        if(exceptionFilter == NULL)
+        {
+            Trace("GetClientData: Failed to get exception filter.");
+            return NULL;
+        }
+
+        clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%s", Exception, fullDumpPath, getpid(), exceptionFilter) + 1;
+        clientData = malloc(clientDataSize);
+        if(clientData == NULL)
+        {
+            Trace("GetClientData: Failed to allocate memory for client data.");
+            return NULL;
+        }
+
+        sprintf(clientData, "%d;%s;%d;%s", Exception, fullDumpPath, getpid(), exceptionFilter);
+    }
+    else if (self->bMonitoringGCMemory)
+    {
+        // GC Memory trigger (-gcm);<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
+        thresholds = GetThresholds(self);
+        if(thresholds == NULL)
+        {
+            Trace("GetClientData: Failed to get thresholds.");
+            return NULL;
+        }
+
+        clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%s", GCThreshold, fullDumpPath, getpid(), thresholds) + 1;
+        clientData = malloc(clientDataSize);
+        if(clientData == NULL)
+        {
+            Trace("GetClientData: Failed to allocate memory for client data.");
+            return NULL;
+        }
+
+        sprintf(clientData, "%d;%s;%d;%s", GCThreshold, fullDumpPath, getpid(), thresholds);
+    }
+    else
+    {
+        Trace("GetClientData: Invalid trigger specified");
+        return NULL;
+    }
+
+    Trace("GetClientData: Exiting GetClientData");
+    return clientData;
+}
+
+//-------------------------------------------------------------------------------------
+//
+// GetThresholds
+//
+// Returns a comma separated string of GC mem thresholds specified in
+// self->MemoryThresholds
+//
+//-------------------------------------------------------------------------------------
+char* GetThresholds(struct ProcDumpConfiguration *self)
+{
+    Trace("GetThresholds: Entering GetThresholds");
+    int thresholdLen = 0;
+    char* thresholds = NULL;
+
+    for(int i = 0; i < self->MemoryThresholdCount; i++)
+    {
+        thresholdLen += snprintf(NULL, 0, "%d", self->MemoryThreshold[i]);
+        if(i != self->MemoryThresholdCount - 1)
+        {
+            thresholdLen++;     // Comma
+        }
+    }
+
+    thresholdLen++;     // NULL terminator
+
+    thresholds = malloc(thresholdLen);
+    if(thresholds != NULL)
+    {
+        char* writePos = thresholds;
+        if(thresholds != NULL)
+        {
+            for(int i = 0; i < self->MemoryThresholdCount; i++)
+            {
+                int len = snprintf(writePos, thresholdLen, "%d", self->MemoryThreshold[i]);
+                writePos += len;
+                thresholdLen -= len;
+                if(i != self->MemoryThresholdCount - 1)
+                {
+                    *writePos = ';';
+                    writePos++;
+                    thresholdLen--;
+                }
+            }
+        }
+
+        *(writePos) = '\0';
+    }
+
+    Trace("GetThresholds: Exiting GetThresholds");
+    return thresholds;
 }
 
 //-------------------------------------------------------------------------------------
