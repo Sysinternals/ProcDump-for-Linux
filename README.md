@@ -25,6 +25,7 @@ procdump [-n Count]
         [-s Seconds]
         [-c|-cl CPU_Usage]
         [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
+        [-gcm Commit_Usage1[,Commit_Usage2...]]
         [-tc Thread_Threshold]
         [-fc FileDescriptor_Threshold]
         [-sig Signal_Number]
@@ -44,6 +45,7 @@ Options:
    -cl     CPU threshold below which to create a dump of the process.
    -m      Memory commit thresholds (MB) above which to create dumps.
    -ml     Memory commit thresholds (MB) below which to create dumps.
+   -gcm    [.NET] GC memory commit threshold in MB at which to create a dump.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
@@ -89,6 +91,10 @@ sudo procdump -c 65 -m 100 1234
 The following will create a core dump when memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
 ```
 sudo procdump -m 100,200 1234
+```
+The following will create a core dump when .NET memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
+```
+sudo procdump -gcm 100,200 1234
 ```
 The following will create a core dump in the `/tmp` directory immediately.
 ```
