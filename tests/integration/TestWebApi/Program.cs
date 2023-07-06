@@ -11,6 +11,17 @@ app.MapGet("/fullgc", () =>
     System.GC.Collect();
 });
 
+app.MapGet("/memincrease", () =>
+{
+    var myList = new List<byte[]>();
+    myList.Add(new byte[15000000]);
+    System.GC.Collect();
+    myList.Add(new byte[15000000]);
+    System.GC.Collect();
+    myList.Add(new byte[15000000]);
+    System.GC.Collect();
+});
+
 
 app.MapGet("/throwandcatchinvalidoperation", () =>
 {

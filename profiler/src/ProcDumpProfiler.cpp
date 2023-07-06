@@ -192,7 +192,7 @@ ContinueWildcard:
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0), currentThresholdIndex(0)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -331,30 +331,30 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 // Syntax of client data: <trigger_type><fullpathtodumplocation>;...
 //
 //      DOTNET_EXCEPTION_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+//      DOTNET_GC_THRESHOLD_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-bool CorProfiler::ParseClientData(char* filter)
+bool CorProfiler::ParseClientData(char* clientData)
 {
     LOG(TRACE) << "CorProfiler::ParseClientData: Enter";
-    std::stringstream exceptionFilter(filter);
+    std::stringstream clientDataStream(clientData);
     std::string segment;
-    std::vector<std::string> exclist;
+    std::vector<std::string> dataList;
 
-    while(std::getline(exceptionFilter, segment, ';'))
+    while(std::getline(clientDataStream, segment, ';'))
     {
-        exclist.push_back(segment);
+        dataList.push_back(segment);
     }
 
-    std::vector<std::string> exceptionList;
     int i=0;
-    for(std::string exception : exclist)
+    for(std::string dataItem : dataList)
     {
         if(i == 0)
         {
             //
             // First part of list is the type of trigger that is being invoked.
             //
-            triggerType = static_cast<enum TriggerType>(std::stoi(exception));
+            triggerType = static_cast<enum TriggerType>(std::stoi(dataItem));
             LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << triggerType;
             i++;
             continue;
@@ -366,7 +366,7 @@ bool CorProfiler::ParseClientData(char* filter)
             //    > base path to dump location (if it ends with '/')
             //    > full path to dump file
             //
-            fullDumpPath = exception;
+            fullDumpPath = dataItem;
 
             LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << fullDumpPath;
             i++;
@@ -378,7 +378,7 @@ bool CorProfiler::ParseClientData(char* filter)
             // Third part of the list is always the procdump pid.
             // we we need this to communicate back status to procdump
             //
-            procDumpPid = std::stoi(exception);
+            procDumpPid = std::stoi(dataItem);
             LOG(TRACE) << "CorProfiler::ParseClientData: ProcDump PID = " << procDumpPid;
             i++;
             continue;
@@ -388,7 +388,7 @@ bool CorProfiler::ParseClientData(char* filter)
         {
             // exception filter
             std::string segment2;
-            std::stringstream stream(exception);
+            std::stringstream stream(dataItem);
             ExceptionMonitorEntry entry;
             entry.exceptionID = NULL;
             entry.collectedDumps = 0;
@@ -402,7 +402,8 @@ bool CorProfiler::ParseClientData(char* filter)
         }
         else if (triggerType == GCThreshold)
         {
-            gcMemoryThresholdMonitorList.push_back(std::stoi(exception));
+            // GC threshold list
+            gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
         }
     }
 
@@ -413,7 +414,7 @@ bool CorProfiler::ParseClientData(char* filter)
 
     for (auto & element : gcMemoryThresholdMonitorList)
     {
-        LOG(TRACE) << "CorProfiler::ParseClientData:GCMemoryThreshold filter " << element;
+        LOG(TRACE) << "CorProfiler::ParseClientData:GCMemoryThreshold  " << element;
     }
 
     LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
@@ -643,14 +644,14 @@ std::string CorProfiler::GetProcessName()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GetDumpName
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionName)
+std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string name)
 {
     LOG(TRACE) << "CorProfiler::GetDumpName: Enter";
     std::ostringstream tmp;
 
     //
     // If the path ends in '/' it means we have a base path and need to create the full path according to:
-    //  <base_path>/<process_name>_exception_<date_time_stamp>
+    //  <base_path>/<process_name>_<dumpcount>_<name>_<date_time_stamp>
     //
     if(fullDumpPath[fullDumpPath.length()-1] == '/')
     {
@@ -670,7 +671,7 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionNa
         strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
         LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
 
-        tmp << fullDumpPath << processName.c_str() << "_" << dumpCount << "_" << exceptionName << "_" << date;
+        tmp << fullDumpPath << processName.c_str() << "_" << dumpCount << "_" << name << "_" << date;
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
     }
     else
@@ -734,15 +735,55 @@ uint64_t CorProfiler::GetGCHeapSize()
         }
     }
 
-    LOG(TRACE) << "#######################CorProfiler::GetGCHeapSize: nObjectRanges " << nObjectRanges;
-
     for (int i = nObjectRanges - 1; i >= 0; i--)
     {
-        LOG(TRACE) << "Range " << i << " Length " << pObjectRanges[i].rangeLength;
         gcHeapSize += pObjectRanges[i].rangeLength;
     }
 
+    LOG(TRACE) << "CorProfiler::GetGCHeapSize: Exit";
     return gcHeapSize;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::WriteDumpHelper
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::WriteDumpHelper(std::string dumpName)
+{
+    LOG(TRACE) << "CorProfiler::WriteDumpHelper: Enter";
+    AutoMutex lock = AutoMutex(&endDumpCondition);
+
+    char* socketName = NULL;
+    if(IsCoreClrProcess(getpid(), &socketName))
+    {
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Target is .NET process";
+        bool res = GenerateCoreClrDump(socketName, const_cast<char*> (dumpName.c_str()));
+        if(res == false)
+        {
+            LOG(TRACE) << "CorProfiler::WriteDumpHelper: Failed to generate core dump";
+            delete[] socketName;
+            return false;
+        }
+
+        // Notify procdump that a dump was generated
+        if(SendDumpCompletedStatus(dumpName, PROFILER_STATUS_SUCCESS) == -1)
+        {
+            LOG(TRACE) << "CorProfiler::WriteDumpHelper: Failed to notify procdump about dump creation";
+            delete[] socketName;
+            return false;
+        }
+
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Generating core dump result: " << res;
+
+        delete[] socketName;
+    }
+    else
+    {
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Target process is not a .NET process";
+        return false;
+    }
+
+    LOG(TRACE) << "CorProfiler::WriteDumpHelper: Exit";
+    return true;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -752,9 +793,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
 {
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Enter";
 
-    uint64_t size = GetGCHeapSize();
-
-    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Total heap size " << size;
+    if(generationCollected[2] == true)
+    {
+        gen2Collection = true;
+    }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
     return S_OK;
@@ -767,9 +809,39 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
 {
     LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Enter";
 
-    uint64_t size = GetGCHeapSize();
+    if(gen2Collection == true)
+    {
+        // We only want to check heap sizes and thresholds after a gen2 collection
+        gen2Collection = false;
+        uint64_t heapSize = GetGCHeapSize();
+        LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << heapSize;
 
-    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << size;
+        if(currentThresholdIndex < gcMemoryThresholdMonitorList.size() && heapSize >= gcMemoryThresholdMonitorList[currentThresholdIndex])
+        {
+            LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Current threshold value " << gcMemoryThresholdMonitorList[currentThresholdIndex];
+
+            std::string dump = GetDumpName(currentThresholdIndex + 1,convertString<std::string,std::wstring>(L"gc_size"));
+
+            // Generate dump
+            if(WriteDumpHelper(dump) == false)
+            {
+                SendCatastrophicFailureStatus();
+                return E_FAIL;
+            }
+            else
+            {
+                currentThresholdIndex++;
+            }
+
+            if(currentThresholdIndex >= gcMemoryThresholdMonitorList.size())
+            {
+                // Stop monitoring
+                LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Reached last threshold ";
+                CleanupProfiler();
+                UnloadProfiler();
+            }
+        }
+    }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Exit";
     return S_OK;
@@ -811,7 +883,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     for (auto & element : exceptionMonitorList)
     {
         WCHAR* exception = GetUint16(const_cast<char*> (element.exception.c_str()));
-        if(exception==NULL)
+        if(exception == NULL)
         {
             LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to get exception name (WHCAR).";
             SendCatastrophicFailureStatus();
@@ -823,10 +895,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
             //
             // We have to serialize calls to the diag pipe to avoid concurrency issues
             //
-            AutoMutex lock = AutoMutex(&endDumpCondition);
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 LOG(TRACE) << "CorProfiler::ExceptionThrown: Dump count has been reached...exiting early";
+                free(exception);
                 return S_OK;
             }
 
@@ -834,53 +906,21 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
             std::string dump = GetDumpName(element.collectedDumps,convertString<std::string,std::wstring>(exceptionName.ToWString()));
 
-            // Invoke coreclr dump generation
-            char* socketName = NULL;
-            if(IsCoreClrProcess(getpid(), &socketName))
+            if(WriteDumpHelper(dump) == false)
             {
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Target is .NET process";
-                bool res = GenerateCoreClrDump(socketName, const_cast<char*> (dump.c_str()));
-                if(res==false)
-                {
-                    delete[] socketName;
-
-                    // If we fail to generate a core dump we consider that a catastrophic failure and terminate all monitoring
-                    SendCatastrophicFailureStatus();
-                    return E_FAIL;
-                }
-
-                //
-                // In asp.net, an exception thrown in the app is caught by asp.net and then rethrown and caught again. To avoid
-                // generating multiple dumps for the same exception instance we store the objectID. If we have already generated
-                // a dump for that object ID we simply ignore it
-                //
-                element.exceptionID = thrownObjectId;
-
-                // Notify procdump that a dump was generated
-                if(SendDumpCompletedStatus(dump, PROFILER_STATUS_SUCCESS)==-1)
-                {
-                    delete[] socketName;
-
-                    SendCatastrophicFailureStatus();
-                    return E_FAIL;
-                }
-
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Generating core dump result: " << res;
-
-                if(res)
-                {
-                    element.collectedDumps++;
-                }
-
-                delete[] socketName;
-            }
-            else
-            {
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to create dump";
                 SendCatastrophicFailureStatus();
+                free(exception);
                 return E_FAIL;
             }
 
+            //
+            // In asp.net, an exception thrown in the app is caught by asp.net and then rethrown and caught again. To avoid
+            // generating multiple dumps for the same exception instance we store the objectID. If we have already generated
+            // a dump for that object ID we simply ignore it
+            //
+            element.exceptionID = thrownObjectId;
+
+            element.collectedDumps++;
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 // We're done collecting dumps...

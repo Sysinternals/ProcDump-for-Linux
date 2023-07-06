@@ -104,18 +104,20 @@ private:
     ICorProfilerInfo* corProfilerInfo;
     ICorProfilerInfo8* corProfilerInfo8;
     std::vector<struct ExceptionMonitorEntry> exceptionMonitorList;
-    std::vector<int> gcMemoryThresholdMonitorList;
+    std::vector<uint64_t> gcMemoryThresholdMonitorList;
     pthread_t healthThread;
     std::string processName;
     std::string fullDumpPath;
     pthread_mutex_t endDumpCondition;
     enum TriggerType triggerType;
+    int currentThresholdIndex;
+    bool gen2Collection;
 
     String GetExceptionName(ObjectID objectId);
     String GetExceptionMessage(ObjectID objectId);
-    bool ParseClientData(char* fw);
+    bool ParseClientData(char* clientData);
     WCHAR* GetUint16(char* buffer);
-    std::string GetDumpName(uint16_t dumpCount,std::string exceptionName);
+    std::string GetDumpName(uint16_t dumpCount,std::string name);
     std::string GetProcessName();
     bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
     bool IsCoreClrProcess(pid_t pid, char** socketName);
@@ -126,6 +128,7 @@ private:
     int recv_all(int socket, void* buffer, size_t length);
     bool WildcardSearch(WCHAR*, WCHAR*);
     u_int64_t GetGCHeapSize();
+    bool WriteDumpHelper(std::string dumpName);
 
 public:
     CorProfiler();

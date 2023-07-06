@@ -566,7 +566,7 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
             }
     }
 
-    if (self->MemoryThreshold != NULL && !tooManyTriggers)
+    if (self->MemoryThreshold != NULL && !tooManyTriggers && self->bMonitoringGCMemory == false)
     {
         if (self->nThreads < MAX_TRIGGERS)
         {
