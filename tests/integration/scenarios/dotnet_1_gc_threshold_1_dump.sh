@@ -19,7 +19,7 @@ if [ $? -eq -1 ]; then
     exit 1
 fi
 
-# Wait for 3 GC commit thresholds (10, 20 and 30MB)
+# Wait for 1 GC commit thresholds (10MB)
 sudo $PROCDUMPPATH -log -gcm 10 -w TestWebApi&
 
 # waiting for procdump child process

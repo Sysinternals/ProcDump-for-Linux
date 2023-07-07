@@ -117,7 +117,7 @@ private:
     String GetExceptionMessage(ObjectID objectId);
     bool ParseClientData(char* clientData);
     WCHAR* GetUint16(char* buffer);
-    std::string GetDumpName(uint16_t dumpCount,std::string name);
+    std::string GetDumpName(uint16_t dumpCount, std::string name);
     std::string GetProcessName();
     bool GenerateCoreClrDump(char* socketName, char* dumpFileName);
     bool IsCoreClrProcess(pid_t pid, char** socketName);

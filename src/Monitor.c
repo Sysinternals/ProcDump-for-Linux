@@ -1426,8 +1426,8 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
 //
 // GetThresholds
 //
-// Returns a comma separated string of GC mem thresholds specified in
-// self->MemoryThresholds
+// Returns a ; separated string of GC mem thresholds specified in
+// self->MemoryThreshold
 //
 //-------------------------------------------------------------------------------------
 char* GetThresholds(struct ProcDumpConfiguration *self)

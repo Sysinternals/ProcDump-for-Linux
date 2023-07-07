@@ -192,7 +192,7 @@ ContinueWildcard:
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0), currentThresholdIndex(0)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0), currentThresholdIndex(0), gen2Collection(false)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -644,7 +644,7 @@ std::string CorProfiler::GetProcessName()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GetDumpName
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string name)
+std::string CorProfiler::GetDumpName(u_int16_t dumpCount, std::string name)
 {
     LOG(TRACE) << "CorProfiler::GetDumpName: Enter";
     std::ostringstream tmp;
@@ -799,7 +799,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
 {
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Enter";
 
-    if(generationCollected[2] == true)
+    if(gcMemoryThresholdMonitorList.size() > 0 && generationCollected[2] == true)
     {
         gen2Collection = true;
     }
@@ -817,7 +817,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
 
     if(gen2Collection == true)
     {
-        // We only want to check heap sizes and thresholds after a gen2 collection
+        // During a GC threshold trigger, we only want to check heap sizes and thresholds after a gen2 collection
         gen2Collection = false;
         uint64_t heapSize = GetGCHeapSize();
         LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << heapSize;

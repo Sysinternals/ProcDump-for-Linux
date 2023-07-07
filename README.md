@@ -25,7 +25,7 @@ procdump [-n Count]
         [-s Seconds]
         [-c|-cl CPU_Usage]
         [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
-        [-gcm Commit_Usage1[,Commit_Usage2...]]
+        [-gcm Memory_Usage1[,Memory_Usage2...]]
         [-tc Thread_Threshold]
         [-fc FileDescriptor_Threshold]
         [-sig Signal_Number]
@@ -43,9 +43,9 @@ Options:
    -s      Consecutive seconds before dump is written (default is 10).
    -c      CPU threshold above which to create a dump of the process.
    -cl     CPU threshold below which to create a dump of the process.
-   -m      Memory commit thresholds (MB) above which to create dumps.
-   -ml     Memory commit thresholds (MB) below which to create dumps.
-   -gcm    [.NET] GC memory commit threshold in MB at which to create a dump.
+   -m      Memory commit threshold(s) (MB) above which to create dumps.
+   -ml     Memory commit threshold(s) (MB) below which to create dumps.
+   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
