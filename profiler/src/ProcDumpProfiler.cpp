@@ -357,9 +357,8 @@ bool CorProfiler::ParseClientData(char* clientData)
             triggerType = static_cast<enum TriggerType>(std::stoi(dataItem));
             LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << triggerType;
             i++;
-            continue;
         }
-        if(i == 1)
+        else if(i == 1)
         {
             //
             // Second part of the list is either:
@@ -370,9 +369,8 @@ bool CorProfiler::ParseClientData(char* clientData)
 
             LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << fullDumpPath;
             i++;
-            continue;
         }
-        if(i == 2)
+        else if(i == 2)
         {
             //
             // Third part of the list is always the procdump pid.
@@ -381,10 +379,8 @@ bool CorProfiler::ParseClientData(char* clientData)
             procDumpPid = std::stoi(dataItem);
             LOG(TRACE) << "CorProfiler::ParseClientData: ProcDump PID = " << procDumpPid;
             i++;
-            continue;
         }
-
-        if(triggerType == Exception)
+        else if(triggerType == Exception)
         {
             // exception filter
             std::string segment2;
@@ -404,6 +400,11 @@ bool CorProfiler::ParseClientData(char* clientData)
         {
             // GC threshold list
             gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
+        }
+        else
+        {
+            LOG(TRACE) << "CorProfiler::ParseClientData Unrecognized trigger type";
+            return false;
         }
     }
 
