@@ -43,17 +43,6 @@
 // Structs
 // -------------------
 
-enum TriggerType
-{
-    Processor,
-    Commit,
-    Timer,
-    Signal,
-    ThreadCount,
-    FileDescriptorCount,
-    Exception
-};
-
 struct TriggerThread
 {
     pthread_t thread;
@@ -96,8 +85,10 @@ struct ProcDumpConfiguration {
     int CpuThreshold;               // -c
     bool bCpuTriggerBelowValue;     // -cl
     int* MemoryThreshold;           // -m
+    int MemoryThresholdCount;
     int MemoryCurrentThreshold;
     bool bMemoryTriggerBelowValue;  // -m or -ml
+    bool bMonitoringGCMemory;       // -gcm
     int ThresholdSeconds;           // -s
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n

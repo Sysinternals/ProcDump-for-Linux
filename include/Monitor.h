@@ -30,6 +30,9 @@ bool IsQuit(struct ProcDumpConfiguration *self);
 int SetQuit(struct ProcDumpConfiguration *self, int quit);
 bool ContinueMonitoring(struct ProcDumpConfiguration *self);
 bool BeginMonitoring(struct ProcDumpConfiguration *self);
+bool MonitorDotNet(struct ProcDumpConfiguration *self);
+char* GetThresholds(struct ProcDumpConfiguration *self);
+char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath);
 
 // Monitor worker threads
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
@@ -38,7 +41,7 @@ void *ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
 void *FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */);
-void *ExceptionMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
+void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
 void *ProcessMonitor(void *thread_args /* struct ProcDumpConfiguration* */);
 void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguration* */);
 

@@ -5,5 +5,14 @@
 	"build": {
 		// If you want to use a different docker file (such as Dockerfile_Rocky) you can specify it here
 		"dockerfile": "Dockerfile_Ubuntu"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.cpptools",
+				"ms-vscode.cpptools-extension-pack",
+				"ms-vscode.makefile-tools"
+			]
+		}
 	}
 }

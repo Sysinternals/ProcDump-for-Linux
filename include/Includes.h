@@ -1,3 +1,4 @@
+#include "ProfilerCommon.h"
 #include "CoreDumpWriter.h"
 #include "Events.h"
 #include "GenHelpers.h"

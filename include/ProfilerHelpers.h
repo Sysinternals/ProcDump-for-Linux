@@ -14,8 +14,8 @@
 #define PROFILER_FILE_NAME  "procdumpprofiler.so"
 #define PROFILER_GUID       "{cf0d821e-299b-5307-a3d8-b283c03916dd}"
 
-int InjectProfiler(pid_t pid, char* filter, char* fullDumpPath);
-int LoadProfiler(pid_t pid, char* filter, char* fullDumpPath);
+int InjectProfiler(pid_t pid, char* clientData);
+int LoadProfiler(pid_t pid, char* clientData);
 int ExtractProfiler();
 char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDumps);
 

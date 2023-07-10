@@ -192,7 +192,7 @@ ContinueWildcard:
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0)
+CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0), currentThresholdIndex(0), gen2Collection(false)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -217,24 +217,24 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
 {
     LOG(TRACE) << "CorProfiler::InitializeForAttach: Enter";
 
-    char* filter = new char[cbClientData+1];
-    if(filter==NULL)
+    char* clientData = new char[cbClientData+1];
+    if(clientData == NULL)
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to allocate memory for exception filter";
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to allocate memory for clientData filter";
         return E_FAIL;
     }
 
-    memcpy(filter, pvClientData, cbClientData);
-    filter[cbClientData]='\0';
+    memcpy(clientData, pvClientData, cbClientData);
+    clientData[cbClientData]='\0';
 
-    if(ParseClientData(filter)==false)
+    if(ParseClientData(clientData)==false)
     {
         LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to parse client data";
-        delete[] filter;
+        delete[] clientData;
         return E_FAIL;
     }
 
-    delete[] filter;
+    delete[] clientData;
 
     processName = GetProcessName();
     if(processName.empty())
@@ -264,11 +264,27 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
         return E_FAIL;
     }
 
-    DWORD eventMask = COR_PRF_MONITOR_EXCEPTIONS;
-    HRESULT hr = this->corProfilerInfo8->SetEventMask(eventMask);
-    if(FAILED(hr))
+    if(triggerType == Exception)
     {
-        LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask";
+        HRESULT hr = this->corProfilerInfo8->SetEventMask(COR_PRF_MONITOR_EXCEPTIONS);
+        if(FAILED(hr))
+        {
+            LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask: COR_PRF_MONITOR_EXCEPTIONS";
+            return E_FAIL;
+        }
+    }
+    else if(triggerType == GCThreshold)
+    {
+        HRESULT hr = this->corProfilerInfo8->SetEventMask2(0, COR_PRF_HIGH_BASIC_GC);
+        if(FAILED(hr))
+        {
+            LOG(TRACE) << "CorProfiler::InitializeForAttach: Failed to set event mask: COR_PRF_HIGH_BASIC_GC";
+            return E_FAIL;
+        }
+    }
+    else
+    {
+        LOG(TRACE) << "CorProfiler::InitializeForAttach: Invalid trigger type found";
         return E_FAIL;
     }
 
@@ -310,71 +326,96 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-// CorProfiler::ParseExceptionList
+// CorProfiler::ParseClientData
 //
-// Syntax of client data: <fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+// Syntax of client data: <trigger_type><fullpathtodumplocation>;...
+//
+//      DOTNET_EXCEPTION_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
+//      DOTNET_GC_THRESHOLD_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-bool CorProfiler::ParseClientData(char* filter)
+bool CorProfiler::ParseClientData(char* clientData)
 {
     LOG(TRACE) << "CorProfiler::ParseClientData: Enter";
-    std::stringstream exceptionFilter(filter);
+    std::stringstream clientDataStream(clientData);
     std::string segment;
-    std::vector<std::string> exclist;
+    std::vector<std::string> dataList;
 
-    while(std::getline(exceptionFilter, segment, ';'))
+    while(std::getline(clientDataStream, segment, ';'))
     {
-        exclist.push_back(segment);
+        dataList.push_back(segment);
     }
 
-    std::vector<std::string> exceptionList;
     int i=0;
-    for(std::string exception : exclist)
+    for(std::string dataItem : dataList)
     {
-        if(i==0)
+        if(i == 0)
         {
             //
-            // First part of the exception list is either:
+            // First part of list is the type of trigger that is being invoked.
+            //
+            triggerType = static_cast<enum TriggerType>(std::stoi(dataItem));
+            LOG(TRACE) << "CorProfiler::ParseClientData: trigger type = " << triggerType;
+            i++;
+        }
+        else if(i == 1)
+        {
+            //
+            // Second part of the list is either:
             //    > base path to dump location (if it ends with '/')
             //    > full path to dump file
             //
-            fullDumpPath = exception;
+            fullDumpPath = dataItem;
 
             LOG(TRACE) << "CorProfiler::ParseClientData: Full path to dump = " << fullDumpPath;
             i++;
-            continue;
         }
-        if(i==1)
+        else if(i == 2)
         {
             //
-            // Second part of the exception list is always the procdump pid.
+            // Third part of the list is always the procdump pid.
             // we we need this to communicate back status to procdump
             //
-            procDumpPid = std::stoi(exception);
+            procDumpPid = std::stoi(dataItem);
             LOG(TRACE) << "CorProfiler::ParseClientData: ProcDump PID = " << procDumpPid;
             i++;
-            continue;
         }
+        else if(triggerType == Exception)
+        {
+            // exception filter
+            std::string segment2;
+            std::stringstream stream(dataItem);
+            ExceptionMonitorEntry entry;
+            entry.exceptionID = NULL;
+            entry.collectedDumps = 0;
+            std::getline(stream, segment2, ':');
 
+            entry.exception = segment2;
+            std::getline(stream, segment2, ':');
+            entry.dumpsToCollect = std::stoi(segment2);
 
-        // exception filter
-        std::string segment2;
-        std::stringstream stream(exception);
-        ExceptionMonitorEntry entry;
-        entry.exceptionID = NULL;
-        entry.collectedDumps = 0;
-        std::getline(stream, segment2, ':');
-
-        entry.exception = segment2;
-        std::getline(stream, segment2, ':');
-        entry.dumpsToCollect = std::stoi(segment2);
-
-        exceptionMonitorList.push_back(entry);
+            exceptionMonitorList.push_back(entry);
+        }
+        else if (triggerType == GCThreshold)
+        {
+            // GC threshold list
+            gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
+        }
+        else
+        {
+            LOG(TRACE) << "CorProfiler::ParseClientData Unrecognized trigger type";
+            return false;
+        }
     }
 
     for (auto & element : exceptionMonitorList)
     {
         LOG(TRACE) << "CorProfiler::ParseClientData:Exception filter " << element.exception << " with dump count set to " << std::to_string(element.dumpsToCollect);
+    }
+
+    for (auto & element : gcMemoryThresholdMonitorList)
+    {
+        LOG(TRACE) << "CorProfiler::ParseClientData:GCMemoryThreshold  " << element;
     }
 
     LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
@@ -604,14 +645,14 @@ std::string CorProfiler::GetProcessName()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GetDumpName
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionName)
+std::string CorProfiler::GetDumpName(u_int16_t dumpCount, std::string name)
 {
     LOG(TRACE) << "CorProfiler::GetDumpName: Enter";
     std::ostringstream tmp;
 
     //
     // If the path ends in '/' it means we have a base path and need to create the full path according to:
-    //  <base_path>/<process_name>_exception_<date_time_stamp>
+    //  <base_path>/<process_name>_<dumpcount>_<name>_<date_time_stamp>
     //
     if(fullDumpPath[fullDumpPath.length()-1] == '/')
     {
@@ -631,7 +672,7 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionNa
         strftime(date, 26, "%Y-%m-%d_%H:%M:%S", timerInfo);
         LOG(TRACE) << "CorProfiler::GetDumpName: Date/time " << date;
 
-        tmp << fullDumpPath << processName.c_str() << "_" << dumpCount << "_" << exceptionName << "_" << date;
+        tmp << fullDumpPath << processName.c_str() << "_" << dumpCount << "_" << name << "_" << date;
         LOG(TRACE) << "CorProfiler::GetDumpName: Full path name " << tmp.str();
     }
     else
@@ -647,6 +688,170 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount,std::string exceptionNa
 
     LOG(TRACE) << "CorProfiler::GetDumpName: Exit";
     return tmp.str();
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GetGCHeapSize
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+uint64_t CorProfiler::GetGCHeapSize()
+{
+    LOG(TRACE) << "CorProfiler::GetGCHeapSize: Enter";
+    uint64_t gcHeapSize = 0;
+
+    ULONG nObjectRanges = 0;
+    bool fHeapAlloc = false;
+    COR_PRF_GC_GENERATION_RANGE* pObjectRanges = NULL;
+    const ULONG cRanges = 32;
+    COR_PRF_GC_GENERATION_RANGE objectRangesStackBuffer[cRanges];
+
+    HRESULT hr = corProfilerInfo8->GetGenerationBounds(cRanges, &nObjectRanges, objectRangesStackBuffer);
+    if (FAILED(hr))
+    {
+        LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed calling GetGenerationBounds " << hr;
+        return 0;
+    }
+
+    if (nObjectRanges <= cRanges)
+    {
+        pObjectRanges = objectRangesStackBuffer;
+    }
+
+    if (pObjectRanges == NULL)
+    {
+        pObjectRanges = new COR_PRF_GC_GENERATION_RANGE[nObjectRanges];
+        if (pObjectRanges == NULL)
+        {
+            LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to allocate memory for object ranges ";
+            return 0;
+        }
+
+        fHeapAlloc = true;
+
+        ULONG nObjectRanges2 = 0;
+        HRESULT hr = corProfilerInfo8->GetGenerationBounds(nObjectRanges, &nObjectRanges2, pObjectRanges);
+        if (FAILED(hr) || nObjectRanges != nObjectRanges2)
+        {
+            LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to call GetGenerationBounds with allocated memory";
+            delete[] pObjectRanges;
+            return 0;
+        }
+    }
+
+    for (int i = nObjectRanges - 1; i >= 0; i--)
+    {
+        gcHeapSize += pObjectRanges[i].rangeLength;
+    }
+
+    if(fHeapAlloc == true)
+    {
+        delete[] pObjectRanges;
+    }
+
+    LOG(TRACE) << "CorProfiler::GetGCHeapSize: Exit";
+    return gcHeapSize;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::WriteDumpHelper
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::WriteDumpHelper(std::string dumpName)
+{
+    LOG(TRACE) << "CorProfiler::WriteDumpHelper: Enter";
+    AutoMutex lock = AutoMutex(&endDumpCondition);
+
+    char* socketName = NULL;
+    if(IsCoreClrProcess(getpid(), &socketName))
+    {
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Target is .NET process";
+        bool res = GenerateCoreClrDump(socketName, const_cast<char*> (dumpName.c_str()));
+        if(res == false)
+        {
+            LOG(TRACE) << "CorProfiler::WriteDumpHelper: Failed to generate core dump";
+            delete[] socketName;
+            return false;
+        }
+
+        // Notify procdump that a dump was generated
+        if(SendDumpCompletedStatus(dumpName, PROFILER_STATUS_SUCCESS) == -1)
+        {
+            LOG(TRACE) << "CorProfiler::WriteDumpHelper: Failed to notify procdump about dump creation";
+            delete[] socketName;
+            return false;
+        }
+
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Generating core dump result: " << res;
+
+        delete[] socketName;
+    }
+    else
+    {
+        LOG(TRACE) << "CorProfiler::WriteDumpHelper: Target process is not a .NET process";
+        return false;
+    }
+
+    LOG(TRACE) << "CorProfiler::WriteDumpHelper: Exit";
+    return true;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GarbageCollectionStarted
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCollected[], COR_PRF_GC_REASON reason)
+{
+    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Enter";
+
+    if(gcMemoryThresholdMonitorList.size() > 0 && generationCollected[2] == true)
+    {
+        gen2Collection = true;
+    }
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
+    return S_OK;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::GarbageCollectionFinished
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
+{
+    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Enter";
+
+    if(gen2Collection == true)
+    {
+        // During a GC threshold trigger, we only want to check heap sizes and thresholds after a gen2 collection
+        gen2Collection = false;
+        uint64_t heapSize = GetGCHeapSize();
+        LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << heapSize;
+
+        if(currentThresholdIndex < gcMemoryThresholdMonitorList.size() && heapSize >= gcMemoryThresholdMonitorList[currentThresholdIndex])
+        {
+            LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Current threshold value " << gcMemoryThresholdMonitorList[currentThresholdIndex];
+
+            std::string dump = GetDumpName(currentThresholdIndex + 1,convertString<std::string,std::wstring>(L"gc_size"));
+
+            // Generate dump
+            if(WriteDumpHelper(dump) == false)
+            {
+                SendCatastrophicFailureStatus();
+                return E_FAIL;
+            }
+            else
+            {
+                currentThresholdIndex++;
+            }
+
+            if(currentThresholdIndex >= gcMemoryThresholdMonitorList.size())
+            {
+                // Stop monitoring
+                LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Reached last threshold ";
+                CleanupProfiler();
+                UnloadProfiler();
+            }
+        }
+    }
+
+    LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Exit";
+    return S_OK;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -685,7 +890,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
     for (auto & element : exceptionMonitorList)
     {
         WCHAR* exception = GetUint16(const_cast<char*> (element.exception.c_str()));
-        if(exception==NULL)
+        if(exception == NULL)
         {
             LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to get exception name (WHCAR).";
             SendCatastrophicFailureStatus();
@@ -694,13 +899,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
         if(WildcardSearch(exceptionWCHARs,exception) && element.exceptionID != thrownObjectId)
         {
-            //
-            // We have to serialize calls to the diag pipe to avoid concurrency issues
-            //
-            AutoMutex lock = AutoMutex(&endDumpCondition);
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 LOG(TRACE) << "CorProfiler::ExceptionThrown: Dump count has been reached...exiting early";
+                free(exception);
                 return S_OK;
             }
 
@@ -708,53 +910,21 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
             std::string dump = GetDumpName(element.collectedDumps,convertString<std::string,std::wstring>(exceptionName.ToWString()));
 
-            // Invoke coreclr dump generation
-            char* socketName = NULL;
-            if(IsCoreClrProcess(getpid(), &socketName))
+            if(WriteDumpHelper(dump) == false)
             {
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Target is .NET process";
-                bool res = GenerateCoreClrDump(socketName, const_cast<char*> (dump.c_str()));
-                if(res==false)
-                {
-                    delete[] socketName;
-
-                    // If we fail to generate a core dump we consider that a catastrophic failure and terminate all monitoring
-                    SendCatastrophicFailureStatus();
-                    return E_FAIL;
-                }
-
-                //
-                // In asp.net, an exception thrown in the app is caught by asp.net and then rethrown and caught again. To avoid
-                // generating multiple dumps for the same exception instance we store the objectID. If we have already generated
-                // a dump for that object ID we simply ignore it
-                //
-                element.exceptionID = thrownObjectId;
-
-                // Notify procdump that a dump was generated
-                if(SendDumpCompletedStatus(dump, PROFILER_STATUS_SUCCESS)==-1)
-                {
-                    delete[] socketName;
-
-                    SendCatastrophicFailureStatus();
-                    return E_FAIL;
-                }
-
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Generating core dump result: " << res;
-
-                if(res)
-                {
-                    element.collectedDumps++;
-                }
-
-                delete[] socketName;
-            }
-            else
-            {
-                LOG(TRACE) << "CorProfiler::ExceptionThrown: Unable to create dump";
                 SendCatastrophicFailureStatus();
+                free(exception);
                 return E_FAIL;
             }
 
+            //
+            // In asp.net, an exception thrown in the app is caught by asp.net and then rethrown and caught again. To avoid
+            // generating multiple dumps for the same exception instance we store the objectID. If we have already generated
+            // a dump for that object ID we simply ignore it
+            //
+            element.exceptionID = thrownObjectId;
+
+            element.collectedDumps++;
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 // We're done collecting dumps...
@@ -1670,17 +1840,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ThreadNameChanged(ThreadID threadId, ULON
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations, BOOL generationCollected[], COR_PRF_GC_REASON reason)
-{
-    return S_OK;
-}
-
 HRESULT STDMETHODCALLTYPE CorProfiler::SurvivingReferences(ULONG cSurvivingObjectIDRanges, ObjectID objectIDRangeStart[], ULONG cObjectIDRangeLength[])
-{
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
 {
     return S_OK;
 }
