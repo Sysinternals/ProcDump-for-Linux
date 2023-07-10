@@ -1250,7 +1250,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 //
 // NOTE: .NET only.
 // NOTE: At the moment, .NET triggers are mutually exclusive meaning
-// only one can specified at a time. For example, you cannot specify
+// only one can be specified at a time. For example, you cannot specify
 // both exception based monitoring and GC based monitoring.
 //
 //--------------------------------------------------------------------

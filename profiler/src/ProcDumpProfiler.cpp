@@ -708,7 +708,7 @@ uint64_t CorProfiler::GetGCHeapSize()
     if (FAILED(hr))
     {
         LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed calling GetGenerationBounds " << hr;
-        return E_FAIL;
+        return 0;
     }
 
     if (nObjectRanges <= cRanges)
@@ -722,7 +722,7 @@ uint64_t CorProfiler::GetGCHeapSize()
         if (pObjectRanges == NULL)
         {
             LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to allocate memory for object ranges ";
-            return E_FAIL;
+            return 0;
         }
 
         fHeapAlloc = true;
@@ -733,7 +733,7 @@ uint64_t CorProfiler::GetGCHeapSize()
         {
             LOG(TRACE) << "CorProfiler::GetGCHeapSize: Failed to call GetGenerationBounds with allocated memory";
             delete[] pObjectRanges;
-            return E_FAIL;
+            return 0;
         }
     }
 
@@ -899,9 +899,6 @@ HRESULT STDMETHODCALLTYPE CorProfiler::ExceptionThrown(ObjectID thrownObjectId)
 
         if(WildcardSearch(exceptionWCHARs,exception) && element.exceptionID != thrownObjectId)
         {
-            //
-            // We have to serialize calls to the diag pipe to avoid concurrency issues
-            //
             if(element.collectedDumps == element.dumpsToCollect)
             {
                 LOG(TRACE) << "CorProfiler::ExceptionThrown: Dump count has been reached...exiting early";
