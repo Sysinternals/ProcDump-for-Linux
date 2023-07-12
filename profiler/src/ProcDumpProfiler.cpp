@@ -190,9 +190,24 @@ ContinueWildcard:
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------
+// CorProfiler::IsHighPerfBasicGC
+//------------------------------------------------------------------------------------------------------------------------------------------------------
+bool CorProfiler::IsHighPerfBasicGC()
+{
+    if(triggerType == GCThreshold || triggerType == GCGeneration)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::CorProfiler
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-CorProfiler::CorProfiler() : refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr), procDumpPid(0), currentThresholdIndex(0), gen2Collection(false)
+CorProfiler::CorProfiler() :
+    refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr),
+    procDumpPid(0), currentThresholdIndex(0), gen2Collection(false), gcGeneration(-1), gcGenStarted(false)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -273,7 +288,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::InitializeForAttach(IUnknown *pCorProfile
             return E_FAIL;
         }
     }
-    else if(triggerType == GCThreshold)
+    else if(IsHighPerfBasicGC() == true)
     {
         HRESULT hr = this->corProfilerInfo8->SetEventMask2(0, COR_PRF_HIGH_BASIC_GC);
         if(FAILED(hr))
@@ -401,6 +416,12 @@ bool CorProfiler::ParseClientData(char* clientData)
             // GC threshold list
             gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
         }
+        else if (triggerType == GCGeneration)
+        {
+            // GC generation
+            gcGeneration = std::stoi(dataItem);
+            break;
+        }
         else
         {
             LOG(TRACE) << "CorProfiler::ParseClientData Unrecognized trigger type";
@@ -416,6 +437,11 @@ bool CorProfiler::ParseClientData(char* clientData)
     for (auto & element : gcMemoryThresholdMonitorList)
     {
         LOG(TRACE) << "CorProfiler::ParseClientData:GCMemoryThreshold  " << element;
+    }
+
+    if(gcGeneration != -1)
+    {
+        LOG(TRACE) << "CorProfiler::ParseClientData:GCGeneration  " << gcGeneration;
     }
 
     LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
@@ -802,7 +828,21 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
 
     if(gcMemoryThresholdMonitorList.size() > 0 && generationCollected[2] == true)
     {
+        // GC memory threshold dump
         gen2Collection = true;
+    }
+    else if(gcGeneration != -1 && gcGenStarted == false && generationCollected[gcGeneration] == true)
+    {
+        // GC Generation dump
+        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration;
+        std::string dump = GetDumpName(1, convertString<std::string,std::wstring>(L"gc_gen"));
+        if(WriteDumpHelper(dump) == false)
+        {
+            SendCatastrophicFailureStatus();
+            return E_FAIL;
+        }
+
+        gcGenStarted = true;
     }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
@@ -848,6 +888,23 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
                 UnloadProfiler();
             }
         }
+    }
+    else if(gcGenStarted == true)
+    {
+        // GC Generation dump
+        LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Dump on generation: " << gcGeneration;
+        gcGenStarted = false;
+
+        std::string dump = GetDumpName(2, convertString<std::string,std::wstring>(L"gc_gen"));
+        if(WriteDumpHelper(dump) == false)
+        {
+            SendCatastrophicFailureStatus();
+            return E_FAIL;
+        }
+
+        // Stop monitoring
+        CleanupProfiler();
+        UnloadProfiler();
     }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Exit";

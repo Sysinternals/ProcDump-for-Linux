@@ -112,6 +112,8 @@ private:
     enum TriggerType triggerType;
     int currentThresholdIndex;
     bool gen2Collection;
+    int gcGeneration;
+    bool gcGenStarted;
 
     String GetExceptionName(ObjectID objectId);
     String GetExceptionMessage(ObjectID objectId);
@@ -129,6 +131,7 @@ private:
     bool WildcardSearch(WCHAR*, WCHAR*);
     u_int64_t GetGCHeapSize();
     bool WriteDumpHelper(std::string dumpName);
+    bool IsHighPerfBasicGC();
 
 public:
     CorProfiler();

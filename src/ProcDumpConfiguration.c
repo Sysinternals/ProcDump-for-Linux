@@ -151,6 +151,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->MemoryThresholdCount =        -1;
     self->MemoryCurrentThreshold =      0;
     self->bMonitoringGCMemory =         false;
+    self->DumpGCGeneration =            -1;
     self->ThreadThreshold =             -1;
     self->FileDescriptorThreshold =     -1;
     self->SignalNumber =                -1;
@@ -172,6 +173,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->statusSocket =                -1;
 
     self->bSocketInitialized =          false;
+    self->bExitProcessMonitor =         false;
     pthread_mutex_init(&self->dotnetMutex, NULL);
     pthread_cond_init(&self->dotnetCond, NULL);
 }
@@ -258,6 +260,8 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         // Init new struct
         InitProcDumpConfiguration(copy);
 
+        copy->bExitProcessMonitor = self->bExitProcessMonitor;
+
         // copy target data we need from original config
         copy->ProcessId = self->ProcessId;
         copy->bProcessGroup = self->bProcessGroup;
@@ -299,6 +303,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
         copy->MemoryThresholdCount = self->MemoryThresholdCount;
         copy->bMonitoringGCMemory = self->bMonitoringGCMemory;
+        copy->DumpGCGeneration = self->DumpGCGeneration;
         copy->ThresholdSeconds = self->ThresholdSeconds;
         copy->bTimerThreshold = self->bTimerThreshold;
         copy->NumberOfDumpsToCollect = self->NumberOfDumpsToCollect;
@@ -414,6 +419,21 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             dotnetTriggerCount++;
             self->bMonitoringGCMemory = true;
+            i++;
+        }
+        else if( 0 == strcasecmp( argv[i], "/gcgen" ) ||
+                    0 == strcasecmp( argv[i], "-gcgen" ))
+        {
+            if( i+1 >= argc || self->DumpGCGeneration != -1 ) return PrintUsage();
+            if(!ConvertToInt(argv[i+1], &self->DumpGCGeneration)) return PrintUsage();
+            if(self->DumpGCGeneration < 0)
+            {
+                Log(error, "Invalid GC generation specified.");
+                return PrintUsage();
+            }
+
+            self->NumberOfDumpsToCollect = 2;               // This accounts for 1 dump at the start of the GC and 1 at the end.
+            dotnetTriggerCount++;
             i++;
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
@@ -719,7 +739,8 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     if ((self->CpuThreshold == -1) &&
         (self->MemoryThreshold == NULL) &&
         (self->ThreadThreshold == -1) &&
-        (self->FileDescriptorThreshold == -1))
+        (self->FileDescriptorThreshold == -1) &&
+        (self->DumpGCGeneration == -1))
     {
         self->bTimerThreshold = true;
     }
@@ -866,7 +887,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         {
             printf("%-40s%s\n", "Signal:", "n/a");
         }
-        // Signal
+        // Exception
         if (self->bDumpOnException)
         {
             printf("%-40s%s\n", "Exception monitor", "On");
@@ -874,7 +895,16 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         }
         else
         {
-            printf("%-40s%s\n", "Exception monitor", "Off");
+            printf("%-40s%s\n", "Exception monitor", "n/a");
+        }
+        // GC Generation
+        if (self->DumpGCGeneration != -1)
+        {
+            printf("%-40s%d\n", "GC Generation", self->DumpGCGeneration);
+        }
+        else
+        {
+            printf("%-40s%s\n", "GC Generation", "n/a");
         }
 
         // Polling inverval
@@ -930,6 +960,7 @@ int PrintUsage()
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-gcm Memory_Usage1[,Memory_Usage2...]]\n");
+    printf("            [-gcgen Generation\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
@@ -950,6 +981,7 @@ int PrintUsage()
     printf("   -m      Memory commit threshold(s) (MB) above which to create dumps.\n");
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
     printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps.\n");
+    printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");

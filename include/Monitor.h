@@ -33,6 +33,9 @@ bool BeginMonitoring(struct ProcDumpConfiguration *self);
 bool MonitorDotNet(struct ProcDumpConfiguration *self);
 char* GetThresholds(struct ProcDumpConfiguration *self);
 char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath);
+char* GetClientDataInt(enum TriggerType triggerType, char* path, int value);
+char* GetClientDataString(enum TriggerType triggerType, char* path, char* value);
+bool ExitProcessMonitor(struct ProcDumpConfiguration* config, pthread_t processMonitor);
 
 // Monitor worker threads
 void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */);
