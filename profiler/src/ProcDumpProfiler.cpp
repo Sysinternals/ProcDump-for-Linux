@@ -347,6 +347,7 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 //
 //      DOTNET_EXCEPTION_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
 //      DOTNET_GC_THRESHOLD_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
+//      DOTNET_GC_GEN_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;GCGeneration
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(char* clientData)
