@@ -832,7 +832,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
         // GC memory threshold dump
         gen2Collection = true;
     }
-    else if(gcGeneration != -1 && gcGenStarted == false && gcGeneration <= cGenerations && generationCollected[gcGeneration] == true)
+    else if(gcGeneration != -1 && gcGenStarted == false && gcGeneration < cGenerations && generationCollected[gcGeneration] == true)
     {
         // GC Generation dump
         LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration << " and cGenerations = " << cGenerations;
