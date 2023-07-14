@@ -6,7 +6,9 @@
 // General purpose helpers
 //
 //--------------------------------------------------------------------
+#define _GNU_SOURCE
 #include "Includes.h"
+#include <syscall.h>
 
 //--------------------------------------------------------------------
 //
@@ -546,6 +548,25 @@ int recv_all(int socket, void* buffer, size_t length)
         ptr += i;
         length -= i;
     }
+
+    return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// gettid
+//
+// Returns the current thread ID. Useful to add in trace statements
+// when threads are created to match to a debug session.
+//
+// Note: SYS_gettid is not POSIX compliant.
+//
+//--------------------------------------------------------------------
+pid_t gettid()
+{
+#ifdef SYS_gettid
+    return syscall(SYS_gettid);
+#endif
 
     return 0;
 }

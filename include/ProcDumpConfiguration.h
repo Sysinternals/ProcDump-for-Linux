@@ -69,6 +69,7 @@ struct ProcDumpConfiguration {
     int NumberOfDumpsCollected; // Number of dumps we have collected
     bool bTerminated; // Do we know whether the process has terminated and subsequently whether we are terminating?
     char* socketPath;
+    bool bExitProcessMonitor;
 
     // Quit
     int nQuit; // if not 0, then quit
@@ -89,6 +90,7 @@ struct ProcDumpConfiguration {
     int MemoryCurrentThreshold;
     bool bMemoryTriggerBelowValue;  // -m or -ml
     bool bMonitoringGCMemory;       // -gcm
+    int DumpGCGeneration;           // -gcgen
     int ThresholdSeconds;           // -s
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n

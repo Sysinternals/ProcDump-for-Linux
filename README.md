@@ -26,6 +26,7 @@ procdump [-n Count]
         [-c|-cl CPU_Usage]
         [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
         [-gcm Memory_Usage1[,Memory_Usage2...]]
+        [-gcgen Generation]
         [-tc Thread_Threshold]
         [-fc FileDescriptor_Threshold]
         [-sig Signal_Number]
@@ -46,6 +47,7 @@ Options:
    -m      Memory commit threshold(s) (MB) above which to create dumps.
    -ml     Memory commit threshold(s) (MB) below which to create dumps.
    -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps.
+   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
@@ -95,6 +97,10 @@ sudo procdump -m 100,200 1234
 The following will create a core dump when .NET memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
 ```
 sudo procdump -gcm 100,200 1234
+```
+The following will create a core dump at the start and end of a .NET generation 1 garbage collection.
+```
+sudo procdump -gcgen 1
 ```
 The following will create a core dump in the `/tmp` directory immediately.
 ```
