@@ -832,10 +832,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
         // GC memory threshold dump
         gen2Collection = true;
     }
-    else if(gcGeneration != -1 && gcGenStarted == false && generationCollected[gcGeneration] == true)
+    else if(gcGeneration != -1 && gcGenStarted == false && gcGeneration <= cGenerations && generationCollected[gcGeneration] == true)
     {
         // GC Generation dump
-        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration;
+        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration << " and cGenerations = " << cGenerations;
         std::string dump = GetDumpName(1, convertString<std::string,std::wstring>(L"gc_gen"));
         if(WriteDumpHelper(dump) == false)
         {
@@ -844,6 +844,10 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
         }
 
         gcGenStarted = true;
+    }
+    else
+    {
+        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Invalid trigger data, trigger = " << triggerType << " cGenerations " << cGenerations;
     }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
