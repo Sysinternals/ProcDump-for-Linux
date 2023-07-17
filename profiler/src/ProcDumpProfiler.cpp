@@ -207,7 +207,7 @@ bool CorProfiler::IsHighPerfBasicGC()
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 CorProfiler::CorProfiler() :
     refCount(0), corProfilerInfo8(nullptr), corProfilerInfo3(nullptr), corProfilerInfo(nullptr),
-    procDumpPid(0), currentThresholdIndex(0), gen2Collection(false), gcGeneration(-1), gcGenStarted(false)
+    procDumpPid(0), currentThresholdIndex(0), gcGeneration(-1), gcGenStarted(false)
 {
     // Configure logging
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
@@ -346,13 +346,13 @@ WCHAR* CorProfiler::GetUint16(char* buffer)
 // Syntax of client data: <trigger_type><fullpathtodumplocation>;...
 //
 //      DOTNET_EXCEPTION_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;<exception>:<numdumps>;<exception>:<numdumps>,...
-//      DOTNET_GC_THRESHOLD_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
+//      DOTNET_GC_THRESHOLD_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;[<generation> | 3(LOH) | 4(POH) | 2008 (total mem)];Threshold1;Threshold2,...
 //      DOTNET_GC_GEN_TRIGGER;<fullpathtodumplocation>;<pidofprocdump>;GCGeneration
 //
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 bool CorProfiler::ParseClientData(char* clientData)
 {
-    LOG(TRACE) << "CorProfiler::ParseClientData: Enter";
+    LOG(TRACE) << "CorProfiler::ParseClientData: Enter clientData = " << clientData;
     std::stringstream clientDataStream(clientData);
     std::string segment;
     std::vector<std::string> dataList;
@@ -415,7 +415,16 @@ bool CorProfiler::ParseClientData(char* clientData)
         else if (triggerType == GCThreshold)
         {
             // GC threshold list
-            gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
+            if(i == 3)
+            {
+                // first element is the generation
+                gcGeneration = std::stoi(dataItem);
+                i++;
+            }
+            else
+            {
+                gcMemoryThresholdMonitorList.push_back(std::stoi(dataItem) << 20);
+            }
         }
         else if (triggerType == GCGeneration)
         {
@@ -442,7 +451,14 @@ bool CorProfiler::ParseClientData(char* clientData)
 
     if(gcGeneration != -1)
     {
-        LOG(TRACE) << "CorProfiler::ParseClientData:GCGeneration  " << gcGeneration;
+        if( gcGeneration == CUMULATIVE_GC_SIZE)
+        {
+            LOG(TRACE) << "CorProfiler::ParseClientData:GCGeneration " << "Cumulative";
+        }
+        else
+        {
+            LOG(TRACE) << "CorProfiler::ParseClientData:GCGeneration " << gcGeneration;
+        }
     }
 
     LOG(TRACE) << "CorProfiler::ParseClientData: Exit";
@@ -720,7 +736,7 @@ std::string CorProfiler::GetDumpName(u_int16_t dumpCount, std::string name)
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // CorProfiler::GetGCHeapSize
 //------------------------------------------------------------------------------------------------------------------------------------------------------
-uint64_t CorProfiler::GetGCHeapSize()
+uint64_t CorProfiler::GetGCHeapSize(int generation)
 {
     LOG(TRACE) << "CorProfiler::GetGCHeapSize: Enter";
     uint64_t gcHeapSize = 0;
@@ -766,7 +782,17 @@ uint64_t CorProfiler::GetGCHeapSize()
 
     for (int i = nObjectRanges - 1; i >= 0; i--)
     {
-        gcHeapSize += pObjectRanges[i].rangeLength;
+        // Uncomment this to help track down .NET memory usage while debugging.
+        //LOG(TRACE) << "Range Len: " << pObjectRanges[i].rangeLength << " Gen: " << pObjectRanges[i].generation;
+
+        if(generation == CUMULATIVE_GC_SIZE)
+        {
+            gcHeapSize += pObjectRanges[i].rangeLength;
+        }
+        else if(pObjectRanges[i].generation == generation)
+        {
+            gcHeapSize += pObjectRanges[i].rangeLength;
+        }
     }
 
     if(fHeapAlloc == true)
@@ -827,27 +853,29 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionStarted(int cGenerations
 {
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Enter";
 
-    if(gcMemoryThresholdMonitorList.size() > 0 && generationCollected[2] == true)
+    if(gcGeneration != -1 &&
+       gcGenStarted == false &&
+       gcGeneration == CUMULATIVE_GC_SIZE ||
+       (gcGeneration < cGenerations &&
+       generationCollected[gcGeneration] == true))
     {
-        // GC memory threshold dump
-        gen2Collection = true;
-    }
-    else if(gcGeneration != -1 && gcGenStarted == false && gcGeneration < cGenerations && generationCollected[gcGeneration] == true)
-    {
-        // GC Generation dump
-        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration << " and cGenerations = " << cGenerations;
-        std::string dump = GetDumpName(1, convertString<std::string,std::wstring>(L"gc_gen"));
-        if(WriteDumpHelper(dump) == false)
-        {
-            SendCatastrophicFailureStatus();
-            return E_FAIL;
-        }
-
         gcGenStarted = true;
+
+        if(gcMemoryThresholdMonitorList.size() == 0)
+        {
+            // GC Generation dump
+            LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Dump on generation: " << gcGeneration << " and cGenerations = " << cGenerations;
+            std::string dump = GetDumpName(1, convertString<std::string,std::wstring>(L"gc_gen"));
+            if(WriteDumpHelper(dump) == false)
+            {
+                SendCatastrophicFailureStatus();
+                return E_FAIL;
+            }
+        }
     }
     else
     {
-        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Invalid trigger data, trigger = " << triggerType << " cGenerations " << cGenerations;
+        LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Trigger = " << triggerType << " cGenerations " << cGenerations << " gcGeneration " << gcGeneration << " threshold size " << gcMemoryThresholdMonitorList.size();
     }
 
     LOG(TRACE) << "CorProfiler::GarbageCollectionStarted: Exit";
@@ -861,12 +889,24 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
 {
     LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Enter";
 
-    if(gen2Collection == true)
+    if(gcGenStarted == true && gcMemoryThresholdMonitorList.size() > 0)
     {
-        // During a GC threshold trigger, we only want to check heap sizes and thresholds after a gen2 collection
-        gen2Collection = false;
-        uint64_t heapSize = GetGCHeapSize();
-        LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Total heap size " << heapSize;
+        // During a GC threshold trigger, we only want to check heap sizes and thresholds after the gen collection
+        uint64_t heapSize = 0;
+        gcGenStarted = false;
+
+        if(gcGeneration == CUMULATIVE_GC_SIZE)
+        {
+            // If a generation was not explicitly specified on the command line (for example: -gcm 10,20,30) we want to get _all_ the memory of
+            // the managed heap and hence we add up all generations, LOH and POH.
+            heapSize += GetGCHeapSize(CUMULATIVE_GC_SIZE);
+            LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Cumulative heap size " << heapSize;
+        }
+        else
+        {
+            heapSize = GetGCHeapSize(gcGeneration);
+            LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Generation  " << gcGeneration << " heap size " << heapSize;
+        }
 
         if(currentThresholdIndex < gcMemoryThresholdMonitorList.size() && heapSize >= gcMemoryThresholdMonitorList[currentThresholdIndex])
         {
@@ -894,7 +934,7 @@ HRESULT STDMETHODCALLTYPE CorProfiler::GarbageCollectionFinished()
             }
         }
     }
-    else if(gcGenStarted == true)
+    else if(gcGenStarted == true && gcMemoryThresholdMonitorList.size() == 0)
     {
         // GC Generation dump
         LOG(TRACE) << "CorProfiler::GarbageCollectionFinished: Dump on generation: " << gcGeneration;

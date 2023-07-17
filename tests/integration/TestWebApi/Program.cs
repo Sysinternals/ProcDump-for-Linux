@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
@@ -13,12 +15,32 @@ app.MapGet("/fullgc", () =>
 
 app.MapGet("/memincrease", () =>
 {
+    // Gen2
     var myList = new List<byte[]>();
-    myList.Add(new byte[15000000]);
+    for(int i = 0; i < 1000; i++)
+    {
+        myList.Add(new byte[10000]);
+    }
+    // Promote to Gen2
+    GC.Collect();
+    GC.Collect();
+    GC.Collect();
+
+    // LOH
+    var myLOHList = new List<byte[]>();
+    myLOHList.Add(new byte[15000000]);
     System.GC.Collect();
-    myList.Add(new byte[15000000]);
+    myLOHList.Add(new byte[15000000]);
     System.GC.Collect();
-    myList.Add(new byte[15000000]);
+    myLOHList.Add(new byte[15000000]);
+    System.GC.Collect();
+
+    // POH
+    var p1 = GC.AllocateArray<byte>(15000000, pinned: true);
+    System.GC.Collect();
+    var p2 = GC.AllocateArray<byte>(15000000, pinned: true);
+    System.GC.Collect();
+    var p3 = GC.AllocateArray<byte>(15000000, pinned: true);
     System.GC.Collect();
 });
 

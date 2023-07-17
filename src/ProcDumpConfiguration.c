@@ -403,9 +403,59 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "-gcm" ))
         {
             if( i+1 >= argc || self->MemoryThresholdCount != -1) return PrintUsage();
-            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
+            if(strchr(argv[i+1], ':') != NULL)
+            {
+                char* token = NULL;
+                char* copy = strdup(argv[i+1]);
+                if(copy == NULL)
+                {
+                    Trace("Failed to strdup.");
+                    Log(error, INTERNAL_ERROR);
+                    return 1;
+                }
 
-            if(self->MemoryThreshold == NULL || self->MemoryThresholdCount == 0) return PrintUsage();
+                token = strtok(copy, ":");
+                if(token != NULL)
+                {
+                    if(!ConvertToInt(token, &self->DumpGCGeneration))
+                    {
+                        if(strcasecmp(token, "loh") == 0)
+                        {
+                            self->DumpGCGeneration = 3;
+                        }
+                        else if(strcasecmp(token, "poh") == 0)
+                        {
+                            self->DumpGCGeneration = 4;
+                        }
+                        else
+                        {
+                            free(copy);
+                            return PrintUsage();
+                        }
+                    }
+
+                    token = strtok(NULL, ":");
+                    if(token == NULL)
+                    {
+                        free(copy);
+                        return PrintUsage();
+                    }
+
+                    self->MemoryThreshold = GetSeparatedValues(token, ",", &self->MemoryThresholdCount);
+                }
+                else
+                {
+                    free(copy);
+                    return PrintUsage();
+                }
+
+                free(copy);
+            }
+            else
+            {
+                self->DumpGCGeneration = CUMULATIVE_GC_SIZE;        // Indicates that we want to check against total managed heap size (across all generations)
+                self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
+            }
 
             for(int i = 0; i < self->MemoryThresholdCount; i++)
             {
@@ -417,6 +467,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 }
             }
 
+            if(self->DumpGCGeneration < 0 || (self->DumpGCGeneration > MAX_GC_GEN+2 && self->DumpGCGeneration != CUMULATIVE_GC_SIZE))   // +2 for LOH and POH
+            {
+                Log(error, "Invalid GC generation or heap specified.");
+                free(self->MemoryThreshold);
+                return PrintUsage();
+            }
+
             dotnetTriggerCount++;
             self->bMonitoringGCMemory = true;
             i++;
@@ -426,7 +483,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         {
             if( i+1 >= argc || self->DumpGCGeneration != -1 ) return PrintUsage();
             if(!ConvertToInt(argv[i+1], &self->DumpGCGeneration)) return PrintUsage();
-            if(self->DumpGCGeneration < 0)
+            if(self->DumpGCGeneration < 0 || self->DumpGCGeneration > MAX_GC_GEN)
             {
                 Log(error, "Invalid GC generation specified.");
                 return PrintUsage();
@@ -959,7 +1016,7 @@ int PrintUsage()
     printf("            [-s Seconds]\n");
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
-    printf("            [-gcm Memory_Usage1[,Memory_Usage2...]]\n");
+    printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
@@ -980,7 +1037,7 @@ int PrintUsage()
     printf("   -cl     CPU threshold below which to create a dump of the process.\n");
     printf("   -m      Memory commit threshold(s) (MB) above which to create dumps.\n");
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
-    printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps.\n");
+    printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).\n");
     printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
