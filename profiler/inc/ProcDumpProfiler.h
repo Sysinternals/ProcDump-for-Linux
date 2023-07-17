@@ -111,7 +111,6 @@ private:
     pthread_mutex_t endDumpCondition;
     enum TriggerType triggerType;
     int currentThresholdIndex;
-    bool gen2Collection;
     int gcGeneration;
     bool gcGenStarted;
 
@@ -129,7 +128,7 @@ private:
     int send_all(int socket, void* buffer, size_t length);
     int recv_all(int socket, void* buffer, size_t length);
     bool WildcardSearch(WCHAR*, WCHAR*);
-    u_int64_t GetGCHeapSize();
+    u_int64_t GetGCHeapSize(int generation);
     bool WriteDumpHelper(std::string dumpName);
     bool IsHighPerfBasicGC();
 

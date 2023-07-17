@@ -130,7 +130,7 @@ int LoadProfiler(pid_t pid, char* clientData)
     payloadSize += sizeof(clientDataSize);
     payloadSize += clientDataSize*sizeof(unsigned char);
 
-    Trace("LoadProfiler: Exception list: %s", clientData);
+    Trace("LoadProfiler: client data: %s", clientData);
 
     uint16_t totalPacketSize = sizeof(struct IpcHeader)+payloadSize;
 

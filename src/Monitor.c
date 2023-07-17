@@ -1381,7 +1381,7 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
             return NULL;
         }
 
-        clientData = GetClientDataString(Exception, fullDumpPath, exceptionFilter);
+        clientData = GetClientDataHelper(Exception, fullDumpPath, "%s", exceptionFilter);
         if(clientData == NULL)
         {
             Trace("GetClientData: Failed to get client data (-e).");
@@ -1390,7 +1390,7 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
     }
     else if (self->bMonitoringGCMemory)
     {
-        // GC Memory trigger (-gcm);<fullpathtodumplocation>;<pidofprocdump>;Threshold1;Threshold2,...
+        // GC Memory trigger (-gcm);<fullpathtodumplocation>;<pidofprocdump>;Generation:Threshold1;Threshold2,...
         thresholds = GetThresholds(self);
         if(thresholds == NULL)
         {
@@ -1398,17 +1398,17 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
             return NULL;
         }
 
-        clientData = GetClientDataString(GCThreshold, fullDumpPath, thresholds);
+        clientData = GetClientDataHelper(GCThreshold, fullDumpPath, "%d;%s", self->DumpGCGeneration == -1 ? CUMULATIVE_GC_SIZE : self->DumpGCGeneration, thresholds);
         if(clientData == NULL)
         {
             Trace("GetClientData: Failed to get client data (-gcm).");
             return NULL;
         }
     }
-    else if(self->DumpGCGeneration)
+    else if(self->DumpGCGeneration != -1 && self->MemoryThreshold == NULL)
     {
         // GC Generation (-gcgen);<fullpathtodumplocation>;<pidofprocdump>;GCGeneration
-        clientData = GetClientDataInt(GCGeneration, fullDumpPath, self->DumpGCGeneration);
+        clientData = GetClientDataHelper(GCGeneration, fullDumpPath, "%d", self->DumpGCGeneration);
         if(clientData == NULL)
         {
             Trace("GetClientData: Failed to get client data (-gcgen).");
@@ -1427,51 +1427,36 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
 
 //-------------------------------------------------------------------------------------
 //
-// GetClientDataString
+// GetClientDataHelper
 //
-// Helper that fetches client data where the value is an 'char*'.
+// Helper that fetches client data based on format specified.
 //
 //-------------------------------------------------------------------------------------
-char* GetClientDataString(enum TriggerType triggerType, char* path, char* value)
+char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* format, ...)
 {
     unsigned int clientDataSize = 0;
+    unsigned int clientDataPrefixSize = 0;
     char* clientData = NULL;
 
-    clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%s", triggerType, path, getpid(), value) + 1;
+    va_list args;
+    va_start(args, format);
+
+    clientDataPrefixSize = snprintf(NULL, 0, "%d;%s;%d;", triggerType, path, getpid());
+    va_list args_copy;
+    va_copy(args_copy, args);
+    clientDataSize = clientDataPrefixSize + vsnprintf(NULL, 0, format, args_copy) + 1;
+    va_end(args_copy);
     clientData = malloc(clientDataSize);
     if(clientData == NULL)
     {
-        Trace("GetClientDataString: Failed to allocate memory for client data.");
+        Trace("GetClientDataHelper: Failed to allocate memory for client data.");
         return NULL;
     }
 
-    sprintf(clientData, "%d;%s;%d;%s", triggerType, path, getpid(), value);
+    sprintf(clientData, "%d;%s;%d;", triggerType, path, getpid());
+    vsprintf(clientData+clientDataPrefixSize, format, args);
 
-    return clientData;
-}
-
-//-------------------------------------------------------------------------------------
-//
-// GetClientDataInt
-//
-// Helper that fetches client data where the value is an 'int'.
-//
-//-------------------------------------------------------------------------------------
-char* GetClientDataInt(enum TriggerType triggerType, char* path, int value)
-{
-    unsigned int clientDataSize = 0;
-    char* clientData = NULL;
-
-    clientDataSize = snprintf(NULL, 0, "%d;%s;%d;%d", triggerType, path, getpid(), value) + 1;
-    clientData = malloc(clientDataSize);
-    if(clientData == NULL)
-    {
-        Trace("GetClientDataInt: Failed to allocate memory for client data.");
-        return NULL;
-    }
-
-    sprintf(clientData, "%d;%s;%d;%d", triggerType, path, getpid(), value);
-
+    va_end(args);
     return clientData;
 }
 
