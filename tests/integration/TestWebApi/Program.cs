@@ -24,6 +24,7 @@ app.MapGet("/memincrease", () =>
     // Promote to Gen2
     GC.Collect();
     GC.Collect();
+    GC.Collect();
 
     // LOH
     var myLOHList = new List<byte[]>();
