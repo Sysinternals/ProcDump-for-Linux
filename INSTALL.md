@@ -1,6 +1,6 @@
 # Install ProcDump
 
-## Ubuntu 20.04, 22.04
+## Ubuntu 20.04, 22.04, 23.04
 #### 1. Register Microsoft key and feed
 ```sh
 wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
@@ -32,11 +32,42 @@ sudo apt-get update
 sudo apt-get install procdump
 ```
 
-## Fedora 36
+## Debian 12
+#### 1. Register Microsoft key and feed
+```sh
+wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.asc.gpg
+sudo mv microsoft.asc.gpg /etc/apt/trusted.gpg.d/
+wget -q https://packages.microsoft.com/config/debian/12/prod.list
+sudo mv prod.list /etc/apt/sources.list.d/microsoft-prod.list
+sudo chown root:root /etc/apt/trusted.gpg.d/microsoft.asc.gpg
+sudo chown root:root /etc/apt/sources.list.d/microsoft-prod.list
+```
+
+#### 2. Install Procdump
+```sh
+sudo apt-get update
+sudo apt-get install apt-transport-https
+sudo apt-get update
+sudo apt-get install procdump
+```
+
+## Fedora 37
 #### 1. Register Microsoft key and feed
 ```sh
 sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/fedora/36/prod.repo
+sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/fedora/37/prod.repo
+```
+
+#### 2. Install Procdump
+```sh
+sudo dnf install procdump
+```
+
+## Fedora 38
+#### 1. Register Microsoft key and feed
+```sh
+sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/fedora/38/prod.repo
 ```
 
 #### 2. Install Procdump
