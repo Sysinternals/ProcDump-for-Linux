@@ -56,7 +56,7 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
-* Wed July 26 2023 Mario Hewardt <marioh@microsoft.com> - 2.0
+* Wed Jul 26 2023 Mario Hewardt <marioh@microsoft.com> - 2.0
 - -gcm allows you to specify generation or heap (LOH and POH) thresholds.
 - -gcgen allows you to create a dump at the start and end of a GC.
 - Allow multiple thresholds for memory trigger (-m)
