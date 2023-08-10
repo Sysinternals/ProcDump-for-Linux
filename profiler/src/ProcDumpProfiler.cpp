@@ -213,6 +213,7 @@ CorProfiler::CorProfiler() :
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Filename, LOG_FILE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::MaxLogFileSize, MAX_LOG_FILE_SIZE);
     el::Loggers::reconfigureAllLoggers(el::ConfigurationType::ToStandardOutput, "false");
+    el::Loggers::reconfigureAllLoggers(el::ConfigurationType::Format, "%datetime %level [%thread] [%func] [%loc] %msg");
 
     pthread_mutex_init(&endDumpCondition, NULL);
 }
