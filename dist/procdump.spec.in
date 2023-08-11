@@ -56,6 +56,10 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Fri Aug 11 2023 Mario Hewardt <marioh@microsoft.com> - 2.1
+- Fixes bug that can lead to crash in monitored .NET process
+- Adds thread id to profiler tracing
+
 * Wed Jul 26 2023 Mario Hewardt <marioh@microsoft.com> - 2.0
 - -gcm allows you to specify generation or heap (LOH and POH) thresholds.
 - -gcgen allows you to create a dump at the start and end of a GC.

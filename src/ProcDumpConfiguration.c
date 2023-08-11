@@ -994,7 +994,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v2.0 - Sysinternals process dump utility\n");
+    printf("\nProcDump v2.1 - Sysinternals process dump utility\n");
     printf("Copyright (C) 2023 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
