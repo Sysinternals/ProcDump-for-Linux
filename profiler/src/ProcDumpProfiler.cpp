@@ -1225,7 +1225,7 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
         }
 
         //
-        // Loop to lcoate the "_message" field
+        // Loop to locate the "_message" field
         // Get stringLength from the "_message" field stringLengthOffset
         // Copy the number of (stringLength+1) WCHARs from the "_message" field stringBufferOffset to our stringBuffer
         //
@@ -1251,18 +1251,24 @@ String CorProfiler::GetExceptionMessage(ObjectID objectId)
                     delete [] pFieldOffsets;
                     return WCHAR("");
                 }
+
                 msgField = *(PLONG_PTR)(((BYTE *)objectId) + pFieldOffsets[fieldIndex].ulOffset);
-                stringLength = *(PINT32)((BYTE *)msgField + stringLengthOffset);
-                stringBuffer = new WCHAR[stringLength+1];
-                if(stringBuffer==NULL)
+                if(msgField != NULL)
                 {
-                    LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed memory allocation for stringBuffer";
-                    if(metadata != NULL) metadata->Release();
-                    delete [] pFieldOffsets;
-                    return WCHAR("");;
+                    stringLength = *(PINT32)((BYTE *)msgField + stringLengthOffset);
+                    stringBuffer = new WCHAR[stringLength+1];
+                    if(stringBuffer==NULL)
+                    {
+                        LOG(TRACE) << "CorProfiler::GetExceptionMessage: Failed memory allocation for stringBuffer";
+                        if(metadata != NULL) metadata->Release();
+                        delete [] pFieldOffsets;
+                        return WCHAR("");;
+                    }
+
+                    memcpy(stringBuffer, (BYTE *)msgField+stringBufferOffset,(stringLength+1)*sizeof(WCHAR));
+                    msg+=stringBuffer;
                 }
-                memcpy(stringBuffer, (BYTE *)msgField+stringBufferOffset,(stringLength+1)*sizeof(WCHAR));
-                msg+=stringBuffer;
+
                 break;
             }
         }
