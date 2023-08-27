@@ -153,7 +153,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     {
         Log(error, INTERNAL_ERROR);
         Trace("CreateMonitorThreads: failed to create SignalThread.");
-        free(monitoredProcessMap);
         return;
     }
 
@@ -199,7 +198,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to allocate memory for item");
-            free(monitoredProcessMap);
             return;
         }
 
@@ -209,7 +207,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("MonitorProcesses: failed to alloc struct for process.");
-            free(monitoredProcessMap);
             return;
         }
 
@@ -226,7 +223,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Trace("MonitorProcesses: Failed to start the monitor.");
             Log(error, "MonitorProcesses: Failed to start the monitor.");
-            free(monitoredProcessMap);
             return;
         }
 
@@ -287,7 +283,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to allocate memory for item");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -297,7 +292,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for process.");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -316,7 +310,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -344,7 +337,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to allocate memory for item");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -354,7 +346,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: failed to alloc struct for named process.");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -373,7 +364,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
-                                free(monitoredProcessMap);
                                 return;
                             }
 
@@ -471,7 +461,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         {
             Log(error, INTERNAL_ERROR);
             Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-            free(monitoredProcessMap);
             return;
         }
 
