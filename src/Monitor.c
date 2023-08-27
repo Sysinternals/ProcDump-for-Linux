@@ -1439,6 +1439,7 @@ char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* 
     if(clientData == NULL)
     {
         Trace("GetClientDataHelper: Failed to allocate memory for client data.");
+        va_end(args);
         return NULL;
     }
 
