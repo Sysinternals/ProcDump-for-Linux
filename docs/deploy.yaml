@@ -1,0 +1,95 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: <somename>
+provisioner: file.csi.azure.com
+allowVolumeExpansion: true
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=0
+  - gid=0
+  - mfsymlinks
+  - cache=strict
+  - actimeo=30
+parameters:
+  skuName: Standard_LRS
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: <somename>
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: <somename>
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapi
+  labels:
+    app: weather-forecast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: webapi
+  template:
+    metadata:
+      labels:
+        app: weather-forecast
+        service: webapi
+    spec:
+      shareProcessNamespace: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: <somename>
+
+      containers:
+        - image: webapi:latest
+          name: webapi-container
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_URLS
+              value: http://+:80
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
+        - image: sysinternals:latest
+          imagePullPolicy: Always
+          name: sysinternals-container
+          stdin: true
+          tty: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapi
+  labels:
+    app: weather-forecast
+    service: webapi
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    service: webapi
