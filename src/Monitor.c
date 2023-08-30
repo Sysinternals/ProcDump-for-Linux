@@ -1458,6 +1458,11 @@ char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* 
 // self->MemoryThreshold
 //
 //-------------------------------------------------------------------------------------
+// On GCC 11 it generates a false positive leak for thresholds.
+#if (__GNUC__ >= 11 && __GNUC__ < 12)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+#endif
 char* GetThresholds(struct ProcDumpConfiguration *self)
 {
     Trace("GetThresholds: Entering GetThresholds");
@@ -1501,6 +1506,9 @@ char* GetThresholds(struct ProcDumpConfiguration *self)
     Trace("GetThresholds: Exiting GetThresholds");
     return thresholds;
 }
+#if (__GNUC__ >= 11 && __GNUC__ < 12)
+#pragma GCC diagnostic pop
+#endif
 
 //-------------------------------------------------------------------------------------
 //
