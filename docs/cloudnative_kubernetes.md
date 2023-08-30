@@ -2,7 +2,7 @@
 In today's distributed and cloud native systems, easy access to diagnostic tools is critical to ensuring the reliability and resilience of applications. Here we'll outline the steps that are needed to leverage ProcDump in a containerized environment.
 
 ## **A note on security**
-A core dump is a static snapshot of all the memory content of a target process. As such, it can contain critically sensitive data including passwords, social security numbers, credit card numbers, encryption keys etc. Please make sure you have the right processes in place to uphold the confidentiality and integrity of the sensitive nature of core dumps.
+A core dump is a static snapshot of all the memory content of a target process. As such, it can contain critically sensitive data including passwords, social security numbers, credit card numbers, encryption keys, etc. Please make sure you have the right processes in place to uphold the confidentiality and integrity of the sensitive nature of core dumps.
 
 ## **Running ProcDump in a container**
 The simplest case is running ProcDump from within a container. A few easy steps are all that is required:
@@ -10,7 +10,7 @@ The simplest case is running ProcDump from within a container. A few easy steps 
 1. Make sure to include ProcDump in the container image.
 2. Connect to the running container.
 3. Run ProcDump.
-4. Copy the core dump from the container to a suitable location for postmortem debugging
+4. Copy the core dump from the container to a suitable location for postmortem debugging.
 
 ## **Running ProcDump in Kubernetes**
 Instead of adding ProcDump to all the container images, a more common scenario in Kubernetes is to deploy ProcDump as part of a diagnostics sidecar that can share resources within the pods. Enabling ProcDump to run in a sidecar requires a few additional steps discussed below.
