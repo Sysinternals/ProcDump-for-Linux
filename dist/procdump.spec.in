@@ -56,6 +56,10 @@ make CFLAGS="%{optflags}"
 
 
 %changelog
+* Wed Sep 6 2023 Mario Hewardt <marioh@microsoft.com> - 2.2
+- Adds Azure Linux package
+- Fixes memory leaks
+
 * Fri Aug 11 2023 Mario Hewardt <marioh@microsoft.com> - 2.1
 - Fixes bug that can lead to crash in monitored .NET process
 - Adds thread id to profiler tracing
