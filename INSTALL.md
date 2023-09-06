@@ -1,5 +1,10 @@
 # Install ProcDump
 
+## Azure Linux 2.0
+```sh
+sudo yum install procdump
+```
+
 ## Ubuntu 20.04, 22.04, 23.04
 #### 1. Register Microsoft key and feed
 ```sh
