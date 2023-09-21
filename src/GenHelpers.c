@@ -155,17 +155,19 @@ bool IsValidNumberArg(const char *arg)
 //--------------------------------------------------------------------
 uint16_t* GetUint16(char* buffer)
 {
+    int len;
     uint16_t* dumpFileNameW = NULL;
 
     if(buffer!=NULL)
     {
-        dumpFileNameW = malloc((strlen(buffer)+1)*sizeof(uint16_t));
+	len = strlen(buffer) + 1;
+        dumpFileNameW = malloc((len)*sizeof(uint16_t));
         if(dumpFileNameW==NULL)
         {
             return NULL;
         }
 
-        for(int i=0; i<(strlen(buffer)+1); i++)
+        for(int i=0; i<len; i++)
         {
             dumpFileNameW[i] = (uint16_t) buffer[i];
         }
@@ -186,6 +188,7 @@ uint16_t* GetUint16(char* buffer)
 //--------------------------------------------------------------------
 char* GetPath(char* lineBuf)
 {
+    int i = 7;
     char delim[] = " ";
 
     // example of /proc/net/unix line:
@@ -193,7 +196,7 @@ char* GetPath(char* lineBuf)
     char *ptr = strtok(lineBuf, delim);
 
     // Move to last column which contains the name of the file (/socket)
-    for(int i=0; i<7; i++)
+    while (i--)
     {
         ptr = strtok(NULL, delim);
     }
