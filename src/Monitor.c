@@ -1297,7 +1297,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0', +1 = '/'
+                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1484,19 +1484,16 @@ char* GetThresholds(struct ProcDumpConfiguration *self)
     if(thresholds != NULL)
     {
         char* writePos = thresholds;
-        if(thresholds != NULL)
+        for(int i = 0; i < self->MemoryThresholdCount; i++)
         {
-            for(int i = 0; i < self->MemoryThresholdCount; i++)
+	    int len = snprintf(writePos, thresholdLen, "%d", self->MemoryThreshold[i]);
+	    writePos += len;
+	    thresholdLen -= len;
+	    if(i != self->MemoryThresholdCount - 1)
             {
-                int len = snprintf(writePos, thresholdLen, "%d", self->MemoryThreshold[i]);
-                writePos += len;
-                thresholdLen -= len;
-                if(i != self->MemoryThresholdCount - 1)
-                {
-                    *writePos = ';';
-                    writePos++;
-                    thresholdLen--;
-                }
+		*writePos = ';';
+		writePos++;
+		thresholdLen--;
             }
         }
 
