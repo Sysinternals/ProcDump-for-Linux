@@ -1,7 +1,19 @@
 ROOT=.
-CC ?= gcc
+CC ?= clang
 CFLAGS ?= -Wall
-CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -fanalyzer -Werror
+
+# Defines which target the profiler is compiled against. Defaults to HOST_AMD64. Options are:
+# HOST_X86
+# HOST_AMD64
+# HOST_ARM
+# HOST_ARM64
+# HOST_S390X
+# HOST_LOONGARCH64
+# HOST_RISCV64
+# HOST_POWERPC64
+CLRHOST ?= HOST_AMD64
+
+CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -Werror
 LIBDIR=lib
 OBJDIR=obj
 SRCDIR=src
@@ -19,7 +31,7 @@ TESTOUT=$(BINDIR)/ProcDumpTestApplication
 # Profiler
 PROFSRCDIR=profiler/src
 PROFINCDIR=profiler/inc
-PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -DBIT64 -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
+PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -D$(CLRHOST) -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
 PROFCLANG=clang++
 
 # Revision value from build pipeline
