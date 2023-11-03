@@ -2,16 +2,34 @@ ROOT=.
 CC ?= clang
 CFLAGS ?= -Wall
 
-# Defines which target the profiler is compiled against. Defaults to HOST_AMD64. Options are:
-# HOST_X86
-# HOST_AMD64
-# HOST_ARM
-# HOST_ARM64
-# HOST_S390X
-# HOST_LOONGARCH64
-# HOST_RISCV64
-# HOST_POWERPC64
-CLRHOST ?= HOST_AMD64
+# ProcDump implements .NET triggers via a .NET Profiler. .NET has a set of
+# architectures that it supports and we have to make sure we're building on
+# one of the supported ones below.
+HOST := $(shell uname -p)
+
+ifeq ($(HOST), $(filter $(HOST), x86_64 amd64))
+	CLRHOSTDEF := -DHOST_AMD64 -DHOST_64BIT
+else ifeq ($(HOST), $(filter $(HOST), x86 i686))
+	CLRHOSTDEF := -DHOST_X86
+else ifeq ($(HOST), $(filter $(HOST), armv6 armv6l))
+	CLRHOSTDEF := -DHOST_ARM -DHOST_ARMV6
+else ifeq ($(HOST), $(filter $(HOST), arm armv7-a))
+	CLRHOSTDEF := -DHOST_ARM
+else ifeq ($(HOST), $(filter $(HOST), aarch64 arm64))
+	CLRHOSTDEF := -DHOST_ARM64 -DHOST_64BIT
+else ifeq ($(HOST), loongarch64)
+	CLRHOSTDEF := -DHOST_LOONGARCH64 -DHOST_64BIT
+else ifeq ($(HOST), riscv64)
+	CLRHOSTDEF := -DHOST_RISCV64 -DHOST_64BIT
+else ifeq ($(HOST), s390x)
+	CLRHOSTDEF := -DHOST_S390X -DHOST_64BIT -DBIGENDIAN
+else ifeq ($(HOST), mips64)
+	CLRHOSTDEF := -DHOST_MIPS64 -DHOST_64BIT=1
+else ifeq ($(HOST), ppc64le)
+	CLRHOSTDEF := -DHOST_POWERPC64 -DHOST_64BIT
+else
+	$(error Unsupported architecture: $(HOST))
+endif
 
 CCFLAGS=$(CFLAGS) -I ./include -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -Werror
 LIBDIR=lib
@@ -31,7 +49,7 @@ TESTOUT=$(BINDIR)/ProcDumpTestApplication
 # Profiler
 PROFSRCDIR=profiler/src
 PROFINCDIR=profiler/inc
-PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions -DHOST_64BIT -D$(CLRHOST) -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
+PROFCXXFLAGS ?= -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -shared --no-undefined -Wno-invalid-noreturn -Wno-pragma-pack -Wno-writable-strings -Wno-format-security -fPIC -fms-extensions $(CLRHOSTDEF) -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11
 PROFCLANG=clang++
 
 # Revision value from build pipeline
