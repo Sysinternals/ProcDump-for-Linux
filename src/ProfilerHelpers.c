@@ -68,7 +68,6 @@ int LoadProfiler(pid_t pid, char* clientData)
 
     auto_free_fd int fd = -1;
     auto_free char* socketName = NULL;
-    auto_free char* dumpPath = NULL;
     auto_free uint16_t* profilerPathW = NULL;
     auto_free void* temp_buffer = NULL;
 

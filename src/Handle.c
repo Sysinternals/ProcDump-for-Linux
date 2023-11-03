@@ -287,9 +287,13 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
         retVal = (WaitAll) ? rc : results[0].retVal + results[0].threadIndex;
     }
 
+#ifndef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
     // Analyzer false positive: 'coordinator' is freed on a different thread.
     return retVal;
 #pragma GCC diagnostic pop
+#else
+    return retVal;
+#endif
 }
