@@ -1,0 +1,206 @@
+#
+#
+#    ProcDump-for-Linux
+#
+#    Copyright (c) Microsoft Corporation
+#
+#    All rights reserved.
+#
+#    MIT License
+#
+#    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ""Software""), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+#
+#    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+#
+#    THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
+#
+
+#################################################################################
+#
+# CMakeLists.txt
+#
+# Build script
+#
+#################################################################################
+
+cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0048 NEW)
+
+#
+# set the project name - version is MAJOR.MINOR.PATCH.RELEASE - releases start at 1
+#
+if (DEFINED ENV{VERSION})
+  project(ProcDumpForLinux VERSION $ENV{VERSION})
+else()
+  project(ProcDumpForLinux VERSION 0.0.0)
+endif()
+
+set(PROJECT_VERSION_TWEAK 0)
+file(READ "dist/changelog" CHANGE_LOG)
+
+#
+# package name
+#
+set(PACKAGE_NAME "procdump")
+
+#
+# MAN page
+#
+set(PROCDUMP_COMPRESS_MAN "procdump.1.gz")
+
+add_custom_target(procDumpManPageCompress ALL
+                  DEPENDS ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                  )
+
+add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                   COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                   COMMENT "Compressing ProcDump man page"
+                   DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
+                  )
+
+#
+# Change log
+#
+set(PROCDUMP_COMPRESS_CHANGELOG "changelog.gz")
+
+add_custom_target(procDumpChangelogCompress ALL
+                  DEPENDS ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_CHANGELOG}
+                  )
+
+add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_CHANGELOG}
+                   COMMAND cp "${CMAKE_SOURCE_DIR}/dist/changelog" ${PROJECT_BINARY_DIR} && gzip -f -c "${CMAKE_SOURCE_DIR}/dist/changelog" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_CHANGELOG}
+                   COMMENT "Compressing changelog"
+                   DEPENDS "${CMAKE_SOURCE_DIR}/dist/changelog"
+                  )
+
+#
+# Paths
+#
+set(profiler_INC ${CMAKE_SOURCE_DIR}/profiler/inc)
+set(profiler_SRC ${CMAKE_SOURCE_DIR}/profiler/src)
+set(procdump_INC ${CMAKE_SOURCE_DIR}/include)
+set(procdump_SRC ${CMAKE_SOURCE_DIR}/src)
+set(procdump_Test ${CMAKE_SOURCE_DIR}/tests/integration)
+set(LD "/usr/bin/ld")
+
+#
+# Configure files
+#
+configure_file(${procdump_INC}/ProcDumpVersion.h.in ${PROJECT_BINARY_DIR}/ProcDumpVersion.h)
+configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
+configure_file(dist/SPECS.in/spec.in SPECS.spec)
+
+#
+# Make procdump profiler
+#
+set(CMAKE_CXX_COMPILER "clang++")
+
+# Figure out which architecture we are building for
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
+  set(CLRHOSTDEF -DHOST_AMD64 -DHOST_64BIT)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL x86 OR CMAKE_SYSTEM_PROCESSOR STREQUAL i686)
+  set(CLRHOSTDEF -DHOST_X86)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv6 OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv6l)
+  set(CLRHOSTDEF -DHOST_ARM -DHOST_ARMV6)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL arm OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv7-a)
+  set(CLRHOSTDEF -DHOST_ARM)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL arm64)
+  set(CLRHOSTDEF -DHOST_ARM64 -DHOST_64BIT)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL loongarch64)
+  set(CLRHOSTDEF -DHOST_LOONGARCH64 -DHOST_64BIT)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL riscv64)
+  set(CLRHOSTDEF -DHOST_RISCV64 -DHOST_64BIT)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL s390x)
+  set(CLRHOSTDEF -DHOST_S390X -DHOST_64BIT -DBIGENDIAN)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64)
+  set(CLRHOSTDEF -DHOST_MIPS64 -DHOST_64BIT=1)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL ppc64le)
+  set(CLRHOSTDEF -DHOST_POWERPC64 -DHOST_64BIT)
+else()
+  message(FATAL_ERROR "'${CMAKE_SYSTEM_PROCESSOR}' is an unsupported architecture.")
+endif()
+
+add_library(ProcDumpProfiler SHARED
+            ${profiler_SRC}/ClassFactory.cpp
+            ${profiler_SRC}/ProcDumpProfiler.cpp
+            ${profiler_SRC}/dllmain.cpp
+            ${profiler_SRC}/corprof_i.cpp
+            ${profiler_SRC}/easylogging++.cc
+            )
+
+target_compile_options(ProcDumpProfiler PRIVATE -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -Wno-pragma-pack -Wno-pointer-arith -Wno-conversion-null -Wno-write-strings -Wno-format-security -fPIC -fms-extensions ${CLRHOSTDEF} -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11)
+set_target_properties(ProcDumpProfiler PROPERTIES PREFIX "")
+
+target_include_directories(ProcDumpProfiler PUBLIC
+                           "${profiler_INC}"
+                           "${procdump_INC}"
+                           /usr/include
+                          )
+
+add_custom_command(OUTPUT ProcDumpProfiler.o
+                   COMMAND "${LD}" -r -b binary -o "${PROJECT_BINARY_DIR}/ProcDumpProfiler.o" ProcDumpProfiler.so
+                   COMMENT "Packing ProcDumpProfiler.so into ProcDumpProfiler.o"
+                   DEPENDS ProcDumpProfiler
+                  )
+
+#
+# Make ProcDump
+#
+SET (CMAKE_C_COMPILER "clang")
+add_executable(procdump
+               ${procdump_SRC}/CoreDumpWriter.c
+               ${procdump_SRC}/DotnetHelpers.c
+               ${procdump_SRC}/Events.c
+               ${procdump_SRC}/GenHelpers.c
+               ${procdump_SRC}/Handle.c
+               ${procdump_SRC}/Logging.c
+               ${procdump_SRC}/Monitor.c
+               ${procdump_SRC}/Procdump.c
+               ${procdump_SRC}/ProcDumpConfiguration.c
+               ${procdump_SRC}/Process.c
+               ${procdump_SRC}/ProfilerHelpers.c
+               ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
+              )
+
+target_compile_options(procdump PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -Werror)
+
+target_include_directories(procdump PUBLIC
+                           ${procdump_INC}
+                           ${PROJECT_BINARY_DIR}
+                           /usr/include
+                          )
+
+target_link_libraries(procdump pthread)
+
+#
+# Copy integration test directory
+#
+add_custom_target(copy_integration_test_dir ALL
+                  COMMAND ${CMAKE_COMMAND} -E copy_directory
+                  ${CMAKE_SOURCE_DIR}/tests/integration ${CMAKE_BINARY_DIR}/tests/integration
+                  COMMENT "Copying the tests/integration directory to the build directory"
+                 )
+
+#
+# Make test application
+#
+add_executable(ProcDumpTestApplication
+               ${procdump_Test}/ProcDumpTestApplication.c
+              )
+
+target_compile_options(ProcDumpTestApplication PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror)
+
+target_include_directories(ProcDumpTestApplication PUBLIC
+                           /usr/include
+                          )
+
+target_link_libraries(ProcDumpTestApplication pthread)
+
+#
+# Make package(s)
+#
+add_custom_target(packages
+    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+)

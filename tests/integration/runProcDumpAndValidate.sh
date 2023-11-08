@@ -1,7 +1,7 @@
 #!/bin/bash
 function runProcDumpAndValidate {
 	DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-	PROCDUMPPATH=$(readlink -m "$DIR/../../bin/procdump");
+	PROCDUMPPATH=$(readlink -m "$DIR/../../procdump");
 
 	# In cases where the previous scenario is still writing a dump we simply want to kill it
 	pkill -9 gdb

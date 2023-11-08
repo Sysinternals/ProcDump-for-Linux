@@ -28,8 +28,8 @@ make
 ```
 
 ## Testing
-* There are a multitude of tests included in the `tests` directory of the repository.  
-* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.  
+* There are a multitude of tests included in the `tests` directory of the repository.
+* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.
 * Make sure that the tests are all passing, including your new tests.
 
 ## Creating integration tests
@@ -39,7 +39,7 @@ Test scripts will return `0` when they succeed and `1` when they fail.
 
 Most of the tests are written using [stress-ng](https://wiki.ubuntu.com/Kernel/References/stress-ng "stress-ng manual"), but you can write your own code to simulate the scenario you require.
 
-After writing a new test, run the `run.sh` script and verify that no tests fail.
+After writing a new test, run the `run.sh` script from $build/tests/integration and verify that no tests fail.
 
 ## Pull Requests
 * Always tag a work item or issue with a pull request.

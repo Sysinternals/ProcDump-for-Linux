@@ -34,7 +34,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 function runTest {
         printf "\n========================================================================================\n"
         printf "\nStarting $(basename $1)\n"
-	$1
+	$1 "../../../procdump"
 
 	if [ $? -ne 0 ]; then
 		echo "$(basename $1) failed"
