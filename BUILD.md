@@ -29,12 +29,12 @@ make install
 ### Ubuntu
 ```
 sudo apt update
-sudo apt -y install gcc make clang gdb zlib1g-dev
+sudo apt -y install gcc make clang gdb zlib1g-dev cmake
 ```
 
 ### Rocky Linux
 ```
-sudo yum install gcc make clang gdb zlib-devel
+sudo yum install gcc make clang gdb zlib-devel cmake
 ```
 
 ## Build
