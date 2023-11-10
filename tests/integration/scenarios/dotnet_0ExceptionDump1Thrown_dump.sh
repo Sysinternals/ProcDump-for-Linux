@@ -1,6 +1,7 @@
 #!/bin/bash
+echo "ProcDump path "$1
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-PROCDUMPPATH=$(readlink -m "$DIR/../../../bin/procdump");
+PROCDUMPPATH=$(readlink -m "$DIR/$1");
 TESTWEBAPIPATH=$(readlink -m "$DIR/../TestWebApi");
 HELPERS=$(readlink -m "$DIR/../helpers.sh");
 

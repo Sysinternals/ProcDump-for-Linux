@@ -9,27 +9,11 @@ The master branch contains current development.  While CI should ensure that mas
 To contribute, fork the repository and create a branch in your fork for your work.  Please keep branch names short and descriptive.  Please direct PRs into the upstream master branch.
 
 ## Build and run from source
-### Environment
-* Linux OS (dev team is using Ubuntu 18.04)
-  * Development can be done on Windows Subsystem for Linux (WSL), but ProcDump cannot be executed in that environment
-* git
-* GDB
-* GCC (or other C compiler)
-* GNU Make
-
-## Building from source
-* Clone the repo
-* Run `make` from the project root
-* The procdump executable will be placed into the `bin` directory
-```sh
-git clone https://github.com/microsoft/ProcDump-for-Linux
-cd ProcDump-for-Linux
-make
-```
+Please refer to [Build instructions](BUILD.md) for details on how to build ProcDump for Linux.
 
 ## Testing
-* There are a multitude of tests included in the `tests` directory of the repository.  
-* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.  
+* There are a multitude of tests included in the `tests` directory of the repository.
+* Add new tests corresponding to your change, if applicable. Include tests when adding new features. When fixing bugs, start with adding a test that highlights how the current behavior is broken.
 * Make sure that the tests are all passing, including your new tests.
 
 ## Creating integration tests
@@ -39,7 +23,7 @@ Test scripts will return `0` when they succeed and `1` when they fail.
 
 Most of the tests are written using [stress-ng](https://wiki.ubuntu.com/Kernel/References/stress-ng "stress-ng manual"), but you can write your own code to simulate the scenario you require.
 
-After writing a new test, run the `run.sh` script and verify that no tests fail.
+After writing a new test, run the `run.sh` script from $build/tests/integration and verify that no tests fail.
 
 ## Pull Requests
 * Always tag a work item or issue with a pull request.

@@ -16,25 +16,22 @@ stages:
     - job: "ProcDump_Run_Unit_Tests"
       pool:
        vmImage: 'ubuntu-latest'
-      variables:
-       CC: gcc-10
       steps:
       - script: |
           sudo apt update
-          sudo apt install -y gdb stress-ng zlib1g-dev
+          sudo apt install -y gdb stress-ng zlib1g-dev clang
         displayName: 'Setup build environment'
 
       - script: |
-          gcc --version
-          dpkg --list | grep compiler
+          clang --version
+          clang++ --version
         displayName: 'List compiler versions'
 
       - template: templates/build.yaml
-        parameters:
-          ccopts: '-fsanitize=address'
 
       - script: |
-          sudo ./tests/integration/run.sh
+          cd build/tests/integration
+          sudo ./run.sh
         displayName: 'Run unit tests'
 
       - script: |
@@ -61,8 +58,6 @@ stages:
     - job: "Build_ProcDump"
       pool:
        vmImage: 'ubuntu-latest'
-      variables:
-       CC: gcc-10
       steps:
       - template: templates/build.yaml
       displayName: 'Build ProcDump'

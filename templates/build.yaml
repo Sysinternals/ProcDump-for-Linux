@@ -8,7 +8,7 @@ parameters:
 
 steps:
 - script: |
-    ${{ parameters.extra }}
-    export OPT_CCFLAGS=${{ parameters.ccopts }}
+    mkdir build && cd build
+    cmake ..
     make
   displayName: "Build ProcDump binaries"

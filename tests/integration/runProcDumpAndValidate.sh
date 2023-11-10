@@ -1,7 +1,7 @@
 #!/bin/bash
 function runProcDumpAndValidate {
 	DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-	PROCDUMPPATH=$(readlink -m "$DIR/../../bin/procdump");
+	PROCDUMPPATH=$(readlink -m "$DIR/../../procdump");
 
 	# In cases where the previous scenario is still writing a dump we simply want to kill it
 	pkill -9 gdb
@@ -51,7 +51,7 @@ function runProcDumpAndValidate {
 	    fi
 	else
 		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
-		TESTPROGPATH=$(readlink -m "$DIR/../../bin/$TESTPROGNAME");
+		TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
 		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"

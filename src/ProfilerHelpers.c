@@ -9,8 +9,8 @@
 #include "Includes.h"
 
 // These are the start and end addresses to the embedded profiler binary
-extern char _binary_obj_ProcDumpProfiler_so_end[];
-extern char _binary_obj_ProcDumpProfiler_so_start[];
+extern char _binary_ProcDumpProfiler_so_end[];
+extern char _binary_ProcDumpProfiler_so_start[];
 
 //--------------------------------------------------------------------
 //
@@ -36,11 +36,11 @@ int ExtractProfiler()
 
     size_t written = 0;
     ssize_t writeRet;
-    size_t size = _binary_obj_ProcDumpProfiler_so_end - _binary_obj_ProcDumpProfiler_so_start;
+    size_t size = _binary_ProcDumpProfiler_so_end - _binary_ProcDumpProfiler_so_start;
 
     while (written < size)
     {
-        writeRet = write(destfd, _binary_obj_ProcDumpProfiler_so_start + written, size - written);
+        writeRet = write(destfd, _binary_ProcDumpProfiler_so_start + written, size - written);
         if (writeRet < 0)
         {
             return 1;
