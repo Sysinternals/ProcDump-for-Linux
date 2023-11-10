@@ -24,7 +24,7 @@ make install
 - clang v10+
 - gcc v10+
 - zlib
-- make
+- cmake 3.10+
 
 ### Ubuntu
 ```
@@ -39,19 +39,15 @@ sudo yum install gcc make clang gdb zlib-devel
 
 ## Build
 ```sh
+mkdir build
+cd build
+cmake ..
 make
-make install
 ```
 
 # Building Packages
-The distribution packages for Procdump for Linux are constructed utilizing `debbuild` for Debian targets and `rpmbuild` for Fedora targets.
+The distribution packages for Procdump for Linux are constructed utilizing `dpkg-deb` for Debian targets and `rpmbuild` for Fedora targets.
 
-To build a `deb` package of Procdump:
 ```sh
-make && make deb
-```
-
-To build a `rpm` package of Procdump:
-```sh
-make && make rpm
+make packages
 ```
