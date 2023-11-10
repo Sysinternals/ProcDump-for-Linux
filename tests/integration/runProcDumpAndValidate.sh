@@ -51,7 +51,7 @@ function runProcDumpAndValidate {
 	    fi
 	else
 		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
-		TESTPROGPATH=$(readlink -m "$DIR/../../bin/$TESTPROGNAME");
+		TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
 		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
