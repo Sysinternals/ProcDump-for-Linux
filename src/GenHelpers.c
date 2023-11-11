@@ -6,7 +6,6 @@
 // General purpose helpers
 //
 //--------------------------------------------------------------------
-#define _GNU_SOURCE
 #include "Includes.h"
 #include <syscall.h>
 

@@ -99,8 +99,11 @@ void ExitProcDump()
     pthread_mutex_destroy(&LoggerLock);
     closelog();
 
-    // Try to delete the profiler lib in case it was left over...
+    // Try to delete the profiler lib and restrack program in case
+    // they were left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    unlink(PROCDUMP_DIR "/" RESTRACK_FILE_NAME);
+
     Trace("ExitProcDump: Exit");
 }
 
@@ -168,6 +171,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bDumpOnException =            false;
     self->bDumpOnException =            NULL;
     self->ExceptionFilter =             NULL;
+    self->bRestrackEnabled =            false;
 
     self->socketPath =                  NULL;
     self->statusSocket =                -1;
@@ -300,6 +304,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
             memcpy(copy->MemoryThreshold, self->MemoryThreshold, self->NumberOfDumpsToCollect*sizeof(int));
         }
 
+        copy->bRestrackEnabled = self->bRestrackEnabled;
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
         copy->MemoryThresholdCount = self->MemoryThresholdCount;
         copy->bMonitoringGCMemory = self->bMonitoringGCMemory;
@@ -492,6 +497,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             self->NumberOfDumpsToCollect = 2;               // This accounts for 1 dump at the start of the GC and 1 at the end.
             dotnetTriggerCount++;
             i++;
+        }
+        else if( 0 == strcasecmp( argv[i], "/restrack" ) ||
+                    0 == strcasecmp( argv[i], "-restrack" ))
+        {
+            if( i+1 >= argc) return PrintUsage();
+            self->bRestrackEnabled = true;
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
                     0 == strcasecmp( argv[i], "-tc" ))
@@ -915,6 +926,16 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             printf("%-40s%s\n", "Commit Threshold:", "n/a");
         }
 
+        // Restrack
+        if (self->bRestrackEnabled == true)
+        {
+            printf("%-40s%s\n", "Resource tracking", "On");
+        }
+        else
+        {
+            printf("%-40s%s\n", "Resource tracking", "n/a");
+        }
+
         // Thread
         if (self->ThreadThreshold != -1)
         {
@@ -994,7 +1015,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 void PrintBanner()
 {
-    printf("\nProcDump v2.2 - Sysinternals process dump utility\n");
+    printf("\nProcDump v%s - Sysinternals process dump utility\n", STRFILEVER);
     printf("Copyright (C) 2023 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
@@ -1018,6 +1039,7 @@ int PrintUsage()
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation\n");
+    printf("            [-restrack]\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
@@ -1039,6 +1061,7 @@ int PrintUsage()
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
     printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).\n");
     printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
+    printf("   -restrack Enable memory leak tracking (malloc family of APIs).\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");

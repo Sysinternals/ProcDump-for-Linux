@@ -16,6 +16,9 @@ pthread_mutex_t queue_mutex;
 extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
+extern int ExtractRestrack();
+extern struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid);
+extern void SetMaxRLimit();
 
 //------------------------------------------------------------------------------------------------------
 //
@@ -506,6 +509,34 @@ bool MonitorDotNet(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
+// CreateMonitorThread - Create a specific monitor thread
+//
+//--------------------------------------------------------------------
+int CreateMonitorThread(struct ProcDumpConfiguration *self, enum TriggerType triggerType, void *(*monitorThread) (void *), void *arg)
+{
+    int rc = -1;
+
+    if (self->nThreads < MAX_TRIGGERS)
+    {
+        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, monitorThread, arg)) != 0)
+        {
+            return rc;
+        }
+
+        self->Threads[self->nThreads].trigger = triggerType;
+        self->nThreads++;
+
+    }
+    else
+    {
+        Trace("CreateMonitorThread: max number of triggers reached.");
+    }
+
+    return rc;
+}
+
+//--------------------------------------------------------------------
+//
 // CreateMonitorThreads - Create each of the threads that will be running as a trigger
 //
 //--------------------------------------------------------------------
@@ -518,137 +549,74 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
     // create threads
     if (MonitorDotNet(self) == true)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Exception, DotNetMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, DotNetMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create DotNetMonitoringThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Exception;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create DotNetMonitoringThread.");
+            return rc;
         }
     }
 
     if (self->CpuThreshold != -1)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Processor, CpuMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CpuMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create CpuThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Processor;
-            self->nThreads++;
-
+            Trace("CreateMonitorThreads: failed to create CpuThread.");
+            return rc;
         }
-        else
-        {
-            tooManyTriggers = true;
-            }
     }
 
     if (self->MemoryThreshold != NULL && !tooManyTriggers && self->bMonitoringGCMemory == false)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Commit, CommitMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CommitMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create CommitThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Commit;
-            self->nThreads++;
-
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create CommitThread.");
+            return rc;
         }
     }
 
     if (self->ThreadThreshold != -1 && !tooManyTriggers)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, ThreadCount, ThreadCountMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ThreadCountMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create ThreadThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = ThreadCount;
-            self->nThreads++;
-
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create ThreadThread.");
+            return rc;
         }
     }
 
     if (self->FileDescriptorThreshold != -1 && !tooManyTriggers)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, FileDescriptorCount, FileDescriptorCountMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create FileDescriptorThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = FileDescriptorCount;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create FileDescriptorThread.");
+            return rc;
         }
     }
 
     if (self->SignalNumber != -1 && !tooManyTriggers)
     {
-        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, SignalMonitoringThread, (void *)self)) != 0)
+        if ((rc = CreateMonitorThread(self, Signal, SignalMonitoringThread, (void *)self)) != 0 )
         {
             Trace("CreateMonitorThreads: failed to create SignalMonitoringThread.");
             return rc;
         }
-
-        self->Threads[self->nThreads].trigger = Signal;
-        self->nThreads++;
     }
 
-    if (self->bTimerThreshold && !tooManyTriggers)
+    if (self->bTimerThreshold)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Timer, TimerThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, TimerThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create TimerThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Timer;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create TimerThread.");
+            return rc;
         }
     }
 
-    if (tooManyTriggers)
+    if (self->bRestrackEnabled)
     {
-        Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
-        return -1;
+        if ((rc = CreateMonitorThread(self, Restrack, RestrackThread, (void *)self)) != 0 )
+        {
+            Trace("CreateMonitorThreads: failed to create RestrackThread.");
+            return rc;
+        }
     }
 
     return 0;
@@ -1342,6 +1310,36 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("DotNetMonitoringThread: Exit [id=%d]", gettid());
+    return NULL;
+}
+
+//--------------------------------------------------------------------
+//
+// RestrackThread - Thread that handles resource tracking
+//
+//--------------------------------------------------------------------
+void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("RestrackThread: Enter [id=%d]", gettid());
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    auto_free char* fullDumpPath = NULL;
+    int rc = 0;
+
+    void SetMaxRLimit();
+
+    if(ExtractRestrack() != 0)
+    {
+        Trace("RestrackThread: Failed to extract retrack.");
+        return NULL;
+    }
+
+    if (RunRestrack(config, config->ProcessId) == NULL)
+    {
+        Trace("RestrackThread: Failed to load restrack eBPF program.");
+        return NULL;
+    }
+
+    Trace("RestrackThread: Exit [id=%d]", gettid());
     return NULL;
 }
 

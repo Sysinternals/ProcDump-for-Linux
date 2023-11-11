@@ -83,6 +83,9 @@ set(procdump_INC ${CMAKE_SOURCE_DIR}/include)
 set(procdump_SRC ${CMAKE_SOURCE_DIR}/src)
 set(procdump_Test ${CMAKE_SOURCE_DIR}/tests/integration)
 set(LD "/usr/bin/ld")
+set(libbpf_SOURCE_DIR ${CMAKE_BINARY_DIR}/libbpf/src/libbpf)
+set(procdump_ebpf_SOURCE_DIR ${CMAKE_SOURCE_DIR}/ebpf)
+set(sym_SOURCE_DIR ${CMAKE_SOURCE_DIR}/sym)
 
 #
 # Configure files
@@ -147,7 +150,7 @@ add_custom_command(OUTPUT ProcDumpProfiler.o
 #
 # Make ProcDump
 #
-SET (CMAKE_C_COMPILER "clang")
+set(CMAKE_CXX_COMPILER "clang++")
 add_executable(procdump
                ${procdump_SRC}/CoreDumpWriter.c
                ${procdump_SRC}/DotnetHelpers.c
@@ -160,18 +163,33 @@ add_executable(procdump
                ${procdump_SRC}/ProcDumpConfiguration.c
                ${procdump_SRC}/Process.c
                ${procdump_SRC}/ProfilerHelpers.c
+               ${procdump_SRC}/Restrack.cpp
+               ${sym_SOURCE_DIR}/bcc_proc.c
+               ${sym_SOURCE_DIR}/bcc_syms.cc
+               ${sym_SOURCE_DIR}/bcc_elf.c
+               ${sym_SOURCE_DIR}/bcc_perf_map.c
+               ${sym_SOURCE_DIR}/bcc_zip.c
                ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
+               ${PROJECT_BINARY_DIR}/procdump_ebpf.o
               )
 
-target_compile_options(procdump PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -O2 -Werror)
+target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE)
 
 target_include_directories(procdump PUBLIC
                            ${procdump_INC}
                            ${PROJECT_BINARY_DIR}
                            /usr/include
+                   #        "${libbpf_SOURCE_DIR}/src"
+                   #        "${libbpf_SOURCE_DIR}/include"
+                   #        "${libbpf_SOURCE_DIR}/include/asm"
+                   #        "${libbpf_SOURCE_DIR}/include/linux"
+                   #        "${libbpf_SOURCE_DIR}/include/tools"
+                   #        "${libbpf_SOURCE_DIR}/include/uapi"
+                   #        "${libbpf_SOURCE_DIR}/include/uapi/linux"
                           )
 
-target_link_libraries(procdump pthread)
+add_dependencies(procdump libbpf procdump_ebpf)
+target_link_libraries(procdump ${libbpf_SOURCE_DIR}/src/libbpf.a elf z pthread)
 
 #
 # Copy integration test directory
@@ -204,3 +222,63 @@ add_custom_target(packages
     COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0"
     DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
 )
+
+#
+# Make ProcDump eBPF program
+#
+
+# Fetch libbpf
+include(ExternalProject)
+
+ExternalProject_Add(libbpf
+    GIT_REPOSITORY https://github.com/libbpf/libbpf.git
+    GIT_TAG v1.2.2
+    PREFIX ./libbpf
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND cd ../libbpf/src && bash -c "CFLAGS=\"-g -O2 -Werror -Wall -fPIC\" make"
+    INSTALL_COMMAND ""
+    )
+
+# set binaries and options for clang and llc
+set(CLANG "clang")
+set(LLC "llc")
+set(CLANG_OPTIONS -Wno-unused-value
+                  -Wno-pointer-sign
+                  -Wno-compare-distinct-pointer-types
+                  -Wno-gnu-variable-sized-type-not-at-end
+                  -Wno-address-of-packed-member
+                  -Wno-tautological-compare
+                  -Wno-unknown-warning-option
+                  -g
+                  )
+set(CLANG_DEFINES -D __KERNEL__
+                  -D __BPF_TRACING__
+                  -D __TARGET_ARCH_x86
+                  -D __linux__
+                  )
+if (DEBUG_K)
+    message("Using DEBUG_K Option...")
+    list(APPEND CLANG_DEFINES -DDEBUG_K)
+endif()
+
+set(CLANG_INCLUDES
+                   -I "/usr/include"
+                   -I "/usr/include/x86_64-linux-gnu"
+                   -I "${CMAKE_SOURCE_DIR}"
+                   -I "${CMAKE_BINARY_DIR}"
+                   -I "${libbpf_SOURCE_DIR}/src"
+                   )
+
+add_custom_target(procdump_ebpf
+                  DEPENDS procdump_ebpf.o
+                 )
+
+add_dependencies(procdump_ebpf libbpf)
+
+add_custom_command(OUTPUT procdump_ebpf.o
+                   COMMAND "${CLANG}" -nostdinc -isystem `gcc -print-file-name=include` ${CLANG_INCLUDES} ${CLANG_DEFINES} -O2 ${CLANG_OPTIONS} -target bpf -fno-stack-protector -c "${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c" -o "procdump_ebpf.o" && bpftool gen object procdump.ebpf.o procdump_ebpf.o && bpftool gen skeleton "procdump.ebpf.o" name "procdump_ebpf" > "procdump_ebpf.skel.h" && "${LD}" -r -b binary -o "${PROJECT_BINARY_DIR}/procdump_ebpf.o" procdump_ebpf.o
+                   COMMENT "Building EBPF object procdump_ebpf.o"
+                   DEPENDS ${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c
+                  )
+
+set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES procdump.ebpf.o)

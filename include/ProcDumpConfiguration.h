@@ -105,6 +105,7 @@ struct ProcDumpConfiguration {
     bool bOverwriteExisting;        // -o
     bool bDumpOnException;          // -e
     char *ExceptionFilter;          // -f
+    bool bRestrackEnabled;          // -restrack
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

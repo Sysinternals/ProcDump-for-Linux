@@ -10,3 +10,7 @@
 #include "Process.h"
 #include "DotnetHelpers.h"
 #include "ProfilerHelpers.h"
+#include "Restrack.h"
+#include "ProcDumpVersion.h"
+#include "procdump_ebpf.skel.h"
+

@@ -22,7 +22,8 @@ enum TriggerType
     FileDescriptorCount,
     Exception,
     GCThreshold,
-    GCGeneration
+    GCGeneration,
+    Restrack
 };
 
 #endif // PROFILERCOMMON_H
