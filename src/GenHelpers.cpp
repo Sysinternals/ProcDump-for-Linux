@@ -42,7 +42,7 @@ int* GetSeparatedValues(char* src, char* separator, int* numValues)
 
     if(i > 0)
     {
-        ret = malloc(i*sizeof(int));
+        ret = (int*) malloc(i*sizeof(int));
         if(ret)
         {
             i = 0;
@@ -160,7 +160,7 @@ uint16_t* GetUint16(char* buffer)
     if(buffer!=NULL)
     {
 	len = strlen(buffer) + 1;
-        dumpFileNameW = malloc((len)*sizeof(uint16_t));
+        dumpFileNameW = (uint16_t*) ((len)*sizeof(uint16_t));
         if(dumpFileNameW==NULL)
         {
             return NULL;
@@ -455,7 +455,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         if(targetPid)
         {
             int len = snprintf(NULL, 0, "/tmp/%s%d-%d", prefix, pid, targetPid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -466,7 +466,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         else
         {
             int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -480,7 +480,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         if(targetPid)
         {
             int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -491,7 +491,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         else
         {
             int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -564,7 +564,7 @@ int recv_all(int socket, void* buffer, size_t length)
 // Note: SYS_gettid is not POSIX compliant.
 //
 //--------------------------------------------------------------------
-pid_t gettid()
+pid_t gettid() throw()
 {
 #ifdef SYS_gettid
     return syscall(SYS_gettid);

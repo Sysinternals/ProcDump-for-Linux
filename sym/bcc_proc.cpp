@@ -100,7 +100,7 @@ static char *_procutils_memfd_path(const int pid, const uint64_t inum) {
   struct dirent *dent;
 
   snprintf(path_buffer, (PATH_MAX + 1), "/proc/%d/fd", pid);
-  dirstr = malloc(strlen(path_buffer) + 1);
+  dirstr = (char*) malloc(strlen(path_buffer) + 1);
   strcpy(dirstr, path_buffer);
   dirstream = opendir(dirstr);
 
@@ -115,7 +115,7 @@ static char *_procutils_memfd_path(const int pid, const uint64_t inum) {
       continue;
 
     if (sb.st_ino == inum) {
-      char *pid_fd_path = malloc(strlen(path_buffer) + 1);
+      char *pid_fd_path = (char*) malloc(strlen(path_buffer) + 1);
       strcpy(pid_fd_path, path_buffer);
       path = pid_fd_path;
     }
@@ -151,7 +151,7 @@ static char *_procfs_find_zip_entry(const char *path, int pid,
     return NULL;
   }
 
-  char *result = malloc(strlen(path) + entry.name_length + 3);
+  char *result = (char*) malloc(strlen(path) + entry.name_length + 3);
   if (result == NULL) {
     bcc_zip_archive_close(archive);
     return NULL;
@@ -221,6 +221,7 @@ int _procfs_maps_each_module(FILE *procmap, int pid,
 int bcc_procutils_each_module(int pid, bcc_procutils_modulecb callback,
                               void *payload) {
   char procmap_filename[128];
+  int res;
   FILE *procmap;
   snprintf(procmap_filename, sizeof(procmap_filename), "/proc/%ld/maps",
            (long)pid);
@@ -246,7 +247,7 @@ int bcc_procutils_each_module(int pid, bcc_procutils_modulecb callback,
   // Try perf-<PID>.map path with global root and PID, in case it is generated
   // by other Process. Avoid checking mount namespace for this.
   memset(&mod, 0, sizeof(mod_info));
-  int res = snprintf(map_path, 4096, "/tmp/perf-%d.map", pid);
+  res = snprintf(map_path, 4096, "/tmp/perf-%d.map", pid);
   if (res > 0 && res < 4096) {
     mod.name = map_path;
     mod.end_addr = -1;
@@ -300,7 +301,7 @@ int bcc_procutils_each_ksym(bcc_procutils_ksymcb callback, void *payload) {
     }
 
     if (!endmod)
-      modname = "kernel";
+      modname = const_cast<char*>("kernel");
 
     callback(symname, modname, addr, payload);
   }
@@ -481,7 +482,7 @@ static bool which_so_in_process(const char* libname, int pid, char* libpath) {
   snprintf(mappings_file, sizeof(mappings_file), "/proc/%ld/maps", (long)pid);
   FILE *fp = fopen(mappings_file, "r");
   if (!fp)
-    return NULL;
+    return false;
 
   snprintf(search1, search_len + 1, "/lib%s.", libname);
   snprintf(search2, search_len + 1, "/lib%s-", libname);

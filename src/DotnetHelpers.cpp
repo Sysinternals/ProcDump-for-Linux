@@ -32,7 +32,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
 
     // If $TMPDIR is set, use it as the path, otherwise we use /tmp
     // per https://github.com/dotnet/diagnostics/blob/master/documentation/design-docs/ipc-protocol.md
-    tmpFolder = GetSocketPath("dotnet-diagnostic-", pid, 0);
+    tmpFolder = GetSocketPath(const_cast<char*>("dotnet-diagnostic-"), pid, 0);
     if(tmpFolder == NULL)
     {
         return false;
@@ -54,7 +54,7 @@ bool IsCoreClrProcess(pid_t pid, char** socketName)
                 {
                     // Found the correct socket...copy the name to the out param
 		    int len = strlen(ptr)+1;
-                    *socketName = calloc(len, sizeof(char));
+                    *socketName = (char*) calloc(len, sizeof(char));
                     if(*socketName!=NULL)
                     {
 			if(strcpy(*socketName, ptr) != NULL)
@@ -143,7 +143,7 @@ bool GenerateCoreClrDump(char* socketName, char* dumpFileName)
                         (uint16_t)0x0000
                     };
 
-                    void* temp_buffer_cur = temp_buffer;
+                    char* temp_buffer_cur = (char*) temp_buffer;
 
                     memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));
                     temp_buffer_cur += sizeof(struct IpcHeader);

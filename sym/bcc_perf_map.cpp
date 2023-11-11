@@ -23,7 +23,7 @@
 #include "bcc_perf_map.h"
 
 bool bcc_is_perf_map(const char *path) {
-  char* pos = strstr(path, ".map");
+  char* pos = strstr(const_cast<char*>(path), ".map");
   // Path ends with ".map"
   return (pos != NULL) && (*(pos + 4)== 0);
 }

@@ -154,14 +154,14 @@ static void* check_access(struct bcc_zip_archive* archive, uint32_t offset,
   if (offset + size > archive->size || offset > offset + size) {
     return NULL;
   }
-  return archive->data + offset;
+  return (char*)(archive->data) + offset;
 }
 
 // Returns 0 on success, -1 on error and -2 if the eocd indicates
 // the archive uses features which are not supported.
 static int try_parse_end_of_central_directory(struct bcc_zip_archive* archive,
                                               uint32_t offset) {
-  struct end_of_central_directory_record* eocd = check_access(
+  struct end_of_central_directory_record* eocd = (end_of_central_directory_record*) check_access(
       archive, offset, sizeof(struct end_of_central_directory_record));
   if (eocd == NULL ||
       unaligned_uint32_read(eocd->magic) != END_OF_CD_RECORD_MAGIC) {
@@ -232,7 +232,7 @@ struct bcc_zip_archive* bcc_zip_archive_open(const char* path) {
     return NULL;
   }
 
-  struct bcc_zip_archive* archive = malloc(sizeof(struct bcc_zip_archive));
+  struct bcc_zip_archive* archive = (bcc_zip_archive*) malloc(sizeof(struct bcc_zip_archive));
   if (archive == NULL) {
     munmap(data, size);
     return NULL;
@@ -257,7 +257,7 @@ void bcc_zip_archive_close(struct bcc_zip_archive* archive) {
 static struct local_file_header* local_file_header_at_offset(
     struct bcc_zip_archive* archive, uint32_t offset) {
   struct local_file_header* lfh =
-      check_access(archive, offset, sizeof(struct local_file_header));
+      (local_file_header*) check_access(archive, offset, sizeof(struct local_file_header));
   if (lfh == NULL ||
       unaligned_uint32_read(lfh->magic) != LOCAL_FILE_HEADER_MAGIC) {
     return NULL;
@@ -279,7 +279,7 @@ static int get_entry_at_offset(struct bcc_zip_archive* archive, uint32_t offset,
   }
 
   uint16_t name_length = unaligned_uint16_read(lfh->file_name_length);
-  const char* name = check_access(archive, offset, name_length);
+  const char* name = (const char*) check_access(archive, offset, name_length);
   offset += name_length;
   if (name == NULL) {
     return -1;
@@ -309,7 +309,7 @@ static int get_entry_at_offset(struct bcc_zip_archive* archive, uint32_t offset,
 
 static struct central_directory_file_header* cd_file_header_at_offset(
     struct bcc_zip_archive* archive, uint32_t offset) {
-  struct central_directory_file_header* cdfh = check_access(
+  struct central_directory_file_header* cdfh = (central_directory_file_header*) check_access(
       archive, offset, sizeof(struct central_directory_file_header));
   if (cdfh == NULL ||
       unaligned_uint32_read(cdfh->magic) != CD_FILE_HEADER_MAGIC) {
@@ -333,7 +333,7 @@ int bcc_zip_archive_find_entry(struct bcc_zip_archive* archive,
     }
 
     uint16_t cdfh_name_length = unaligned_uint16_read(cdfh->file_name_length);
-    const char* cdfh_name = check_access(archive, offset, cdfh_name_length);
+    const char* cdfh_name = (const char*) check_access(archive, offset, cdfh_name_length);
     if (cdfh_name == NULL) {
       return -1;
     }
@@ -342,7 +342,7 @@ int bcc_zip_archive_find_entry(struct bcc_zip_archive* archive,
     if ((cdfh_flags & FLAG_ENCRYPTED) == 0 &&
         (cdfh_flags & FLAG_HAS_DATA_DESCRIPTOR) == 0 &&
         file_name_length == cdfh_name_length &&
-        memcmp(file_name, archive->data + offset, file_name_length) == 0) {
+        memcmp(file_name, (char*)(archive->data) + offset, file_name_length) == 0) {
       return get_entry_at_offset(archive, unaligned_uint32_read(cdfh->offset),
                                  out);
     }
@@ -375,8 +375,8 @@ int bcc_zip_archive_find_entry_at_offset(struct bcc_zip_archive* archive,
         return -1;
       }
 
-      if (out->data <= archive->data + target &&
-          archive->data + target < out->data + out->data_length) {
+      if (out->data <= (char*)(archive->data) + target &&
+          (char*)(archive->data) + target < (char*)(out->data) + out->data_length) {
         return 0;
       }
     }

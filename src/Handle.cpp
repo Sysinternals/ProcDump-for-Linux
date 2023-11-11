@@ -211,8 +211,8 @@ int WaitForMultipleObjects(int Count, struct Handle **Handles, bool WaitAll, int
 
     coordinator->evtCanCleanUp.type = EVENT;
     coordinator->evtStartWaiting.type = EVENT;
-    InitNamedEvent(&(coordinator->evtCanCleanUp.event), true, false, "CanCleanUp");
-    InitNamedEvent(&(coordinator->evtStartWaiting.event), true, false, "StartWaiting");
+    InitNamedEvent(&(coordinator->evtCanCleanUp.event), true, false, const_cast<char*> ("CanCleanUp"));
+    InitNamedEvent(&(coordinator->evtStartWaiting.event), true, false, const_cast<char*> ("StartWaiting"));
     pthread_cond_init(&coordinator->condEventTriggered, NULL);
     pthread_mutex_init(&coordinator->mutexEventTriggered, NULL);
 

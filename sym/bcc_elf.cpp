@@ -56,7 +56,7 @@ static int openelf_mem(void *buf, size_t buf_len, Elf **elf_out) {
   if (elf_version(EV_CURRENT) == EV_NONE)
     return -1;
 
-  *elf_out = elf_memory(buf, buf_len);
+  *elf_out = elf_memory((char*) buf, buf_len);
   if (*elf_out == NULL)
     return -1;
 
@@ -616,7 +616,7 @@ static int verify_checksum(const char *file, unsigned int crc) {
     return 0;
   }
 
-  actual = gnu_debuglink_crc32(0, buf, st.st_size);
+  actual = gnu_debuglink_crc32(0, (char*) buf, st.st_size);
 
   munmap(buf, st.st_size);
   close(fd);
@@ -727,6 +727,7 @@ static int find_debug_via_symfs(Elf *e, const char *path,
   char symfs_buildid[128];
   int check_build_id;
   char *symfs;
+  int ns_prefix_length = 0;
   struct bcc_elf_file symfs_elf_file;
   bcc_elf_file_init(&symfs_elf_file);
 
@@ -736,7 +737,6 @@ static int find_debug_via_symfs(Elf *e, const char *path,
 
   check_build_id = find_buildid(e, buildid);
 
-  int ns_prefix_length = 0;
   sscanf(path, "/proc/%*u/root/%n", &ns_prefix_length);
   path += ns_prefix_length;
 
@@ -919,14 +919,14 @@ static int foreach_sym_core(const char *path, bcc_elf_symcb callback,
 
 int bcc_elf_foreach_sym(const char *path, bcc_elf_symcb callback,
                         void *option, void *payload) {
-  struct bcc_symbol_option *o = option;
+  struct bcc_symbol_option *o = (bcc_symbol_option*) option;
   o->lazy_symbolize = 0;
   return foreach_sym_core(path, callback, NULL, o, payload);
 }
 
 int bcc_elf_foreach_sym_lazy(const char *path, bcc_elf_symcb_lazy callback,
                         void *option, void *payload) {
-  struct bcc_symbol_option *o = option;
+  struct bcc_symbol_option *o = (bcc_symbol_option *) option;
   o->lazy_symbolize = 1;
   return foreach_sym_core(path, NULL, callback, o, payload);
 }
@@ -1099,6 +1099,7 @@ static int bcc_free_memory_with_file(const char *path) {
   Elf_Scn *section = NULL;
   int err;
   GElf_Shdr header;
+  int sh_idx = 0;
   struct bcc_elf_file elf_file;
   bcc_elf_file_init(&elf_file);
 
@@ -1151,7 +1152,6 @@ static int bcc_free_memory_with_file(const char *path) {
   if (sym_addr == 0)
     goto exit;
 
-  int sh_idx = 0;
   section = NULL;
   err = 1;
   while ((section = elf_nextscn(elf_file.elf, section)) != 0) {

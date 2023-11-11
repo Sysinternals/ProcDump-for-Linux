@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdint.h>
 #include <strings.h>
 #include <syslog.h>
 #include <limits.h>
@@ -31,6 +32,10 @@
 #include <sys/queue.h>
 #include <fcntl.h>
 #include <signal.h>
+
+#include "Restrack.h"
+
+#include <unordered_map>
 
 #define MAX_TRIGGERS 10
 #define NO_PID INT_MAX
@@ -106,6 +111,9 @@ struct ProcDumpConfiguration {
     bool bDumpOnException;          // -e
     char *ExceptionFilter;          // -f
     bool bRestrackEnabled;          // -restrack
+
+    // Keeps track of the memory allocations when -restrack is specified.
+    std::unordered_map<uintptr_t, ResourceInformation*> memAllocMap;
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

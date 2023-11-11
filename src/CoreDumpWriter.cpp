@@ -46,7 +46,7 @@ char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName,
     char date[DATE_LENGTH];
     char* gcorePrefixName = NULL;
 
-    gcorePrefixName = malloc(PATH_MAX+1);
+    gcorePrefixName = (char*) malloc(PATH_MAX+1);
     if(!gcorePrefixName)
     {
         Log(error, INTERNAL_ERROR);

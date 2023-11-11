@@ -117,7 +117,7 @@ int BPF_KRETPROBE(uretprobe_malloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    bpf_printk("malloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
+    //bpf_printk("malloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
 
     //
     // Send the event to the ring buffer (user land)
@@ -288,7 +288,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
         return 1;
     }
 
-    bpf_printk("calloc called with size = %d, count: %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
+    //bpf_printk("calloc called with size = %d, count: %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -326,7 +326,7 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    bpf_printk("calloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
+    //bpf_printk("calloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
 
     //
     // Send the event to the ring buffer (user land)
@@ -432,7 +432,7 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    bpf_printk("realloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
+    //bpf_printk("realloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
 
     //
     // Send the event to the ring buffer (user land)
@@ -501,7 +501,7 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
         return 1;
     }
 
-    bpf_printk("reallocarray called with size = %d, count = %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
+    //bpf_printk("reallocarray called with size = %d, count = %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -539,7 +539,8 @@ int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    bpf_printk("reallocarray exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
+    // TODO: use different trace since it only supports 3 arguments passed in.
+    //bpf_printk("reallocarray exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
 
     //
     // Send the event to the ring buffer (user land)

@@ -27,6 +27,8 @@
 cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0048 NEW)
 
+SET (CMAKE_CXX_COMPILER "/usr/bin/clang++" CACHE STRING "C++ compiler" FORCE)
+
 #
 # set the project name - version is MAJOR.MINOR.PATCH.RELEASE - releases start at 1
 #
@@ -95,9 +97,13 @@ configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
 configure_file(dist/SPECS.in/spec.in SPECS.spec)
 
 #
-# Make procdump profiler
+# Compiler
 #
 set(CMAKE_CXX_COMPILER "clang++")
+
+#
+# Make procdump profiler
+#
 
 # Figure out which architecture we are building for
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
@@ -150,35 +156,35 @@ add_custom_command(OUTPUT ProcDumpProfiler.o
 #
 # Make ProcDump
 #
-set(CMAKE_CXX_COMPILER "clang++")
 add_executable(procdump
-               ${procdump_SRC}/CoreDumpWriter.c
-               ${procdump_SRC}/DotnetHelpers.c
-               ${procdump_SRC}/Events.c
-               ${procdump_SRC}/GenHelpers.c
-               ${procdump_SRC}/Handle.c
-               ${procdump_SRC}/Logging.c
-               ${procdump_SRC}/Monitor.c
-               ${procdump_SRC}/Procdump.c
-               ${procdump_SRC}/ProcDumpConfiguration.c
-               ${procdump_SRC}/Process.c
-               ${procdump_SRC}/ProfilerHelpers.c
+               ${procdump_SRC}/CoreDumpWriter.cpp
+               ${procdump_SRC}/DotnetHelpers.cpp
+               ${procdump_SRC}/Events.cpp
+               ${procdump_SRC}/GenHelpers.cpp
+               ${procdump_SRC}/Handle.cpp
+               ${procdump_SRC}/Logging.cpp
+               ${procdump_SRC}/Monitor.cpp
+               ${procdump_SRC}/Procdump.cpp
+               ${procdump_SRC}/ProcDumpConfiguration.cpp
+               ${procdump_SRC}/Process.cpp
+               ${procdump_SRC}/ProfilerHelpers.cpp
                ${procdump_SRC}/Restrack.cpp
-               ${sym_SOURCE_DIR}/bcc_proc.c
+               ${sym_SOURCE_DIR}/bcc_proc.cpp
                ${sym_SOURCE_DIR}/bcc_syms.cc
-               ${sym_SOURCE_DIR}/bcc_elf.c
-               ${sym_SOURCE_DIR}/bcc_perf_map.c
-               ${sym_SOURCE_DIR}/bcc_zip.c
+               ${sym_SOURCE_DIR}/bcc_elf.cpp
+               ${sym_SOURCE_DIR}/bcc_perf_map.cpp
+               ${sym_SOURCE_DIR}/bcc_zip.cpp
                ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
                ${PROJECT_BINARY_DIR}/procdump_ebpf.o
               )
 
-target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE)
+target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11)
 
 target_include_directories(procdump PUBLIC
                            ${procdump_INC}
                            ${PROJECT_BINARY_DIR}
                            /usr/include
+                           ${sym_SOURCE_DIR}
                    #        "${libbpf_SOURCE_DIR}/src"
                    #        "${libbpf_SOURCE_DIR}/include"
                    #        "${libbpf_SOURCE_DIR}/include/asm"

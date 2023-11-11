@@ -74,7 +74,7 @@ void InitProcDump()
     else
     {
         int len = strlen(prefixTmpFolder) + strlen("/procdump") + 1;
-        char* t = malloc(len);
+        char* t = (char*) malloc(len);
         if(t == NULL)
         {
             Log(error, INTERNAL_ERROR);
@@ -102,7 +102,6 @@ void ExitProcDump()
     // Try to delete the profiler lib and restrack program in case
     // they were left over...
     unlink(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
-    unlink(PROCDUMP_DIR "/" RESTRACK_FILE_NAME);
 
     Trace("ExitProcDump: Exit");
 }
@@ -121,22 +120,22 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     pthread_mutex_init(&self->ptrace_mutex, NULL);
 
-    InitNamedEvent(&(self->evtCtrlHandlerCleanupComplete.event), true, false, "CtrlHandlerCleanupComplete");
+    InitNamedEvent(&(self->evtCtrlHandlerCleanupComplete.event), true, false, const_cast<char*>("CtrlHandlerCleanupComplete"));
     self->evtCtrlHandlerCleanupComplete.type = EVENT;
 
-    InitNamedEvent(&(self->evtBannerPrinted.event), true, false, "BannerPrinted");
+    InitNamedEvent(&(self->evtBannerPrinted.event), true, false, const_cast<char*>("BannerPrinted"));
     self->evtBannerPrinted.type = EVENT;
 
-    InitNamedEvent(&(self->evtConfigurationPrinted.event), true, false, "ConfigurationPrinted");
+    InitNamedEvent(&(self->evtConfigurationPrinted.event), true, false, const_cast<char*>("ConfigurationPrinted"));
     self->evtConfigurationPrinted.type = EVENT;
 
-    InitNamedEvent(&(self->evtDebugThreadInitialized.event), true, false, "DebugThreadInitialized");
+    InitNamedEvent(&(self->evtDebugThreadInitialized.event), true, false, const_cast<char*>("DebugThreadInitialized"));
     self->evtDebugThreadInitialized.type = EVENT;
 
-    InitNamedEvent(&(self->evtQuit.event), true, false, "Quit");
+    InitNamedEvent(&(self->evtQuit.event), true, false, const_cast<char*>("Quit"));
     self->evtQuit.type = EVENT;
 
-    InitNamedEvent(&(self->evtStartMonitoring.event), true, false, "StartMonitoring");
+    InitNamedEvent(&(self->evtStartMonitoring.event), true, false, const_cast<char*>("StartMonitoring"));
     self->evtStartMonitoring.type = EVENT;
 
     sem_init(&(self->semAvailableDumpSlots.semaphore), 0, 1);
@@ -169,7 +168,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->CoreDumpName =                NULL;
     self->nQuit =                       0;
     self->bDumpOnException =            false;
-    self->bDumpOnException =            NULL;
+    self->bDumpOnException =            false;
     self->ExceptionFilter =             NULL;
     self->bRestrackEnabled =            false;
 
@@ -180,6 +179,12 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bExitProcessMonitor =         false;
     pthread_mutex_init(&self->dotnetMutex, NULL);
     pthread_cond_init(&self->dotnetCond, NULL);
+
+    long s = self->memAllocMap.size();
+    if(self->memAllocMap.size() > 0)
+    {
+        self->memAllocMap.clear();
+    }
 }
 
 //--------------------------------------------------------------------
@@ -246,6 +251,8 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->MemoryThreshold = NULL;
     }
 
+    self->memAllocMap.clear();
+
     Trace("FreeProcDumpConfiguration: Exit");
 }
 
@@ -257,7 +264,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfiguration *self)
 {
-    struct ProcDumpConfiguration * copy = (struct ProcDumpConfiguration*)malloc(sizeof(struct ProcDumpConfiguration));
+    struct ProcDumpConfiguration * copy = new ProcDumpConfiguration();
 
     if(copy != NULL)
     {
@@ -289,7 +296,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         {
             copy->NumberOfDumpsToCollect = self->NumberOfDumpsToCollect;
             copy->MemoryCurrentThreshold = self->MemoryCurrentThreshold;
-            copy->MemoryThreshold = malloc(self->NumberOfDumpsToCollect*sizeof(int));
+            copy->MemoryThreshold = (int*) malloc(self->NumberOfDumpsToCollect*sizeof(int));
             if(copy->MemoryThreshold == NULL)
             {
                 Trace("Failed to alloc memory for MemoryThreshold");
@@ -324,6 +331,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->socketPath = self->socketPath == NULL ? NULL : strdup(self->socketPath);
         copy->bDumpOnException = self->bDumpOnException;
         copy->statusSocket = self->statusSocket;
+        copy->memAllocMap = self->memAllocMap;
 
         return copy;
     }
@@ -383,7 +391,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "-ml" ))
         {
             if( i+1 >= argc || self->MemoryThresholdCount != -1 ) return PrintUsage();
-            self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
+            self->MemoryThreshold = GetSeparatedValues(argv[i+1], const_cast<char*>(","), &self->MemoryThresholdCount);
 
             if(self->MemoryThreshold == NULL || self->MemoryThresholdCount == 0) return PrintUsage();
 
@@ -446,7 +454,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                         return PrintUsage();
                     }
 
-                    self->MemoryThreshold = GetSeparatedValues(token, ",", &self->MemoryThresholdCount);
+                    self->MemoryThreshold = GetSeparatedValues(token, const_cast<char*>(","), &self->MemoryThresholdCount);
                 }
                 else
                 {
@@ -459,7 +467,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             else
             {
                 self->DumpGCGeneration = CUMULATIVE_GC_SIZE;        // Indicates that we want to check against total managed heap size (across all generations)
-                self->MemoryThreshold = GetSeparatedValues(argv[i+1], ",", &self->MemoryThresholdCount);
+                self->MemoryThreshold = GetSeparatedValues(argv[i+1], const_cast<char*>(","), &self->MemoryThresholdCount);
             }
 
             for(int i = 0; i < self->MemoryThresholdCount; i++)

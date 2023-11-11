@@ -6,6 +6,9 @@
 // Monitor functions
 //
 //--------------------------------------------------------------------
+#define _Bool bool
+#include "procdump_ebpf.skel.h"
+
 #include "Includes.h"
 
 static pthread_t sig_thread_id;
@@ -16,9 +19,10 @@ pthread_mutex_t queue_mutex;
 extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
-extern int ExtractRestrack();
-extern struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid);
+
+/*extern struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid);
 extern void SetMaxRLimit();
+extern int RestrackHandleEvent(void *ctx, void *data, size_t data_sz);*/
 
 //------------------------------------------------------------------------------------------------------
 //
@@ -44,7 +48,7 @@ extern void SetMaxRLimit();
 //    #14 0x7f6cd08719ff  (/lib/x86_64-linux-gnu/libc.so.6+0x1269ff)
 //------------------------------------------------------------------------------------------------------
 __attribute__((no_sanitize("address")))
-void *SignalThread(void *input)
+void* SignalThread(void *input)
 {
     Trace("SignalThread: Enter [id=%d]", gettid());
     int sig_caught, rc;
@@ -430,7 +434,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             {
                 // free config entry
                 FreeProcDumpConfiguration(deleteList[i]->config);
-                free(deleteList[i]->config);
+                delete deleteList[i]->config;
                 TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
                 free(deleteList[i]);
             }
@@ -787,6 +791,12 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 //--------------------------------------------------------------------
 bool ContinueMonitoring(struct ProcDumpConfiguration *self)
 {
+    // Procdump exiting
+    if (self->nQuit == 1)
+    {
+        return false;
+    }
+
     // Have we reached the dump limit?
     if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect)
     {
@@ -1228,7 +1238,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             // We don't have a dump name so we just use the path (append a '/' to indicate its a base path)
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)-1] != '/')
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1239,7 +1249,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 1);
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + 1);
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1254,7 +1264,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             // We have a dump name, let's append to dump path
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)] != '/')
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1265,7 +1275,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1323,21 +1333,50 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
     Trace("RestrackThread: Enter [id=%d]", gettid());
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* fullDumpPath = NULL;
+    struct procdump_ebpf* skel = NULL;
     int rc = 0;
 
     void SetMaxRLimit();
 
-    if(ExtractRestrack() != 0)
+    if ((skel = RunRestrack(config, config->ProcessId)) == NULL)
     {
-        Trace("RestrackThread: Failed to extract retrack.");
+        Trace("RestrackThread: Failed to run restrack eBPF program.");
         return NULL;
     }
 
-    if (RunRestrack(config, config->ProcessId) == NULL)
+	//
+    // Set up ring buffer polling
+    //
+	struct ring_buffer *ringBuffer = ring_buffer__new(bpf_map__fd(skel->maps.ringBuffer), RestrackHandleEvent, (void*) config, NULL);
+	if (!ringBuffer)
     {
-        Trace("RestrackThread: Failed to load restrack eBPF program.");
-        return NULL;
+        Trace("RestrackThread: Failed to create ring buffer.");
+		return NULL;
     }
+
+    // poll for memory allocation events
+    while(ContinueMonitoring(config))
+    {
+        //
+        // Loop and poll eBPF buffer for memory allocation events
+        //
+		int err = ring_buffer__poll(ringBuffer, 100);
+		if (err == -EINTR)
+        {
+			err = 0;
+			break;
+		}
+		if (err < 0)
+        {
+			printf("RestrackThread: Error polling ring buffer: %d\n", err);
+			break;
+		}
+
+        sleep(1);
+    }
+
+
+    ReportLeaks(config);
 
     Trace("RestrackThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1433,7 +1472,7 @@ char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* 
     va_copy(args_copy, args);
     clientDataSize = clientDataPrefixSize + vsnprintf(NULL, 0, format, args_copy) + 1;
     va_end(args_copy);
-    clientData = malloc(clientDataSize);
+    clientData = (char*) malloc(clientDataSize);
     if(clientData == NULL)
     {
         Trace("GetClientDataHelper: Failed to allocate memory for client data.");
@@ -1478,7 +1517,7 @@ char* GetThresholds(struct ProcDumpConfiguration *self)
 
     thresholdLen++;     // NULL terminator
 
-    thresholds = malloc(thresholdLen);
+    thresholds = (char*) malloc(thresholdLen);
     if(thresholds != NULL)
     {
         char* writePos = thresholds;
@@ -1533,7 +1572,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
     auto_free char* tmpFolder = NULL;
     auto_free_fd int s=-1;
 
-    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
+    tmpFolder = GetSocketPath(const_cast<char*>("procdump/procdump-status-"), getpid(), config->ProcessId);
     config->socketPath = tmpFolder;
     Trace("WaitForProfilerCompletion: Status socket path: %s", tmpFolder);
 
@@ -1670,7 +1709,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
                 return NULL;
             }
 
-            char* dump = malloc(dumpLen+1);
+            char* dump =(char*) malloc(dumpLen+1);
             if(dump==NULL)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for dump\n");
