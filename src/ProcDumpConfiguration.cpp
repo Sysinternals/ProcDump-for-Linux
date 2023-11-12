@@ -13,7 +13,7 @@ long HZ;                                                        // clock ticks p
 int MAXIMUM_CPU;                                                // maximum cpu usage percentage (# cores * 100)
 struct ProcDumpConfiguration g_config;                          // backbone of the program
 struct ProcDumpConfiguration * target_config;                   // list of configs for target group processes or matching names
-extern pthread_mutex_t queue_mutex;
+extern pthread_mutex_t activeConfigurationsMutex;
 
 sigset_t sig_set;
 
@@ -48,14 +48,14 @@ void ApplyDefaults(struct ProcDumpConfiguration *self)
 void InitProcDump()
 {
     openlog("ProcDump", LOG_PID, LOG_USER);
-    if(CheckKernelVersion() == false)
+    if(CheckKernelVersion(MIN_KERNEL_VERSION, MIN_KERNEL_PATCH) == false)
     {
-        Log(error, "Kernel version lower than 3.5+.");
+        Log(error, "ProcDump requires kernel version %d.%d+.", MIN_KERNEL_VERSION, MIN_KERNEL_PATCH);
         exit(-1);
     }
     InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
-    pthread_mutex_init(&queue_mutex, NULL);
+    pthread_mutex_init(&activeConfigurationsMutex, NULL);
 
     sigemptyset (&sig_set);
     sigaddset (&sig_set, SIGINT);
@@ -511,6 +511,12 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         {
             if( i+1 >= argc) return PrintUsage();
             self->bRestrackEnabled = true;
+
+            if(self->bRestrackEnabled == true && CheckKernelVersion(MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH) == false)
+            {
+                Log(error, "Restrack requires kernel version %d.%d+.", MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH);
+                return PrintUsage();
+            }
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
                     0 == strcasecmp( argv[i], "-tc" ))

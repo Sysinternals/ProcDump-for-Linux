@@ -27,8 +27,6 @@
 cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0048 NEW)
 
-SET (CMAKE_CXX_COMPILER "/usr/bin/clang++" CACHE STRING "C++ compiler" FORCE)
-
 #
 # set the project name - version is MAJOR.MINOR.PATCH.RELEASE - releases start at 1
 #

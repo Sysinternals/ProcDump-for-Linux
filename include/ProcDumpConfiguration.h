@@ -60,7 +60,8 @@ struct MonitoredProcessMapEntry
     long long starttime;
 };
 
-struct ProcDumpConfiguration {
+struct ProcDumpConfiguration
+{
     // Process and System info
     pid_t ProcessId;
     pid_t ProcessGroup;         // -pgid
@@ -135,12 +136,6 @@ struct ProcDumpConfiguration {
 
     // External
     pid_t gcorePid;
-};
-
-struct ConfigQueueEntry {
-    struct ProcDumpConfiguration * config;
-
-    TAILQ_ENTRY(ConfigQueueEntry) element;
 };
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);

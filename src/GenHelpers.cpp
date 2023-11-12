@@ -96,32 +96,31 @@ bool ConvertToInt(const char* src, int* conv)
 
 //--------------------------------------------------------------------
 //
-// CheckKernelVersion - Check to see if current kernel is 3.5+.
+// CheckKernelVersion - Check to see if current kernel is greater than
+// specified.
 //
-// ProcDump won't proceed if current kernel is less than 3.5.
-// Returns true if >= 3.5+, returns false otherwise or error.
 //--------------------------------------------------------------------
-bool CheckKernelVersion()
+bool CheckKernelVersion(int major, int minor)
 {
-    struct utsname kernelInfo;
+    struct utsname kernelInfo = {};
     if(uname(&kernelInfo) == 0)
     {
         int version, patch = 0;
         if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2)
         {
-            Log(error, "Cannot validate kernel version");
-            Trace("%s",strerror(errno));
             return false;
         }
 
-        if(version > MIN_KERNEL_VERSION) return true;
-        if(version == MIN_KERNEL_VERSION && patch >= MIN_KERNEL_PATCH) return true;
+        if(version > major)
+        {
+            return true;
+        }
+        else if(version == major && patch >= minor)
+        {
+            return true;
+        }
+    }
 
-    }
-    else
-    {
-        Log(error, strerror(errno));
-    }
     return false;
 }
 

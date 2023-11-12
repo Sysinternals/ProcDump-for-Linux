@@ -11,18 +11,25 @@
 
 #include "Includes.h"
 
-static pthread_t sig_thread_id;
+#include <vector>
 
-TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
-pthread_mutex_t queue_mutex;
+static pthread_t sig_thread_id;
 
 extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
 
-/*extern struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid);
-extern void SetMaxRLimit();
-extern int RestrackHandleEvent(void *ctx, void *data, size_t data_sz);*/
+//
+// List of all active monitor configurations.
+// All access to this map must be protected by activeConfigurationMutex
+//
+std::unordered_map<int, ProcDumpConfiguration*> activeConfigurations;
+pthread_mutex_t activeConfigurationsMutex;
+
+//
+// Map of which processes are being monitored
+//
+std::unordered_map<int, MonitoredProcessMapEntry> monitoredProcessMap;
 
 //------------------------------------------------------------------------------------------------------
 //
@@ -65,14 +72,15 @@ void* SignalThread(void *input)
             Trace("SignalThread: Got a SIGINT");
 
             // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
-            pthread_mutex_lock(&queue_mutex);
-            TAILQ_FOREACH(item, &configQueueHead, element)
-            {
-                if(!IsQuit(item->config)) SetQuit(item->config, 1);
+            pthread_mutex_lock(&activeConfigurationsMutex);
 
-                if(item->config->gcorePid != NO_PID) {
+            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
+            {
+                if(!IsQuit(it->second)) SetQuit(it->second, 1);
+
+                if(it->second->gcorePid != NO_PID) {
                     Log(info, "Shutting down gcore");
-                    if((rc = kill(-item->config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
+                    if((rc = kill(-it->second->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
                         Log(error, "Failed to shutdown gcore.");
                     }
                 }
@@ -82,17 +90,17 @@ void* SignalThread(void *input)
                 // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
                 // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
                 // break it out of waitpid call.
-                if(item->config->SignalNumber != -1)
+                if(it->second->SignalNumber != -1)
                 {
-                    for(int i=0; i<item->config->nThreads; i++)
+                    for(int i=0; i<it->second->nThreads; i++)
                     {
-                        if(item->config->Threads[i].trigger == Signal)
+                        if(it->second->Threads[i].trigger == Signal)
                         {
-                            pthread_mutex_lock(&item->config->ptrace_mutex);
-                            ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
-                            pthread_mutex_unlock(&item->config->ptrace_mutex);
+                            pthread_mutex_lock(&it->second->ptrace_mutex);
+                            ptrace(PTRACE_DETACH, it->second->ProcessId, 0, 0);
+                            pthread_mutex_unlock(&it->second->ptrace_mutex);
 
-                            if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
+                            if ((rc = pthread_cancel(it->second->Threads[i].thread)) != 0) {
                                 Log(error, "An error occurred while cancelling SignalMonitorThread.\n");
                                 exit(-1);
                             }
@@ -103,7 +111,7 @@ void* SignalThread(void *input)
 
             Log(info, "Quit");
             SetQuit(&g_config, 1);                  // Make sure to signal the global config
-            pthread_mutex_unlock(&queue_mutex);
+            pthread_mutex_unlock(&activeConfigurationsMutex);
             break;
 
         default:
@@ -117,25 +125,62 @@ void* SignalThread(void *input)
 
 //--------------------------------------------------------------------
 //
+// GetNewMonitorConfiguration
+// Gets a new configuration based off of the passed in config.
+// Also adds the configuration to both activeConfigurations and
+// monitoredProcessMap meaning it is now considered an active and monitored
+// process.
+//
+//--------------------------------------------------------------------
+ProcDumpConfiguration* GetNewMonitorConfiguration(ProcDumpConfiguration* sourceConfig, char* processName, int procPid, unsigned long long starttime)
+{
+    ProcDumpConfiguration* config = CopyProcDumpConfiguration(sourceConfig);
+    if(config == NULL)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("MonitorProcesses: failed to alloc struct for process.");
+        return NULL;
+    }
+
+    // populate fields for this target
+    if(procPid != -1)
+    {
+        config->ProcessId = procPid;
+    }
+
+    if(processName != NULL)
+    {
+        config->ProcessName = processName;
+    }
+
+    // insert config into queue
+    pthread_mutex_lock(&activeConfigurationsMutex);
+    activeConfigurations[config->ProcessId] = config;
+    monitoredProcessMap[config->ProcessId].active = true;
+    monitoredProcessMap[config->ProcessId].starttime = starttime;
+    pthread_mutex_unlock(&activeConfigurationsMutex);
+
+    return config;
+}
+
+
+//--------------------------------------------------------------------
+//
 // MonitorProcesses
 // MonitorProcess is the starting point of where the monitors get
 // created. It uses a list to store all the monitors that are active.
 // All monitors must go on this list as there are other places (for
 // example, SignalThread) that relies on all active monitors to be part
-// of the list. Any access to this list must be protected by queue_mutex.
+// of the list.
 //
 //--------------------------------------------------------------------
 void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
-    auto_free struct MonitoredProcessMapEntry* monitoredProcessMap = NULL;
-
     if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch\n", self->ProcessName);
     if (self->bProcessGroup == true)    Log(info, "Monitoring processes of PGID '%d'\n", self->ProcessGroup);
 
     // allocate list of configs for process monitoring
-    TAILQ_INIT(&configQueueHead);
     int numMonitoredProcesses = 0;
-    struct ConfigQueueEntry * item;
 
     // create binary map to track processes we have already tracked and closed
     int maxPid = GetMaximumPID();
@@ -146,13 +191,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         return;
     }
 
-    monitoredProcessMap = (struct MonitoredProcessMapEntry*) calloc(maxPid, sizeof(struct MonitoredProcessMapEntry));
-    if(!monitoredProcessMap)
-    {
-        Log(error, INTERNAL_ERROR);
-        Trace("CreateMonitorThreads: failed to allocate memory for monitorProcessMap.");
-        return;
-    }
+    monitoredProcessMap.reserve(maxPid);
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
     // Note: We only create ONE per instance of procdump rather than per monitor.
@@ -200,28 +239,13 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
         }
 
-        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-        if(item==NULL)
+        ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, NULL, -1, 0);
+        if(config == NULL)
         {
             Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to allocate memory for item");
+            Trace("MonitorProcesses: failed to get new monitor configuration.");
             return;
         }
-
-        item->config = CopyProcDumpConfiguration(self);
-
-        if(item->config == NULL)
-        {
-            Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to alloc struct for process.");
-            return;
-        }
-
-        // insert config into queue
-        pthread_mutex_lock(&queue_mutex);
-        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId].active = true;
-        pthread_mutex_unlock(&queue_mutex);
 
         // print config here
         PrintConfiguration(self);
@@ -237,13 +261,12 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         Log(info, "Stopping monitor for process %s (%d)", self->ProcessName, self->ProcessId);
         WaitForSignalThreadToTerminate(self);
 
-        pthread_mutex_lock(&queue_mutex);
-        TAILQ_REMOVE(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId].active = false;
-        pthread_mutex_unlock(&queue_mutex);
-        FreeProcDumpConfiguration(item->config);
-        free(item->config);
-        free(item);
+        pthread_mutex_lock(&activeConfigurationsMutex);
+        activeConfigurations.erase(config->ProcessId);
+        monitoredProcessMap[config->ProcessId].active = false;
+        pthread_mutex_unlock(&activeConfigurationsMutex);
+        FreeProcDumpConfiguration(config);
+        free(config);
     }
     else
     {
@@ -284,36 +307,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
                         if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
-                            // allocate for new queue entry
-                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                            if(item==NULL)
+                            ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, GetProcessName(procPid), procPid, procStat.starttime);
+                            if(config == NULL)
                             {
                                 Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                Trace("MonitorProcesses: failed to get new monitor configuration.");
                                 return;
                             }
 
-                            item->config = CopyProcDumpConfiguration(self);
-
-                            if(item->config == NULL)
-                            {
-                                Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to alloc struct for process.");
-                                return;
-                            }
-
-                            // populate fields for this target
-                            item->config->ProcessId = procPid;
-                            item->config->ProcessName = GetProcessName(procPid);
-
-                            // insert config into queue
-                            pthread_mutex_lock(&queue_mutex);
-                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId].active = true;
-                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
-                            pthread_mutex_unlock(&queue_mutex);
-
-                            if(StartMonitor(item->config)!=0)
+                            if(StartMonitor(config)!=0)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
@@ -338,36 +340,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
                         if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
-                            // allocate for new queue entry
-                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                            if(item==NULL)
+                            ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, strdup(nameForPid), procPid, procStat.starttime);
+                            if(config == NULL)
                             {
                                 Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                Trace("MonitorProcesses: failed to get new monitor configuration.");
                                 return;
                             }
 
-                            item->config = CopyProcDumpConfiguration(self);
-
-                            if(item->config == NULL)
-                            {
-                                Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to alloc struct for named process.");
-                                return;
-                            }
-
-                            // populate fields for this target
-                            item->config->ProcessId = procPid;
-                            item->config->ProcessName = strdup(nameForPid);
-
-                            // insert config into queue
-                            pthread_mutex_lock(&queue_mutex);
-                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId].active = true;
-                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
-                            pthread_mutex_unlock(&queue_mutex);
-
-                            if(StartMonitor(item->config)!=0)
+                            if(StartMonitor(config)!=0)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
@@ -391,55 +372,27 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
-            pthread_mutex_lock(&queue_mutex);
+            pthread_mutex_lock(&activeConfigurationsMutex);
 
-            // TALQ_FOREACH does not support changing the list while iterating.
-            // We use a seperate delete list instead.
-            int count = 0;
-            TAILQ_FOREACH(item, &configQueueHead, element)
+            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
             {
-                count++;
-            }
-
-            struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
-            if(deleteList == NULL)
-            {
-                Log(error, INTERNAL_ERROR);
-                Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-                return;
-            }
-
-            count = 0;
-
-            // Iterate over the queue and store the items to delete
-            TAILQ_FOREACH(item, &configQueueHead, element)
-            {
-                // The conditions under which we stop monitoring a process are:
-                // 1. Process has been terminated
-                // 2. The monitoring thread has exited
-                // 3. The monitor has collected the required number of dumps
-                if(item->config->bTerminated || item->config->nQuit || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect)
+                if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
                 {
-                    Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
-                    WaitForAllMonitorsToTerminate(item->config);
+                    Log(info, "Stopping monitors for process: %s (%d)", it->second->ProcessName, it->second->ProcessId);
+                    WaitForAllMonitorsToTerminate(it->second);
 
-                    deleteList[count++] = item;
+                    FreeProcDumpConfiguration(it->second);
+                    delete it->second;
 
+                    it = activeConfigurations.erase(it);
                     numMonitoredProcesses--;
                 }
+                else
+                {
+                    ++it;
+                }
             }
-
-            // Iterate over the delete list and actually delete the items from the queue
-            for(int i=0; i<count; i++)
-            {
-                // free config entry
-                FreeProcDumpConfiguration(deleteList[i]->config);
-                delete deleteList[i]->config;
-                TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
-                free(deleteList[i]);
-            }
-            free(deleteList);
-            pthread_mutex_unlock(&queue_mutex);
+            pthread_mutex_unlock(&activeConfigurationsMutex);
 
             // Exit if we are monitoring PGID and there are no more processes to monitor.
             // If we are monitoring for processes based on a process name we keep monitoring
@@ -456,41 +409,26 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         } while ((numMonitoredProcesses >= 0 || self->WaitingForProcessName == true) && !IsQuit(&g_config));
 
         // cleanup monitoring queue
-        pthread_mutex_lock(&queue_mutex);
-        int count = 0;
-        TAILQ_FOREACH(item, &configQueueHead, element)
+        pthread_mutex_lock(&activeConfigurationsMutex);
+
+        for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
         {
-            count++;
+            if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
+            {
+                SetQuit(it->second, 1);
+                WaitForAllMonitorsToTerminate(it->second);
+
+                FreeProcDumpConfiguration(it->second);
+                delete it->second;
+
+                it = activeConfigurations.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
         }
-
-        struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
-        if(deleteList == NULL)
-        {
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-            return;
-        }
-
-        count = 0;
-
-        TAILQ_FOREACH(item, &configQueueHead, element)
-        {
-            SetQuit(item->config, 1);
-            WaitForAllMonitorsToTerminate(item->config);
-
-            deleteList[count++] = item;
-        }
-
-        // Iterate over the delete list and actually delete the items from the queue
-        for(int i=0; i<count; i++)
-        {
-            // free config entry
-            FreeProcDumpConfiguration(deleteList[i]->config);
-            TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
-            free(deleteList[i]);
-        }
-        free(deleteList);
-        pthread_mutex_unlock(&queue_mutex);
+        pthread_mutex_unlock(&activeConfigurationsMutex);
 
         free(target_config);
     }
