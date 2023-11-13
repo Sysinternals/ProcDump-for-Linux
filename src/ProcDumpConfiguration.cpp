@@ -119,6 +119,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     sysinfo(&(self->SystemInfo));
 
     pthread_mutex_init(&self->ptrace_mutex, NULL);
+    pthread_mutex_init(&self->memAllocMapMutex, NULL);
 
     InitNamedEvent(&(self->evtCtrlHandlerCleanupComplete.event), true, false, const_cast<char*>("CtrlHandlerCleanupComplete"));
     self->evtCtrlHandlerCleanupComplete.type = EVENT;
@@ -170,7 +171,9 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bDumpOnException =            false;
     self->bDumpOnException =            false;
     self->ExceptionFilter =             NULL;
+    self->ExcludeFilter =               NULL;
     self->bRestrackEnabled =            false;
+    self->SampleRate =                  1;
 
     self->socketPath =                  NULL;
     self->statusSocket =                -1;
@@ -203,6 +206,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     DestroyEvent(&(self->evtStartMonitoring.event));
 
     pthread_mutex_destroy(&self->ptrace_mutex);
+    pthread_mutex_destroy(&self->memAllocMapMutex);
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
     pthread_mutex_destroy(&self->dotnetMutex);
@@ -231,6 +235,12 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     {
         free(self->ExceptionFilter);
         self->ExceptionFilter = NULL;
+    }
+
+    if(self->ExcludeFilter)
+    {
+        free(self->ExcludeFilter);
+        self->ExcludeFilter = NULL;
     }
 
     if(self->CoreDumpPath)
@@ -312,6 +322,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         }
 
         copy->bRestrackEnabled = self->bRestrackEnabled;
+        copy->SampleRate = self->SampleRate;
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
         copy->MemoryThresholdCount = self->MemoryThresholdCount;
         copy->bMonitoringGCMemory = self->bMonitoringGCMemory;
@@ -328,6 +339,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->CoreDumpPath = self->CoreDumpPath == NULL ? NULL : strdup(self->CoreDumpPath);
         copy->CoreDumpName = self->CoreDumpName == NULL ? NULL : strdup(self->CoreDumpName);
         copy->ExceptionFilter = self->ExceptionFilter == NULL ? NULL : strdup(self->ExceptionFilter);
+        copy->ExcludeFilter = self->ExcludeFilter == NULL ? NULL : strdup(self->ExcludeFilter);
         copy->socketPath = self->socketPath == NULL ? NULL : strdup(self->socketPath);
         copy->bDumpOnException = self->bDumpOnException;
         copy->statusSocket = self->statusSocket;
@@ -510,13 +522,27 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                     0 == strcasecmp( argv[i], "-restrack" ))
         {
             if( i+1 >= argc) return PrintUsage();
-            self->bRestrackEnabled = true;
+            if(ConvertToInt(argv[i+1], &self->SampleRate))
+            {
+                i++;
+            }
+            else
+            {
+                self->SampleRate = 1;
+            }
+            if(self->SampleRate < 0)
+            {
+                Log(error, "Invalid sample rate specified.");
+                return PrintUsage();
+            }
 
-            if(self->bRestrackEnabled == true && CheckKernelVersion(MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH) == false)
+            if(CheckKernelVersion(MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH) == false)
             {
                 Log(error, "Restrack requires kernel version %d.%d+.", MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH);
                 return PrintUsage();
             }
+
+            self->bRestrackEnabled = true;
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
                     0 == strcasecmp( argv[i], "-tc" ))
@@ -642,7 +668,29 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
+        else if( 0 == strcasecmp( argv[i], "/fx" ) ||
+                   0 == strcasecmp( argv[i], "-fx" ))
+        {
+            if( i+1 >= argc || self->ExcludeFilter)
+            {
+                if(self->ExcludeFilter)
+                {
+                    free(self->ExcludeFilter);
+                }
 
+                return PrintUsage();
+            }
+
+            self->ExcludeFilter = strdup(argv[i+1]);
+            if(self->ExcludeFilter==NULL)
+            {
+                Log(error, INTERNAL_ERROR);
+                Trace("GetOptions: failed to strdup ExcludeFilter");
+                return -1;
+            }
+
+            i++;
+        }
         else if( 0 == strcasecmp( argv[i], "/o" ) ||
                     0 == strcasecmp( argv[i], "-o" ))
         {
@@ -786,7 +834,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage();
     }
 
-    if(self->MemoryThresholdCount != -1)
+    if(self->MemoryThresholdCount > 1)
     {
         self->NumberOfDumpsToCollect = self->MemoryThresholdCount;
     }
@@ -795,6 +843,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     if((self->ExceptionFilter && self->bDumpOnException == false))
     {
         Log(error, "Please use the -e switch when specifying an exception filter (-f)");
+        return PrintUsage();
+    }
+
+    // Make sure exclude filter is provided with switches that supports exclusion.
+    if((self->ExcludeFilter && self->bRestrackEnabled == false))
+    {
+        Log(error, "Please use the -restrack switch when specifying an exclude filter (-fx)");
         return PrintUsage();
     }
 
@@ -944,10 +999,12 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         if (self->bRestrackEnabled == true)
         {
             printf("%-40s%s\n", "Resource tracking", "On");
+            printf("%-40s%d\n", "Resource tracking sample rate", self->SampleRate);
         }
         else
         {
             printf("%-40s%s\n", "Resource tracking", "n/a");
+            printf("%-40s%s\n", "Resource tracking sample rate", "n/a");
         }
 
         // Thread
@@ -988,6 +1045,11 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         else
         {
             printf("%-40s%s\n", "Exception monitor", "n/a");
+        }
+        // Exclude filter
+        if (self->ExcludeFilter)
+        {
+            printf("%-40s%s\n", "Exclude filter", self->ExcludeFilter);
         }
         // GC Generation
         if (self->DumpGCGeneration != -1)

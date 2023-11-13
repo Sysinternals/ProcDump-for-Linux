@@ -24,6 +24,14 @@
 #define USER_STACKID_FLAGS (0 | BPF_F_FAST_STACK_CMP | BPF_F_USER_STACK)
 #define ARGS_HASH_SIZE 10240
 
+#ifdef DEBUG_K
+#define BPF_PRINTK( format, ... ) \
+    char fmt[] = format; \
+    bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__ );
+#else
+#define BPF_PRINTK ((void)0);
+#endif
+
 //
 // This is a hashmap to hold resource arguments (such as size) between alloc and free calls.
 // It's shared by all cpus because alloc and free could be on different cpus.

@@ -22,6 +22,7 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <fstream>
 
 typedef struct {
     unsigned int type;
@@ -40,6 +41,15 @@ typedef struct {
     __u64 pc;
 } stackFrame;
 
+typedef struct {
+    ProcDumpConfiguration* config;
+    const char* filename;
+} leakThreadArgs;
+
+
+extern struct ProcDumpConfiguration g_config;
+
+
 // ------------------------------------------------------------------------------------------
 // libbpf_print_fn
 //
@@ -47,8 +57,12 @@ typedef struct {
 // ------------------------------------------------------------------------------------------
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
-    // TODO: Should go into trace file and error out
-	return vfprintf(stderr, format, args);
+    if(g_config.DiagnosticsLoggingEnabled == true)
+    {
+        return vfprintf(stderr, format, args);
+    }
+
+    return 0;
 }
 
 
@@ -87,7 +101,7 @@ void StopRestrack(struct procdump_ebpf* skel)
 // APIs.
 //
 //--------------------------------------------------------------------
-struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid)
+struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config)
 {
     int ret = -1;
     struct procdump_ebpf *skel = NULL;
@@ -97,7 +111,10 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t ta
     //
     // Setup extended error logging
     //
-    libbpf_set_print(libbpf_print_fn);
+    if(config->DiagnosticsLoggingEnabled == true)
+    {
+        libbpf_set_print(libbpf_print_fn);
+    }
 
     //
     // Open the eBPF program
@@ -108,7 +125,9 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t ta
         return skel;
     }
 
-    skel->bss->target_PID = targetPid;
+    skel->bss->target_PID = config->ProcessId;
+    skel->bss->sampleRate = config->SampleRate;
+    skel->bss->currentSampleCount = 1;
 
     ret = procdump_ebpf__load(skel);
     if (ret)
@@ -134,35 +153,193 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t ta
 // ------------------------------------------------------------------------------------------
 int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
 {
-    Trace("RestrackHandleEvent: Enter");
     ResourceInformation* event = (ResourceInformation*) data;
     struct ProcDumpConfiguration* config = (struct ProcDumpConfiguration*) ctx;
 
-    if(event->allocSize > 0)
+    if(event->resourceType == MALLOC_ALLOC || event->resourceType == CALLOC_ALLOC || event->resourceType == REALLOC_ALLOC || event->resourceType == REALLOCARRAY_ALLOC)
     {
-        if(event->resourceType == MALLOC_ALLOC || event->resourceType == CALLOC_ALLOC || event->resourceType == REALLOC_ALLOC || event->resourceType == REALLOCARRAY_ALLOC)
+        //
+        // Add to allocation map
+        //
+        pthread_mutex_lock(&config->memAllocMapMutex);
+        config->memAllocMap[(uintptr_t) event->allocAddress] = event;
+        pthread_mutex_unlock(&config->memAllocMapMutex);
+
+        if(config->DiagnosticsLoggingEnabled == true)
         {
-            //
-            // Add to allocation map
-            //
-            config->memAllocMap[(uintptr_t) event->allocAddress] = event;
             Trace("Got event: Alloc size: %ld 0x%lx\n", event->allocSize, event->allocAddress);
         }
-        else if (event->resourceType == MALLOC_FREE)
+    }
+    else if (event->resourceType == MALLOC_FREE)
+    {
+        if(config->memAllocMap.find((uintptr_t) event->allocAddress) != config->memAllocMap.end())
         {
-            if(config->memAllocMap.find((uintptr_t) event->allocAddress) != config->memAllocMap.end())
+            //
+            // If in the allocation map, remove the allocation
+            //
+            pthread_mutex_lock(&config->memAllocMapMutex);
+            config->memAllocMap.erase((uintptr_t) event->allocAddress);
+            pthread_mutex_unlock(&config->memAllocMapMutex);
+            if(config->DiagnosticsLoggingEnabled == true)
             {
-                //
-                // If in the allocation map, remove the allocation
-                //
-                config->memAllocMap.erase((uintptr_t) event->allocAddress);
                 Trace("Got event: free 0x%lx\n", event->allocAddress);
             }
         }
     }
 
-    Trace("RestrackHandleEvent: Exit");
 	return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// strlwr
+//
+// Convert string to lowercase.
+// ------------------------------------------------------------------------------------------
+inline int strlwr(char* str, size_t len)
+{
+    for (size_t i = 0; i < len; ++i)
+    {
+        if ((str[i] >= u'A') && (str[i] <= u'Z'))
+        str[i] = str[i] + (u'a' - u'A');
+    }
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// WildcardSearch
+//
+// Same wild card search as the Windows version.
+// ------------------------------------------------------------------------------------------
+bool WildcardSearch(char* entry, char* search)
+{
+    if ((entry == NULL) || (search == NULL))
+        return false;
+
+    char* classLowerMalloc = (char*)malloc(sizeof(char)*(strlen(entry)+1));
+    if (classLowerMalloc == NULL)
+        return false;
+
+    char* searchLowerMalloc = (char*)malloc(sizeof(char)*(strlen(search)+1));
+    if (searchLowerMalloc == NULL)
+    {
+        free(classLowerMalloc);
+        return false;
+    }
+
+    char* classLower = classLowerMalloc;
+    strcpy(classLower, entry);
+    strlwr(classLower, (strlen(entry)+1));
+
+    char* searchLower = searchLowerMalloc;
+    strcpy(searchLower, search);
+    strlwr(searchLower, (strlen(search)+1));
+
+    while ((*searchLower != u'\0') && (*classLower != u'\0'))
+    {
+        if (*searchLower != u'*')
+        {
+            // Straight (case insensitive) compare
+            if (*searchLower != *classLower)
+            {
+                free(classLowerMalloc);
+                classLowerMalloc = NULL;
+
+                free(searchLowerMalloc);
+                searchLowerMalloc = NULL;
+
+                return false;
+            }
+
+            searchLower++;
+            classLower++;
+            continue;
+        }
+
+        //
+        // Wildcard processing
+        //
+
+ContinueWildcard:
+        searchLower++;
+
+        // The wildcard is on the end; e.g. '*' 'blah*' or '*blah*'
+        // Must be a match
+        if (*searchLower == u'\0')
+        {
+            free(classLowerMalloc);
+            classLowerMalloc = NULL;
+
+            free(searchLowerMalloc);
+            searchLowerMalloc = NULL;
+            return true;
+        }
+
+        // Double Wildcard; e.g. '**' 'blah**' or '*blah**'
+        if (*searchLower == u'*')
+            goto ContinueWildcard;
+
+        // Find the length of the sub-string to search for
+        int endpos = 0;
+        while ((searchLower[endpos] != u'\0') && (searchLower[endpos] != u'*'))
+            endpos++;
+
+        // Find a match of the sub-search string anywhere within the class string
+        int cc = 0; // Offset in to the Class
+        int ss = 0; // Offset in to the Sub-Search
+        while (ss < endpos)
+        {
+            if (classLower[ss+cc] == u'\0')
+            {
+                free(classLowerMalloc);
+                classLowerMalloc = NULL;
+
+                free(searchLowerMalloc);
+                searchLowerMalloc = NULL;
+
+                return false;
+            }
+
+            if (searchLower[ss] != classLower[ss+cc])
+            {
+                cc++;
+                ss = 0;
+                continue;
+            }
+            ss++;
+        }
+
+        // If we get here, we found a match; move each string forward
+        searchLower += ss;
+        classLower += (ss + cc);
+    }
+
+    // Do we have a trailing wildcard?
+    // This happens when Class = ABC.XYZ and Search = *XYZ*
+    // Needed as the trailing wildcard code (above) doesn't run after the ss/cc search as Class is null
+    while (*searchLower == u'*')
+    {
+        searchLower++;
+    }
+
+    // If Class and Search have no residual, this is a match.
+    if ((*searchLower == u'\0') && (*classLower == u'\0'))
+    {
+        free(classLowerMalloc);
+        classLowerMalloc = NULL;
+
+        free(searchLowerMalloc);
+        searchLowerMalloc = NULL;
+
+        return true;
+    }
+
+    free(classLowerMalloc);
+    classLowerMalloc = NULL;
+
+    free(searchLowerMalloc);
+    searchLowerMalloc = NULL;
+
+    return false;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -170,19 +347,37 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
 //
 // Reports on leaks
 // ------------------------------------------------------------------------------------------
-void ReportLeaks(ProcDumpConfiguration* config)
+void* ReportLeaks(void* args)
 {
-    void* symResolver = bcc_symcache_new(config->ProcessId, NULL);
+    leakThreadArgs* leakArgs = (leakThreadArgs*) args;
+    ProcDumpConfiguration* config = leakArgs->config;
+    const char* filename = leakArgs->filename;
+
+    std::ofstream file(filename);
+    if (!file)
+    {
+        // Handle error
+        return NULL;
+    }
+
 
     if(config->memAllocMap.size() > 0)
     {
-        // TODO: Use something different for more efficient lookup
+        void* symResolver = bcc_symcache_new(config->ProcessId, NULL);
+
+        //
+        // Since its a snapshot, copy the alloc map so we can avoid synchronization issues.
+        //
+        pthread_mutex_lock(&config->memAllocMapMutex);
+        std::unordered_map<uintptr_t, ResourceInformation*> memAllocMapCopy = config->memAllocMap;
+        pthread_mutex_unlock(&config->memAllocMapMutex);
+
         std::vector<groupedAllocEntry> groupedAllocations;
 
         //
         // Group the call stacks
         //
-        for (const auto& pair : config->memAllocMap)
+        for (const auto& pair : memAllocMapCopy)
         {
             bool found = false;
             for(int i=0; i<(int) groupedAllocations.size(); i++)
@@ -222,26 +417,6 @@ void ReportLeaks(ProcDumpConfiguration* config)
             }
         }
 
-        /*
-        printf("---------------------------------------------------\n");
-        printf("Grouped allocations:\n");
-        for (const auto& pair : groupedAllocations)
-        {
-            printf("Allocations: %d Total Size: %d Call Stack Len: %d\n", pair.allocCount, pair.totalAllocSize, pair.callStackLen);
-            for(unsigned int i=0; i<pair.callStackLen; i++)
-            {
-                //
-                // Now we get the symbol information for the allocation call stacks that are outstanding.
-                //
-                // Below is just TMP.
-                if(pair.stackTrace[i] > 0)
-                {
-                    printf("\t0x%llx\n", pair.stackTrace[i]);
-                }
-            }
-        }
-        printf("---------------------------------------------------\n");*/
-
         // Sort the vector based on the totalAllocSize field in ascending order
         std::sort(groupedAllocations.begin(), groupedAllocations.end(), [](const groupedAllocEntry& a, const groupedAllocEntry& b) {
             return a.totalAllocSize > b.totalAllocSize;
@@ -264,7 +439,7 @@ void ReportLeaks(ProcDumpConfiguration* config)
                     bcc_symbol sym;
                     if(bcc_symcache_resolve(symResolver, pair.stackTrace[i], &sym) != 0)
                     {
-                        printf("Error resolving symbol for address: 0x%llx\n", pair.stackTrace[i]);
+                        file << "Error resolving symbol for address: 0x" << std::hex << pair.stackTrace[i] << "\n";
                         continue;
                     }
 
@@ -286,57 +461,81 @@ void ReportLeaks(ProcDumpConfiguration* config)
             // If the stack contains an ignore frame, don't print it
             //
             bool found = false;
-            /*if(config.ignoreFrame != NULL)
+            if(config->ExcludeFilter != NULL)
             {
                 for (const auto& st : callStack)
                 {
-
-                    if(strstr(st.fullName, config.ignoreFrame) != NULL)
+                    if(WildcardSearch(st.fullName, config->ExcludeFilter) == true)
                     {
                         found = true;
                         break;
                     }
                 }
-            }*/
+            }
 
             if(found == false)
             {
                 totalLeak += pair.totalAllocSize;
 
-                printf ("+++ Leaked Allocation [allocation size: 0x%lx count:0x%lx total size:0x%lx]\n", pair.allocSize, pair.allocCount, pair.totalAllocSize);
+                file << "+++ Leaked Allocation [allocation size: 0x" << std::hex << pair.allocSize << " count:0x" << std::hex << pair.allocCount << " total size:0x" << std::hex << pair.totalAllocSize << "]\n";
 
                 switch(pair.type)
                 {
                     case MALLOC_ALLOC:
-                        printf("\tmalloc\n");
+                        file << "\tmalloc\n";
                         break;
                     case CALLOC_ALLOC:
-                        printf("\tcalloc\n");
+                        file << "\tcalloc\n";
                         break;
                     case REALLOC_ALLOC:
-                        printf("\trealloc\n");
+                        file << "\trealloc\n";
                         break;
                     case REALLOCARRAY_ALLOC:
-                        printf("\treallocarray\n");
+                        file << "\treallocarray\n";
                         break;
                     default:
-                        printf("\tunknown\n");
+                        file << "\tunknown\n";
                         break;
                 }
 
                 for (const auto& st : callStack)
                 {
-                    printf("\t[0x%llx] %s+0x%lx\n", st.pc, st.demangledSymbolName.c_str(), st.offset);
+                    file << "\t[0x" << std::hex << st.pc << "] " << st.demangledSymbolName.c_str() << "+0x" << std::hex << st.offset << "\n";
                 }
 
-                printf("\n");
+                file << "\n";
             }
         }
 
-        printf("\nTotal leaked: 0x%lx\n", totalLeak);
+        file << "\nTotal leaked: 0x" << std::hex << totalLeak << "\n";
     }
     else
     {
-        printf("No leaks detected.\n");
+        file << "No leaks detected.\n";
     }
+
+    Log(info, "Leak report generated: %s", filename);
+
+    free(const_cast<char*>(leakArgs->filename));
+    delete leakArgs;
+    return NULL;
+}
+
+// ------------------------------------------------------------------------------------------
+// WriteRestrackRaw
+//
+// Writes the raw stack trace (IPs only) to the specified file.
+// ------------------------------------------------------------------------------------------
+pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filename)
+{
+
+    //
+    // Create a thread to write the snapshot to avoid delays in the calling thread.
+    // Important due to symbol resolution possibly taking a longer time.
+    //
+    leakThreadArgs* args = new leakThreadArgs();
+    args->config = config;
+    args->filename = strdup(filename);
+    pthread_t thread = 0;
+    return pthread_create(&thread, NULL, ReportLeaks, args);
 }

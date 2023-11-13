@@ -12,6 +12,7 @@
 #include "Includes.h"
 
 #include <vector>
+#include <string>
 
 static pthread_t sig_thread_id;
 
@@ -108,10 +109,10 @@ void* SignalThread(void *input)
                     }
                 }
             }
+            pthread_mutex_unlock(&activeConfigurationsMutex);
 
             Log(info, "Quit");
             SetQuit(&g_config, 1);                  // Make sure to signal the global config
-            pthread_mutex_unlock(&activeConfigurationsMutex);
             break;
 
         default:
@@ -780,6 +781,18 @@ bool BeginMonitoring(struct ProcDumpConfiguration *self)
 
 extern long HZ;                                // clock ticks per second
 
+//--------------------------------------------------------------------
+//
+// WaitThreads - Waits for the specified threads using join.
+//
+//--------------------------------------------------------------------
+void WaitThreads(std::vector<int>& threads)
+{
+    for (auto& thread : threads)
+    {
+        pthread_join(thread, NULL);
+    }
+}
 
 //--------------------------------------------------------------------
 //
@@ -796,6 +809,8 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(COMMIT, config);
 
@@ -816,11 +831,28 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold[config->MemoryCurrentThreshold])))
                 {
                     Log(info, "Trigger: Commit usage:%ldMB on process ID: %d", memUsage, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
                     }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id != 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
+                    }
+
 
                     config->MemoryCurrentThreshold++;
 
@@ -837,6 +869,11 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("CommitMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -855,6 +892,8 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(THREAD, config);
 
@@ -867,10 +906,26 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                 if (proc.num_threads >= config->ThreadThreshold)
                 {
                     Log(info, "Trigger: Thread count:%ld on process ID: %d", proc.num_threads, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id != 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -886,6 +941,11 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("ThreadCountMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -906,6 +966,8 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(FILEDESC, config);
 
@@ -918,10 +980,26 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
                     Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id != 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -937,6 +1015,11 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("FileDescriptorCountMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -959,8 +1042,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int wstatus;
     int signum=-1;
     int rc = 0;
-    int dumpStatus = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(SIGNAL, config);
 
@@ -1001,10 +1085,26 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
                     // Write core dump
                     Log(info, "Trigger: Signal:%d on process ID: %d", signum, config->ProcessId);
-                    dumpStatus = WriteCoreDump(writer);
-                    if(dumpStatus != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id != 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     kill(config->ProcessId, SIGCONT);
@@ -1035,13 +1135,18 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                 pthread_mutex_unlock(&config->ptrace_mutex);
 
-                if(dumpStatus != 0)
+                if(dumpFileName == NULL)
                 {
                     break;
                 }
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("SignalMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1062,6 +1167,8 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     struct sysinfo sysInfo;
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(CPU, config);
 
@@ -1086,10 +1193,26 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     (!config->bCpuTriggerBelowValue && (cpuUsage >= config->CpuThreshold)))
                 {
                     Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id != 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -1105,6 +1228,11 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("CpuTCpuMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1122,6 +1250,8 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<int> leakReportThreads;
 
     writer = NewCoreDumpWriter(TIME, config);
 
@@ -1132,10 +1262,26 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
             Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->PollingInterval/1000, config->ProcessId);
-            rc = WriteCoreDump(writer);
-            if(rc != 0)
+            dumpFileName = WriteCoreDump(writer);
+            if(dumpFileName == NULL)
             {
                 SetQuit(config, 1);
+            }
+
+            //
+            // Check to see if restrack is specified, if so, save current resource usage to file.
+            //
+            if(config->bRestrackEnabled == true)
+            {
+                int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                if (id != 0)
+                {
+                    SetQuit(config, 1);
+                }
+                else
+                {
+                    leakReportThreads.push_back(id);
+                }
             }
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
@@ -1143,6 +1289,11 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("TimerThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1276,7 +1427,7 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     void SetMaxRLimit();
 
-    if ((skel = RunRestrack(config, config->ProcessId)) == NULL)
+    if ((skel = RunRestrack(config)) == NULL)
     {
         Trace("RestrackThread: Failed to run restrack eBPF program.");
         return NULL;

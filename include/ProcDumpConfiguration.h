@@ -110,11 +110,17 @@ struct ProcDumpConfiguration
     char *CoreDumpName;             //
     bool bOverwriteExisting;        // -o
     bool bDumpOnException;          // -e
-    char *ExceptionFilter;          // -f
+    char *ExceptionFilter;          // -f (unfortunately we named this ExceptionFilter event hough it can be used for other include filters as well)
+    char *ExcludeFilter;            // -fx (exclude filter)
     bool bRestrackEnabled;          // -restrack
+    int SampleRate;                 // Record every X resource allocation in restrack
 
+    //
     // Keeps track of the memory allocations when -restrack is specified.
+    // Access must be protected by memAllocMapMutex.
+    //
     std::unordered_map<uintptr_t, ResourceInformation*> memAllocMap;
+    pthread_mutex_t memAllocMapMutex;
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

@@ -28,10 +28,11 @@ struct ResourceInformation
     __u64 stackTrace[MAX_CALL_STACK_FRAMES];
 };
 
-struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config, pid_t targetPid);
+struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config);
 void StopRestrack(struct procdump_ebpf* skel);
 int RestrackHandleEvent(void *ctx, void *data, size_t data_sz);
-void ReportLeaks(ProcDumpConfiguration* config);
+void* ReportLeaks(void* args);
+pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filename);
 
 #endif // RESTRACK_H
 

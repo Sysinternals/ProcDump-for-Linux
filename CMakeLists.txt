@@ -40,6 +40,12 @@ set(PROJECT_VERSION_TWEAK 0)
 file(READ "dist/changelog" CHANGE_LOG)
 
 #
+# enable Debug while pre-release; re-enable it post-release to add symbols to binary
+#
+#set(CMAKE_BUILD_TYPE Debug)
+#option(DEBUG_K "Enter debug mode" On)
+
+#
 # package name
 #
 set(PACKAGE_NAME "procdump")
@@ -222,8 +228,13 @@ target_link_libraries(ProcDumpTestApplication pthread)
 #
 # Make package(s)
 #
-add_custom_target(packages
-    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0"
+add_custom_target(deb
+    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "deb"
+    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+)
+
+add_custom_target(rpm
+    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "rpm"
     DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
 )
 

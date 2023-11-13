@@ -21,8 +21,30 @@
 #include "procdump_ebpf_common.h"
 
 pid_t target_PID;
+int sampleRate;
+int currentSampleCount;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+// ------------------------------------------------------------------------------------------
+// CheckSampleRate
+//
+// Returns true if we should sample this event.
+// ------------------------------------------------------------------------------------------
+__attribute__((always_inline))
+static inline bool CheckSampleRate()
+{
+    if(currentSampleCount == sampleRate)
+    {
+        currentSampleCount = 1;
+        return true;
+    }
+    else
+    {
+        currentSampleCount++;
+        return false;
+    }
+}
 
 // ------------------------------------------------------------------------------------------
 // uprobe_malloc
@@ -40,8 +62,8 @@ int BPF_KPROBE(uprobe_malloc, long size)
     //
     // Only trace PIDs that matched the target PID
     //
-    uint64_t pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != target_PID)
+    uint64_t pid = pidTid >> 32;
+    if (pid != target_PID || CheckSampleRate() == false)
     {
         return 1;
     }
@@ -75,11 +97,11 @@ int BPF_KPROBE(uprobe_malloc, long size)
     //
     if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
     {
-        bpf_printk("Failed to update arguments hashmap\n");
+        BPF_PRINTK("Failed to update arguments hashmap\n");
         return 1;
     }
 
-    bpf_printk("malloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
+    BPF_PRINTK("malloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -117,8 +139,6 @@ int BPF_KRETPROBE(uretprobe_malloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    //bpf_printk("malloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
-
     //
     // Send the event to the ring buffer (user land)
     //
@@ -148,7 +168,7 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
     //
     // Only trace PIDs that matched the target PID
     //
-    uint64_t pid = bpf_get_current_pid_tgid() >> 32;
+    uint64_t pid = pidTid >> 32;
     if (pid != target_PID)
     {
         return 1;
@@ -179,12 +199,11 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
     //
     if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
     {
-        bpf_printk("Failed to update arguments hashmap\n");
+        BPF_PRINTK("Failed to update arguments hashmap\n");
         return 1;
     }
 
-    bpf_printk("Free exiting with pid=%d, alloc=0x%p\n", target_PID, alloc);
-
+    BPF_PRINTK("Free exiting with pid=%d, alloc=0x%p\n", target_PID, alloc);
 	return 0;
 }
 
@@ -220,7 +239,7 @@ int BPF_KRETPROBE(uretprobe_free, void* ret)
         return 1;
     }
 
-    bpf_printk("free exit returned with alloc = 0x%lx, target PID = %d\n", event->allocAddress, target_PID);
+    BPF_PRINTK("free exit returned with alloc = 0x%lx, target PID = %d\n", event->allocAddress, target_PID);
 
     //
     // Send the event to the ring buffer (user land)
@@ -250,8 +269,8 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
     //
     // Only trace PIDs that matched the target PID
     //
-    uint64_t pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != target_PID)
+    uint64_t pid = pidTid >> 32;
+    if (pid != target_PID || CheckSampleRate() == false)
     {
         return 1;
     }
@@ -284,11 +303,10 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
     //
     if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
     {
-        bpf_printk("Failed to update arguments hashmap\n");
+        BPF_PRINTK("Failed to update arguments hashmap\n");
         return 1;
     }
 
-    //bpf_printk("calloc called with size = %d, count: %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -326,8 +344,6 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    //bpf_printk("calloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
-
     //
     // Send the event to the ring buffer (user land)
     //
@@ -356,8 +372,8 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
     //
     // Only trace PIDs that matched the target PID
     //
-    uint64_t pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != target_PID)
+    uint64_t pid = pidTid >> 32;
+    if (pid != target_PID || CheckSampleRate() == false)
     {
         return 1;
     }
@@ -390,11 +406,11 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
     //
     if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
     {
-        bpf_printk("Failed to update arguments hashmap\n");
+        BPF_PRINTK("Failed to update arguments hashmap\n");
         return 1;
     }
 
-    bpf_printk("realloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
+    BPF_PRINTK("realloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -432,8 +448,6 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
-    //bpf_printk("realloc exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
-
     //
     // Send the event to the ring buffer (user land)
     //
@@ -463,8 +477,8 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
     //
     // Only trace PIDs that matched the target PID
     //
-    uint64_t pid = bpf_get_current_pid_tgid() >> 32;
-    if (pid != target_PID)
+    uint64_t pid = pidTid >> 32;
+    if (pid != target_PID || CheckSampleRate() == false)
     {
         return 1;
     }
@@ -497,11 +511,10 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
     //
     if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
     {
-        bpf_printk("Failed to update arguments hashmap\n");
+        BPF_PRINTK("Failed to update arguments hashmap\n");
         return 1;
     }
 
-    //bpf_printk("reallocarray called with size = %d, count = %d, target PID = %d, stacklen = %d\n", size, count, target_PID, event->callStackLen);
 	return 0;
 }
 
@@ -538,9 +551,6 @@ int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
 
     event->allocAddress = (unsigned long) ret;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
-
-    // TODO: use different trace since it only supports 3 arguments passed in.
-    //bpf_printk("reallocarray exit returned with = 0x%p, target PID = %d, size = %d, ret = 0x%p\n", event->allocAddress, target_PID, event->allocSize, ret);
 
     //
     // Send the event to the ring buffer (user land)
