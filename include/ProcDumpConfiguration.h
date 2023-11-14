@@ -113,6 +113,7 @@ struct ProcDumpConfiguration
     char *ExceptionFilter;          // -f (unfortunately we named this ExceptionFilter event hough it can be used for other include filters as well)
     char *ExcludeFilter;            // -fx (exclude filter)
     bool bRestrackEnabled;          // -restrack
+    bool bLeakReportInProgress;
     int SampleRate;                 // Record every X resource allocation in restrack
 
     //

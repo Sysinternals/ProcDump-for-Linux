@@ -21,6 +21,11 @@ extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
 
 //
+// Set when a SIGINT is received.
+//
+bool g_sigint = false;
+
+//
 // List of all active monitor configurations.
 // All access to this map must be protected by activeConfigurationMutex
 //
@@ -71,11 +76,11 @@ void* SignalThread(void *input)
     {
         case SIGINT:
             Trace("SignalThread: Got a SIGINT");
+            g_sigint = true;
 
             // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
             pthread_mutex_lock(&activeConfigurationsMutex);
-
-            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
+            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); it++)
             {
                 if(!IsQuit(it->second)) SetQuit(it->second, 1);
 
@@ -374,14 +379,12 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
             pthread_mutex_lock(&activeConfigurationsMutex);
-
             for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
             {
                 if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
                 {
                     Log(info, "Stopping monitors for process: %s (%d)", it->second->ProcessName, it->second->ProcessId);
                     WaitForAllMonitorsToTerminate(it->second);
-
                     FreeProcDumpConfiguration(it->second);
                     delete it->second;
 
@@ -658,6 +661,36 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 
 //--------------------------------------------------------------------
 //
+// CancelRestrackThread - Cancel the restrack thread
+//
+//--------------------------------------------------------------------
+int CancelRestrackThread(struct ProcDumpConfiguration *self)
+{
+    Trace("CancelRestrackThread: Enter");
+    int rc = -1;
+    pthread_t restrackThread = 0;
+
+    for(int i=0; i<self->nThreads; i++)
+    {
+        if(self->Threads[i].trigger == Restrack)
+        {
+            restrackThread = self->Threads[i].thread;
+            break;
+        }
+    }
+
+    if(restrackThread != 0)
+    {
+        Trace("CancelRestrackThread: cancel restrack thread");
+        rc = pthread_cancel(restrackThread);
+    }
+
+    Trace("CancelRestrackThread: Exit");
+    return rc;
+}
+
+//--------------------------------------------------------------------
+//
 // WaitForAllMonitorsToTerminate - Wait for all monitors to terminate
 //
 //--------------------------------------------------------------------
@@ -665,9 +698,13 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
 
+    CancelRestrackThread(self);
+
     // Wait for the other monitoring threads
-    for (int i = 0; i < self->nThreads; i++) {
-        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
+    for (int i = 0; i < self->nThreads; i++)
+    {
+        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0)
+        {
             Log(error, "An error occurred while joining threads\n");
             exit(-1);
         }
@@ -675,7 +712,6 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 
     return rc;
 }
-
 
 //--------------------------------------------------------------------
 //
@@ -736,6 +772,12 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
         return false;
     }
 
+    // Are we generating leak reports?
+    if (self->bLeakReportInProgress == true)
+    {
+        return true;
+    }
+
     // Have we reached the dump limit?
     if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect)
     {
@@ -783,13 +825,22 @@ extern long HZ;                                // clock ticks per second
 
 //--------------------------------------------------------------------
 //
-// WaitThreads - Waits for the specified threads using join.
+// WaitThreads - Cancels the threads and waits for the specified threads
+// using join.
 //
 //--------------------------------------------------------------------
-void WaitThreads(std::vector<int>& threads)
+void WaitThreads(std::vector<pthread_t>& threads)
 {
     for (auto& thread : threads)
     {
+        //
+        // If user hit CTRL+C, cancel the thread.
+        //
+        if(g_sigint == true)
+        {
+            pthread_cancel(thread);
+        }
+
         pthread_join(thread, NULL);
     }
 }
@@ -810,7 +861,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(COMMIT, config);
 
@@ -842,8 +893,8 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id != 0)
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
                         {
                             SetQuit(config, 1);
                         }
@@ -893,7 +944,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(THREAD, config);
 
@@ -917,8 +968,8 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id != 0)
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
                         {
                             SetQuit(config, 1);
                         }
@@ -967,7 +1018,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(FILEDESC, config);
 
@@ -991,8 +1042,8 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id != 0)
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
                         {
                             SetQuit(config, 1);
                         }
@@ -1044,7 +1095,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(SIGNAL, config);
 
@@ -1096,8 +1147,8 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id != 0)
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
                         {
                             SetQuit(config, 1);
                         }
@@ -1168,7 +1219,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(CPU, config);
 
@@ -1204,8 +1255,8 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id != 0)
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
                         {
                             SetQuit(config, 1);
                         }
@@ -1251,7 +1302,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-    std::vector<int> leakReportThreads;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(TIME, config);
 
@@ -1273,8 +1324,8 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             //
             if(config->bRestrackEnabled == true)
             {
-                int id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                if (id != 0)
+                pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                if (id == 0)
                 {
                     SetQuit(config, 1);
                 }
@@ -1443,29 +1494,31 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
 		return NULL;
     }
 
-    // poll for memory allocation events
-    while(ContinueMonitoring(config))
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        //
-        // Loop and poll eBPF buffer for memory allocation events
-        //
-		int err = ring_buffer__poll(ringBuffer, 100);
-		if (err == -EINTR)
+        while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
-			err = 0;
-			break;
-		}
-		if (err < 0)
-        {
-			printf("RestrackThread: Error polling ring buffer: %d\n", err);
-			break;
-		}
+            //
+            // Loop and poll eBPF buffer for memory allocation events
+            //
+            int err = ring_buffer__poll(ringBuffer, 100);
+            if (err == -EINTR)
+            {
+                err = 0;
+                break;
+            }
+            if (err < 0)
+            {
+                printf("RestrackThread: Error polling ring buffer: %d\n", err);
+                break;
+            }
 
-        sleep(1);
+            if ((rc = WaitForQuit(config, 1000)) != WAIT_TIMEOUT)
+            {
+                break;
+            }
+        }
     }
-
-
-    ReportLeaks(config);
 
     Trace("RestrackThread: Exit [id=%d]", gettid());
     return NULL;

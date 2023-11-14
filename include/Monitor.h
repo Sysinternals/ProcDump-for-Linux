@@ -27,6 +27,7 @@ int WaitForQuit(struct ProcDumpConfiguration *self, int milliseconds);
 int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle, int milliseconds);
 int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self);
 int WaitForSignalThreadToTerminate(struct ProcDumpConfiguration *self);
+int CancelRestrackThread(struct ProcDumpConfiguration *self);
 bool IsQuit(struct ProcDumpConfiguration *self);
 int SetQuit(struct ProcDumpConfiguration *self, int quit);
 bool ContinueMonitoring(struct ProcDumpConfiguration *self);

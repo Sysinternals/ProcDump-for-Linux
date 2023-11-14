@@ -234,9 +234,9 @@ bool WildcardSearch(char* entry, char* search)
     strcpy(searchLower, search);
     strlwr(searchLower, (strlen(search)+1));
 
-    while ((*searchLower != u'\0') && (*classLower != u'\0'))
+    while ((*searchLower != '\0') && (*classLower != '\0'))
     {
-        if (*searchLower != u'*')
+        if (*searchLower != '*')
         {
             // Straight (case insensitive) compare
             if (*searchLower != *classLower)
@@ -264,7 +264,7 @@ ContinueWildcard:
 
         // The wildcard is on the end; e.g. '*' 'blah*' or '*blah*'
         // Must be a match
-        if (*searchLower == u'\0')
+        if (*searchLower == '\0')
         {
             free(classLowerMalloc);
             classLowerMalloc = NULL;
@@ -275,12 +275,12 @@ ContinueWildcard:
         }
 
         // Double Wildcard; e.g. '**' 'blah**' or '*blah**'
-        if (*searchLower == u'*')
+        if (*searchLower == '*')
             goto ContinueWildcard;
 
         // Find the length of the sub-string to search for
         int endpos = 0;
-        while ((searchLower[endpos] != u'\0') && (searchLower[endpos] != u'*'))
+        while ((searchLower[endpos] != '\0') && (searchLower[endpos] != '*'))
             endpos++;
 
         // Find a match of the sub-search string anywhere within the class string
@@ -288,7 +288,7 @@ ContinueWildcard:
         int ss = 0; // Offset in to the Sub-Search
         while (ss < endpos)
         {
-            if (classLower[ss+cc] == u'\0')
+            if (classLower[ss+cc] == '\0')
             {
                 free(classLowerMalloc);
                 classLowerMalloc = NULL;
@@ -316,13 +316,13 @@ ContinueWildcard:
     // Do we have a trailing wildcard?
     // This happens when Class = ABC.XYZ and Search = *XYZ*
     // Needed as the trailing wildcard code (above) doesn't run after the ss/cc search as Class is null
-    while (*searchLower == u'*')
+    while (*searchLower == '*')
     {
         searchLower++;
     }
 
     // If Class and Search have no residual, this is a match.
-    if ((*searchLower == u'\0') && (*classLower == u'\0'))
+    if ((*searchLower == '\0') && (*classLower == '\0'))
     {
         free(classLowerMalloc);
         classLowerMalloc = NULL;
@@ -349,6 +349,7 @@ ContinueWildcard:
 // ------------------------------------------------------------------------------------------
 void* ReportLeaks(void* args)
 {
+    Trace("ReportLeaks:Enter");
     leakThreadArgs* leakArgs = (leakThreadArgs*) args;
     ProcDumpConfiguration* config = leakArgs->config;
     const char* filename = leakArgs->filename;
@@ -356,10 +357,11 @@ void* ReportLeaks(void* args)
     std::ofstream file(filename);
     if (!file)
     {
-        // Handle error
+        Trace("ReportLeaks: Failed to open file: %s", filename);
         return NULL;
     }
 
+    config->bLeakReportInProgress = true;
 
     if(config->memAllocMap.size() > 0)
     {
@@ -517,7 +519,10 @@ void* ReportLeaks(void* args)
     Log(info, "Leak report generated: %s", filename);
 
     free(const_cast<char*>(leakArgs->filename));
-    delete leakArgs;
+    free(leakArgs);
+
+    config->bLeakReportInProgress = false;
+    Trace("ReportLeaks:Exit");
     return NULL;
 }
 
@@ -528,14 +533,20 @@ void* ReportLeaks(void* args)
 // ------------------------------------------------------------------------------------------
 pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filename)
 {
-
     //
     // Create a thread to write the snapshot to avoid delays in the calling thread.
     // Important due to symbol resolution possibly taking a longer time.
     //
-    leakThreadArgs* args = new leakThreadArgs();
+    leakThreadArgs* args = (leakThreadArgs*) malloc(sizeof(leakThreadArgs));
     args->config = config;
     args->filename = strdup(filename);
     pthread_t thread = 0;
-    return pthread_create(&thread, NULL, ReportLeaks, args);
+    int ret = pthread_create(&thread, NULL, ReportLeaks, args);
+    if(ret != 0)
+    {
+        Trace("Error creating thread to write restrack snapshot: %d", ret);
+        return 0;
+    }
+
+    return thread;
 }

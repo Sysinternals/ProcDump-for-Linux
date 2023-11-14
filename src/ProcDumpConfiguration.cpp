@@ -173,6 +173,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->ExceptionFilter =             NULL;
     self->ExcludeFilter =               NULL;
     self->bRestrackEnabled =            false;
+    self->bLeakReportInProgress =       false;
     self->SampleRate =                  1;
 
     self->socketPath =                  NULL;
@@ -322,6 +323,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         }
 
         copy->bRestrackEnabled = self->bRestrackEnabled;
+        copy->bLeakReportInProgress = self->bLeakReportInProgress;
         copy->SampleRate = self->SampleRate;
         copy->bMemoryTriggerBelowValue = self->bMemoryTriggerBelowValue;
         copy->MemoryThresholdCount = self->MemoryThresholdCount;
