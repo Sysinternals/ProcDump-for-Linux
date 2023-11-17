@@ -3,9 +3,22 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
 runProcDumpAndValidate=$(readlink -m "$DIR/../runProcDumpAndValidate.sh");
 source $runProcDumpAndValidate
 
-stressPercentage=200M
-procDumpType="-ml"
-procDumpTrigger=80
-shouldDump=false
+# TARGETVALUE is only used for stress-ng
+TARGETVALUE=200M
 
-runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "MEM"
+# This are all the ProcDump switches preceeding the PID
+PREFIX="-ml 80"
+
+# This are all the ProcDump switches after the PID
+POSTFIX=""
+
+# Indicates whether the test should result in a dump or not
+SHOULDDUMP=false
+
+# Only applicable to stress-ng and can be either MEM or CPU
+RESTYPE="MEM"
+
+# The dump target
+DUMPTARGET=""
+
+runProcDumpAndValidate

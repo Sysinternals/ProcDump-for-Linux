@@ -659,15 +659,9 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
     return wait;
 }
 
-//--------------------------------------------------------------------
-//
-// CancelRestrackThread - Cancel the restrack thread
-//
-//--------------------------------------------------------------------
-int CancelRestrackThread(struct ProcDumpConfiguration *self)
+
+pthread_t GetRestrackThread(struct ProcDumpConfiguration *self)
 {
-    Trace("CancelRestrackThread: Enter");
-    int rc = -1;
     pthread_t restrackThread = 0;
 
     for(int i=0; i<self->nThreads; i++)
@@ -678,6 +672,22 @@ int CancelRestrackThread(struct ProcDumpConfiguration *self)
             break;
         }
     }
+
+    return restrackThread;
+}
+
+//--------------------------------------------------------------------
+//
+// CancelRestrackThread - Cancel the restrack thread
+//
+//--------------------------------------------------------------------
+int CancelRestrackThread(struct ProcDumpConfiguration *self)
+{
+    Trace("CancelRestrackThread: Enter");
+    int rc = 0;
+    pthread_t restrackThread = 0;
+
+    restrackThread = GetRestrackThread(self);
 
     if(restrackThread != 0)
     {
@@ -697,15 +707,34 @@ int CancelRestrackThread(struct ProcDumpConfiguration *self)
 int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
+    pthread_t restrackThread = 0;
 
-    CancelRestrackThread(self);
-
-    // Wait for the other monitoring threads
+    // Wait for the other monitoring threads. We exclude restrack
+    // since we want that thread to exit last
     for (int i = 0; i < self->nThreads; i++)
     {
-        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0)
+        if(self->Threads[i].trigger != Restrack)
         {
-            Log(error, "An error occurred while joining threads\n");
+            if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0)
+            {
+                Log(error, "An error occurred while joining threads\n");
+                exit(-1);
+            }
+        }
+        else
+        {
+            restrackThread = self->Threads[i].thread;
+        }
+    }
+
+    //
+    // If we have a restrack thread, cancel it and wait for it to exit
+    //
+    if(CancelRestrackThread(self) != 0)
+    {
+        if ((rc = pthread_join(restrackThread, NULL)) != 0)
+        {
+            Log(error, "An error occurred while joining restrack thread\n");
             exit(-1);
         }
     }

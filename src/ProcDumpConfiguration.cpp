@@ -38,6 +38,11 @@ void ApplyDefaults(struct ProcDumpConfiguration *self)
     {
         self->PollingInterval = MIN_POLLING_INTERVAL;
     }
+
+    if(self->SampleRate == 0)
+    {
+        self->SampleRate = DEFAULT_SAMPLE_RATE;
+    }
 }
 
 //--------------------------------------------------------------------
@@ -174,7 +179,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->ExcludeFilter =               NULL;
     self->bRestrackEnabled =            false;
     self->bLeakReportInProgress =       false;
-    self->SampleRate =                  1;
+    self->SampleRate =                  0;
 
     self->socketPath =                  NULL;
     self->statusSocket =                -1;
@@ -523,21 +528,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/restrack" ) ||
                     0 == strcasecmp( argv[i], "-restrack" ))
         {
-            if( i+1 >= argc) return PrintUsage();
-            if(ConvertToInt(argv[i+1], &self->SampleRate))
-            {
-                i++;
-            }
-            else
-            {
-                self->SampleRate = 1;
-            }
-            if(self->SampleRate < 0)
-            {
-                Log(error, "Invalid sample rate specified.");
-                return PrintUsage();
-            }
-
             if(CheckKernelVersion(MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH) == false)
             {
                 Log(error, "Restrack requires kernel version %d.%d+.", MIN_RESTRACK_KERNEL_VERSION, MIN_RESTRACK_KERNEL_PATCH);
@@ -545,6 +535,19 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             }
 
             self->bRestrackEnabled = true;
+        }
+        else if( 0 == strcasecmp( argv[i], "/sr" ) ||
+                    0 == strcasecmp( argv[i], "-sr" ))
+        {
+            if( i+1 >= argc  ) return PrintUsage();
+            if(!ConvertToInt(argv[i+1], &self->SampleRate)) return PrintUsage();
+            if(self->SampleRate < 0)
+            {
+                Log(error, "Invalid sample rate specified.");
+                return PrintUsage();
+            }
+
+            i++;
         }
         else if( 0 == strcasecmp( argv[i], "/tc" ) ||
                     0 == strcasecmp( argv[i], "-tc" ))
@@ -848,6 +851,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         return PrintUsage();
     }
 
+    // If sample rate is specified it also requires restrack
+    if((self->SampleRate > 0 && self->bRestrackEnabled == false))
+    {
+        Log(error, "Please use the -restrack switch when specifying a sample rate (-samplerate)");
+        return PrintUsage();
+    }
+
+
     // Make sure exclude filter is provided with switches that supports exclusion.
     if((self->ExcludeFilter && self->bRestrackEnabled == false))
     {
@@ -1042,7 +1053,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         if (self->bDumpOnException)
         {
             printf("%-40s%s\n", "Exception monitor", "On");
-            printf("%-40s%s\n", "Exception filter", self->ExceptionFilter);
+            printf("%-40s%s\n", "Exception filter", self->ExceptionFilter ? self->ExceptionFilter : "n/a");
         }
         else
         {
@@ -1118,6 +1129,7 @@ int PrintUsage()
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation\n");
     printf("            [-restrack]\n");
+    printf("            [-sr Sample_Rate]\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number]\n");
@@ -1140,6 +1152,7 @@ int PrintUsage()
     printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).\n");
     printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
     printf("   -restrack Enable memory leak tracking (malloc family of APIs).\n");
+    printf("   -sr     Set sample rate when using -restrack.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");

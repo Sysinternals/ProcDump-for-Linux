@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -7,6 +8,50 @@
 
 #define FILE_DESC_COUNT	500
 #define THREAD_COUNT	100
+
+
+void* dFunc(int type)
+{
+        if(type == 0)
+        {
+                return malloc(10000);
+        }
+        else if (type == 1)
+        {
+                return calloc(1, 10000);
+        }
+        else if (type == 2)
+        {
+                void* lastAlloc = malloc(10000);
+                void* newAlloc = realloc(lastAlloc, 20000);
+                return newAlloc;
+        }
+        else if (type == 3)
+        {
+                void* lastAlloc = malloc(10000);
+                void* newAlloc = reallocarray(lastAlloc, 10, 20000);
+                return newAlloc;
+        }
+        else
+        {
+                return NULL;
+        }
+}
+
+void* c(int type)
+{
+        return dFunc(type);
+}
+
+void* b(int type)
+{
+        return c(type);
+}
+
+void* a(int type)
+{
+        return b(type);
+}
 
 void* ThreadProc(void *input)
 {
@@ -47,6 +92,19 @@ int main(int argc, char *argv[])
           {
               pthread_create(&threads[i], NULL, ThreadProc, NULL);
           }
+          sleep(UINT_MAX);
+        }
+        else if (strcmp("mem", argv[1]) == 0)
+        {
+          sleep(10);
+          for(int i=0; i<200; i++)
+          {
+            a(0);
+            a(1);
+            a(2);
+            a(3);
+          }
+
           sleep(UINT_MAX);
         }
     }

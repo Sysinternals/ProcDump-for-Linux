@@ -158,8 +158,8 @@ uint16_t* GetUint16(char* buffer)
 
     if(buffer!=NULL)
     {
-	len = strlen(buffer) + 1;
-        dumpFileNameW = (uint16_t*) ((len)*sizeof(uint16_t));
+        len = strlen(buffer) + 1;
+        dumpFileNameW = (uint16_t*) malloc((len)*sizeof(uint16_t));
         if(dumpFileNameW==NULL)
         {
             return NULL;
