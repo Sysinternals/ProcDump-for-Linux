@@ -181,7 +181,7 @@ add_executable(procdump
                ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
               )
 
-target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11)
+target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11 -O2)
 
 target_include_directories(procdump PUBLIC
                            ${procdump_INC}
@@ -209,7 +209,7 @@ add_executable(ProcDumpTestApplication
                ${procdump_Test}/ProcDumpTestApplication.c
               )
 
-target_compile_options(ProcDumpTestApplication PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror)
+target_compile_options(ProcDumpTestApplication PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -Werror -O2)
 
 target_include_directories(ProcDumpTestApplication PUBLIC
                            /usr/include

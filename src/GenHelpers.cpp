@@ -563,7 +563,7 @@ int recv_all(int socket, void* buffer, size_t length)
 // Note: SYS_gettid is not POSIX compliant.
 //
 //--------------------------------------------------------------------
-pid_t gettid() throw()
+pid_t gettid() noexcept
 {
 #ifdef SYS_gettid
     return syscall(SYS_gettid);

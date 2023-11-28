@@ -47,6 +47,23 @@ static inline bool CheckSampleRate()
 }
 
 // ------------------------------------------------------------------------------------------
+// ZeroMemory
+//
+// We could just simply use memset but string.h is not working correctly due to needing
+// the 32bit version of stubs.h (stubs-32.h). For some reason targeting bpf undefines __x86_64__.
+// We can work around this on most architectures (they all have 32bit version) but not on
+// mariner which does not offer it (for now).
+// ------------------------------------------------------------------------------------------
+__attribute__((always_inline))
+static inline void ZeroMemory(char* ptr)
+{
+    for(int i = 0; i < sizeof(struct ResourceInformation); i++)
+    {
+        ptr[i] = 0;
+    }
+}
+
+// ------------------------------------------------------------------------------------------
 // uprobe_malloc
 //
 // This is the entry point for the malloc uprobe. It's called when malloc is called.
@@ -77,7 +94,7 @@ int BPF_KPROBE(uprobe_malloc, long size)
 		return 1;
     }
 
-    memset(event, 0, sizeof(struct ResourceInformation));
+    ZeroMemory((char*) event);
 
     //
     // Setup the event we want to transfer to usermode.
@@ -183,7 +200,7 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
 		return 1;
     }
 
-    memset(event, 0, sizeof(struct ResourceInformation));
+    ZeroMemory((char*) event);
 
     //
     // Setup the event we want to transfer to usermode.
@@ -284,7 +301,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
 		return 1;
     }
 
-    memset(event, 0, sizeof(struct ResourceInformation));
+    ZeroMemory((char*) event);
 
     //
     // Setup the event we want to transfer to usermode.
@@ -387,7 +404,7 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
 		return 1;
     }
 
-    memset(event, 0, sizeof(struct ResourceInformation));
+    ZeroMemory((char*) event);
 
     //
     // Setup the event we want to transfer to usermode.
@@ -492,7 +509,7 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
 		return 1;
     }
 
-    memset(event, 0, sizeof(struct ResourceInformation));
+    ZeroMemory((char*) event);
 
     //
     // Setup the event we want to transfer to usermode.
