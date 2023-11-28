@@ -40,7 +40,7 @@ set(PROJECT_VERSION_TWEAK 0)
 file(READ "dist/changelog" CHANGE_LOG)
 
 #
-# enable Debug while pre-release; re-enable it post-release to add symbols to binary
+# enable Debug while pre-release; disable Debug in post-release
 #
 #set(CMAKE_BUILD_TYPE Debug)
 #option(DEBUG_K "Enter debug mode" On)
@@ -179,7 +179,6 @@ add_executable(procdump
                ${sym_SOURCE_DIR}/bcc_perf_map.cpp
                ${sym_SOURCE_DIR}/bcc_zip.cpp
                ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
-               ${PROJECT_BINARY_DIR}/procdump_ebpf.o
               )
 
 target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11)
@@ -189,13 +188,6 @@ target_include_directories(procdump PUBLIC
                            ${PROJECT_BINARY_DIR}
                            /usr/include
                            ${sym_SOURCE_DIR}
-                   #        "${libbpf_SOURCE_DIR}/src"
-                   #        "${libbpf_SOURCE_DIR}/include"
-                   #        "${libbpf_SOURCE_DIR}/include/asm"
-                   #        "${libbpf_SOURCE_DIR}/include/linux"
-                   #        "${libbpf_SOURCE_DIR}/include/tools"
-                   #        "${libbpf_SOURCE_DIR}/include/uapi"
-                   #        "${libbpf_SOURCE_DIR}/include/uapi/linux"
                           )
 
 add_dependencies(procdump libbpf procdump_ebpf)
@@ -291,7 +283,7 @@ add_custom_target(procdump_ebpf
 add_dependencies(procdump_ebpf libbpf)
 
 add_custom_command(OUTPUT procdump_ebpf.o
-                   COMMAND "${CLANG}" -nostdinc -isystem `gcc -print-file-name=include` ${CLANG_INCLUDES} ${CLANG_DEFINES} -O2 ${CLANG_OPTIONS} -target bpf -fno-stack-protector -c "${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c" -o "procdump_ebpf.o" && bpftool gen object procdump.ebpf.o procdump_ebpf.o && bpftool gen skeleton "procdump.ebpf.o" name "procdump_ebpf" > "procdump_ebpf.skel.h" && "${LD}" -r -b binary -o "${PROJECT_BINARY_DIR}/procdump_ebpf.o" procdump_ebpf.o
+                   COMMAND "${CLANG}" -nostdinc -isystem `gcc -print-file-name=include` ${CLANG_INCLUDES} ${CLANG_DEFINES} -O2 ${CLANG_OPTIONS} -target bpf -fno-stack-protector -c "${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c" -o "procdump_ebpf.o" && bpftool gen object procdump.ebpf.o procdump_ebpf.o && bpftool gen skeleton "procdump.ebpf.o" name "procdump_ebpf" > "procdump_ebpf.skel.h"
                    COMMENT "Building EBPF object procdump_ebpf.o"
                    DEPENDS ${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c
                   )

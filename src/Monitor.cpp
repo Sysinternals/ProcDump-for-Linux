@@ -254,18 +254,18 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         }
 
         // print config here
-        PrintConfiguration(self);
+        PrintConfiguration(config);
 
-        if(StartMonitor(self)!=0)
+        if(StartMonitor(config)!=0)
         {
             Trace("MonitorProcesses: Failed to start the monitor.");
             Log(error, "MonitorProcesses: Failed to start the monitor.");
             return;
         }
 
-        WaitForAllMonitorsToTerminate(self);
-        Log(info, "Stopping monitor for process %s (%d)", self->ProcessName, self->ProcessId);
-        WaitForSignalThreadToTerminate(self);
+        WaitForAllMonitorsToTerminate(config);
+        Log(info, "Stopping monitor for process %s (%d)", config->ProcessName, config->ProcessId);
+        WaitForSignalThreadToTerminate(config);
 
         pthread_mutex_lock(&activeConfigurationsMutex);
         activeConfigurations.erase(config->ProcessId);
@@ -1516,7 +1516,7 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
 	//
     // Set up ring buffer polling
     //
-	struct ring_buffer *ringBuffer = ring_buffer__new(bpf_map__fd(skel->maps.ringBuffer), RestrackHandleEvent, (void*) config, NULL);
+	struct ring_buffer *ringBuffer = ring_buffer__new(bpf_map__fd(skel->maps.ringBuffer), RestrackHandleEvent, NULL, NULL);
 	if (!ringBuffer)
     {
         Trace("RestrackThread: Failed to create ring buffer.");

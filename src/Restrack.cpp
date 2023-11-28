@@ -47,7 +47,10 @@ typedef struct {
 } leakThreadArgs;
 
 
+extern std::unordered_map<int, ProcDumpConfiguration*> activeConfigurations;
+extern pthread_mutex_t activeConfigurationsMutex;
 extern struct ProcDumpConfiguration g_config;
+
 
 
 // ------------------------------------------------------------------------------------------
@@ -154,37 +157,48 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config)
 int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
 {
     ResourceInformation* event = (ResourceInformation*) data;
-    struct ProcDumpConfiguration* config = (struct ProcDumpConfiguration*) ctx;
 
     if(event->resourceType == MALLOC_ALLOC || event->resourceType == CALLOC_ALLOC || event->resourceType == REALLOC_ALLOC || event->resourceType == REALLOCARRAY_ALLOC)
     {
         //
         // Add to allocation map
         //
-        pthread_mutex_lock(&config->memAllocMapMutex);
-        config->memAllocMap[(uintptr_t) event->allocAddress] = event;
-        pthread_mutex_unlock(&config->memAllocMapMutex);
-
-        if(config->DiagnosticsLoggingEnabled == true)
+        pthread_mutex_lock(&activeConfigurationsMutex);
+        if(activeConfigurations.find(event->pid) != activeConfigurations.end())
         {
-            Trace("Got event: Alloc size: %ld 0x%lx\n", event->allocSize, event->allocAddress);
+            pthread_mutex_lock(&activeConfigurations[event->pid]->memAllocMapMutex);
+            activeConfigurations[event->pid]->memAllocMap[(uintptr_t) event->allocAddress] = event;
+            pthread_mutex_unlock(&activeConfigurations[event->pid]->memAllocMapMutex);
+
+            if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled == true)
+            {
+                Trace("Got event: Alloc size: %ld 0x%lx\n", event->allocSize, event->allocAddress);
+            }
         }
+
+        pthread_mutex_unlock(&activeConfigurationsMutex);
     }
     else if (event->resourceType == MALLOC_FREE)
     {
-        if(config->memAllocMap.find((uintptr_t) event->allocAddress) != config->memAllocMap.end())
+        pthread_mutex_lock(&activeConfigurationsMutex);
+        if(activeConfigurations.find(event->pid) != activeConfigurations.end())
         {
-            //
-            // If in the allocation map, remove the allocation
-            //
-            pthread_mutex_lock(&config->memAllocMapMutex);
-            config->memAllocMap.erase((uintptr_t) event->allocAddress);
-            pthread_mutex_unlock(&config->memAllocMapMutex);
-            if(config->DiagnosticsLoggingEnabled == true)
+            if(activeConfigurations[event->pid]->memAllocMap.find((uintptr_t) event->allocAddress) != activeConfigurations[event->pid]->memAllocMap.end())
             {
-                Trace("Got event: free 0x%lx\n", event->allocAddress);
+                //
+                // If in the allocation map, remove the allocation
+                //
+                pthread_mutex_lock(&activeConfigurations[event->pid]->memAllocMapMutex);
+                activeConfigurations[event->pid]->memAllocMap.erase((uintptr_t) event->allocAddress);
+                pthread_mutex_unlock(&activeConfigurations[event->pid]->memAllocMapMutex);
+
+                if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled == true)
+                {
+                    Trace("Got event: free 0x%lx\n", event->allocAddress);
+                }
             }
         }
+        pthread_mutex_unlock(&activeConfigurationsMutex);
     }
 
 	return 0;
