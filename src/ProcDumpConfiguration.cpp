@@ -1127,7 +1127,7 @@ int PrintUsage()
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
-    printf("            [-gcgen Generation\n");
+    printf("            [-gcgen Generation]\n");
     printf("            [-restrack]\n");
     printf("            [-sr Sample_Rate]\n");
     printf("            [-tc Thread_Threshold]\n");
@@ -1135,7 +1135,7 @@ int PrintUsage()
     printf("            [-sig Signal_Number]\n");
     printf("            [-e]\n");
     printf("            [-f Include_Filter,...]\n");
-    printf("            [-fx Exclude_Filter,...]\n");
+    printf("            [-fx Exclude_Filter]\n");
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
     printf("            [-log]\n");
@@ -1159,7 +1159,7 @@ int PrintUsage()
     printf("   -sig    Signal number to intercept to create a dump of the process.\n");
     printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
     printf("   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.\n");
-    printf("   -fx     Filter (exclude) on the content of -restrack callstacks. Wildcards (*) are supported.\n");
+    printf("   -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to syslog.\n");

@@ -15,13 +15,10 @@ stages:
    jobs:
     - job: "ProcDump_Run_Unit_Tests"
       pool:
-       vmImage: 'ubuntu-latest'
+        name: "Sysinternals-for-Linux-AME"
+        demands:
+        - ImageOverride -equals procdump-ubuntu-build-agent
       steps:
-      - script: |
-          sudo apt update
-          sudo apt install -y gdb stress-ng zlib1g-dev clang
-        displayName: 'Setup build environment'
-
       - script: |
           clang --version
           clang++ --version
@@ -57,7 +54,9 @@ stages:
 
     - job: "Build_ProcDump"
       pool:
-       vmImage: 'ubuntu-latest'
+        name: "Sysinternals-for-Linux-AME"
+        demands:
+        - ImageOverride -equals procdump-ubuntu-build-agent
       steps:
       - template: templates/build.yaml
       displayName: 'Build ProcDump'

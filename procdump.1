@@ -4,37 +4,43 @@
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
 procdump [-n Count]
-        [-s Seconds]
-        [-c|-cl CPU_Usage]
-        [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
-        [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
-        [-gcgen Generation]
-        [-tc Thread_Threshold]
-        [-fc FileDescriptor_Threshold]
-        [-sig Signal_Number]
-        [-e]
-        [-f Include_Filter,...]
-        [-pf Polling_Frequency]
-        [-o]
-        [-log]
-        {
-            {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-        }
+         [-s Seconds]
+         [-c|-cl CPU_Usage]
+         [-m|-ml Commit_Usage1[,Commit_Usage2...]]
+         [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
+         [-gcgen Generation]
+         [-restrack]
+         [-sr Sample_Rate]
+         [-tc Thread_Threshold]
+         [-fc FileDescriptor_Threshold]
+         [-sig Signal_Number]
+         [-e]
+         [-f Include_Filter,...]
+         [-fx Exclude_Filter]
+         [-pf Polling_Frequency]
+         [-o]
+         [-log]
+         {
+           {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+         }
 
 Options:
    -n      Number of dumps to write before exiting.
    -s      Consecutive seconds before dump is written (default is 10).
    -c      CPU threshold above which to create a dump of the process.
    -cl     CPU threshold below which to create a dump of the process.
-   -m      Memory commit thresholds (MB) above which to create dumps.
-   -ml     Memory commit thresholds (MB) below which to create dumps.
+   -m      Memory commit threshold(s) (MB) above which to create dumps.
+   -ml     Memory commit threshold(s) (MB) below which to create dumps.
    -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).
    -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.
+   -restrack Enable memory leak tracking (malloc family of APIs).
+   -sr     Sample rate when using -restrack.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s). Supports wildcards.
+   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.
+   -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.

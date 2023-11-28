@@ -1,10 +1,11 @@
 # Containerized Builds
 The Dockerfiles in this repo (located under the `.devcontainer` directory) are the same Dockerfiles that are used on the backend build systems when a PR is built as part of the PR checks. This provides an easy and convenient way to ensure that any changes being made can be built using the same backend infrastructure.
 
-There are two Dockerfiles available:
+There are three Dockerfiles available:
 
 - `Dockerfile_Ubuntu` (default)
 - `Dockerfile_Rocky`
+- `Dockerfile_AzureLinux`
 
 There are two primary ways to build using containers:
 
@@ -16,25 +17,22 @@ For more information about VS Code Dev Containers please see - https://code.visu
 
 To build inside the container:
 ```sh
+mkdir build
+cd build
+cmake ..
 make
-make install
 ```
 # Local Builds
 ## Prerequisites
-- clang v10+
-- gcc v10+
-- zlib
-- cmake 3.10+
-
 ### Ubuntu
 ```
 sudo apt update
-sudo apt -y install gcc make clang gdb zlib1g-dev cmake
+sudo apt -y install gcc cmake make clang clang-12 gdb zlib-devel libelf-dev build-essential libbpf-dev linux-tools-common linux-tools-$(uname -r)
 ```
 
 ### Rocky Linux
 ```
-sudo yum install gcc make clang gdb zlib-devel cmake
+sudo yum install gcc make cmake clang gdb zlib-devel elfutils-libelf-devel libbpf-devel bpftool
 ```
 
 ## Build
@@ -48,6 +46,12 @@ make
 # Building Packages
 The distribution packages for Procdump for Linux are constructed utilizing `dpkg-deb` for Debian targets and `rpmbuild` for Fedora targets.
 
+Create a deb package:
 ```sh
-make packages
+make deb
+```
+
+Create an rpm package:
+```sh
+make rpm
 ```
