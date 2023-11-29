@@ -209,7 +209,7 @@ add_executable(ProcDumpTestApplication
                ${procdump_Test}/ProcDumpTestApplication.c
               )
 
-target_compile_options(ProcDumpTestApplication PRIVATE -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -Werror -O2)
+target_compile_options(ProcDumpTestApplication PRIVATE -g -pthread -std=gnu99 -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -D_GNU_SOURCE -Werror -O2)
 
 target_include_directories(ProcDumpTestApplication PUBLIC
                            /usr/include

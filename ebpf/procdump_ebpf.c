@@ -52,9 +52,9 @@ static inline bool CheckSampleRate()
 // mariner which does not offer it (for now).
 // ------------------------------------------------------------------------------------------
 __attribute__((always_inline))
-static inline void ZeroMemory(char* ptr)
+static inline void ZeroMemory(char* ptr, unsigned int size)
 {
-    for(int i = 0; i < sizeof(struct ResourceInformation); i++)
+    for(int i = 0; i < size; i++)
     {
         ptr[i] = 0;
     }
@@ -91,7 +91,7 @@ int BPF_KPROBE(uprobe_malloc, long size)
 		return 1;
     }
 
-    ZeroMemory((char*) event);
+    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
 
     //
     // Setup the event we want to transfer to usermode.
@@ -134,7 +134,7 @@ int BPF_KRETPROBE(uretprobe_malloc, void* ret)
     // Only trace PIDs that matched the target PID
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID)
+    if (p != target_PID || ret == NULL)
     {
         return 1;
     }
@@ -197,7 +197,7 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
 		return 1;
     }
 
-    ZeroMemory((char*) event);
+    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
 
     //
     // Setup the event we want to transfer to usermode.
@@ -237,7 +237,10 @@ int BPF_KRETPROBE(uretprobe_free, void* ret)
     // Only trace PIDs that matched the target PID
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID)
+    if (p != target_PID || ret == NULL)
+    {
+        return 1;
+    }
     {
         return 1;
     }
@@ -298,7 +301,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
 		return 1;
     }
 
-    ZeroMemory((char*) event);
+    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
 
     //
     // Setup the event we want to transfer to usermode.
@@ -339,7 +342,7 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
     // Only trace PIDs that matched the target PID
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID)
+    if (p != target_PID || ret == NULL)
     {
         return 1;
     }
@@ -401,7 +404,7 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
 		return 1;
     }
 
-    ZeroMemory((char*) event);
+    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
 
     //
     // Setup the event we want to transfer to usermode.
@@ -443,7 +446,7 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
     // Only trace PIDs that matched the target PID
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID)
+    if (p != target_PID || ret == NULL)
     {
         return 1;
     }
@@ -506,7 +509,7 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
 		return 1;
     }
 
-    ZeroMemory((char*) event);
+    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
 
     //
     // Setup the event we want to transfer to usermode.
@@ -547,7 +550,7 @@ int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
     // Only trace PIDs that matched the target PID
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID)
+    if (p != target_PID || ret == NULL)
     {
         return 1;
     }
