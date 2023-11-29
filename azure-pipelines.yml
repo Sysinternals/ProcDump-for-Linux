@@ -24,6 +24,12 @@ stages:
           clang++ --version
         displayName: 'List compiler versions'
 
+      - script: |
+          apt install rsyslog
+          rm -f /run/rsyslogd.pid
+          service rsyslog start | true
+        displayName: 'Enable syslog'
+
       - template: templates/build.yaml
 
       - script: |
