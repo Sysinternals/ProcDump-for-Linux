@@ -453,16 +453,20 @@ void* ReportLeaks(void* args)
                 if(pair.stackTrace[i] > 0)
                 {
                     bcc_symbol sym;
-                    if(bcc_symcache_resolve(symResolver, pair.stackTrace[i], &sym) != 0)
-                    {
-                        file << "Error resolving symbol for address: 0x" << std::hex << pair.stackTrace[i] << "\n";
-                        continue;
-                    }
+                    bcc_symcache_resolve(symResolver, pair.stackTrace[i], &sym);
 
                     stackFrame frame = {};
                     frame.offset = sym.offset;
-                    frame.symbolName = sym.name;
-                    frame.demangledSymbolName = sym.demangle_name;
+                    if(sym.name != NULL)
+                    {
+                        frame.symbolName = sym.name;
+                    }
+
+                    if(sym.demangle_name != NULL)
+                    {
+                        frame.demangledSymbolName = sym.demangle_name;
+                    }
+
                     frame.pc = pair.stackTrace[i];
 
                     int len = snprintf(NULL, 0, "\t[0x%llx] %s+0x%lx\n", pair.stackTrace[i], frame.demangledSymbolName.c_str(), frame.offset);
@@ -516,7 +520,14 @@ void* ReportLeaks(void* args)
 
                 for (const auto& st : callStack)
                 {
-                    file << "\t[0x" << std::hex << st.pc << "] " << st.demangledSymbolName.c_str() << "+0x" << std::hex << st.offset << "\n";
+                    if(st.demangledSymbolName.length() > 0)
+                    {
+                        file << "\t[0x" << std::hex << st.pc << "] " << st.demangledSymbolName.c_str() << "+0x" << std::hex << st.offset << "\n";
+                    }
+                    else
+                    {
+                        file << "\t[0x" << std::hex << st.pc << "]\n";
+                    }
                 }
 
                 file << "\n";

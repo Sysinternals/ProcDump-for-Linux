@@ -183,3 +183,9 @@ Please see also our [Code of Conduct](CODE_OF_CONDUCT.md).
 Copyright (c) Microsoft Corporation. All rights reserved.
 
 Licensed under the MIT License.
+
+ProcDump for Linux:
+
+* Clones, compiles and statically links against libbpf (https://github.com/libbpf/libbpf)
+* Copies symbol resolution source code from BCC (https://github.com/iovisor/bcc).
+* Uses eBPF
