@@ -161,6 +161,12 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
     if(event->resourceType == MALLOC_ALLOC || event->resourceType == CALLOC_ALLOC || event->resourceType == REALLOC_ALLOC || event->resourceType == REALLOCARRAY_ALLOC)
     {
         //
+        // We need to make a copy of the data otherwise the ring buffer might free/overwrite.
+        //
+        event = (ResourceInformation*) malloc(sizeof(ResourceInformation));
+        memcpy(event, data, sizeof(ResourceInformation));
+
+        //
         // Add to allocation map
         //
         pthread_mutex_lock(&activeConfigurationsMutex);
@@ -189,6 +195,7 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
                 // If in the allocation map, remove the allocation
                 //
                 pthread_mutex_lock(&activeConfigurations[event->pid]->memAllocMapMutex);
+                free(activeConfigurations[event->pid]->memAllocMap[(uintptr_t) event->allocAddress]);
                 activeConfigurations[event->pid]->memAllocMap.erase((uintptr_t) event->allocAddress);
                 pthread_mutex_unlock(&activeConfigurations[event->pid]->memAllocMapMutex);
 
@@ -385,15 +392,13 @@ void* ReportLeaks(void* args)
         // Since its a snapshot, copy the alloc map so we can avoid synchronization issues.
         //
         pthread_mutex_lock(&config->memAllocMapMutex);
-        std::unordered_map<uintptr_t, ResourceInformation*> memAllocMapCopy = config->memAllocMap;
-        pthread_mutex_unlock(&config->memAllocMapMutex);
 
         std::vector<groupedAllocEntry> groupedAllocations;
 
         //
         // Group the call stacks
         //
-        for (const auto& pair : memAllocMapCopy)
+        for (const auto& pair : config->memAllocMap)
         {
             bool found = false;
             for(int i=0; i<(int) groupedAllocations.size(); i++)
@@ -432,6 +437,9 @@ void* ReportLeaks(void* args)
                 groupedAllocations.push_back(entry);
             }
         }
+
+        pthread_mutex_unlock(&config->memAllocMapMutex);
+
 
         // Sort the vector based on the totalAllocSize field in ascending order
         std::sort(groupedAllocations.begin(), groupedAllocations.end(), [](const groupedAllocEntry& a, const groupedAllocEntry& b) {
@@ -498,25 +506,6 @@ void* ReportLeaks(void* args)
                 totalLeak += pair.totalAllocSize;
 
                 file << "+++ Leaked Allocation [allocation size: 0x" << std::hex << pair.allocSize << " count:0x" << std::hex << pair.allocCount << " total size:0x" << std::hex << pair.totalAllocSize << "]\n";
-
-                switch(pair.type)
-                {
-                    case MALLOC_ALLOC:
-                        file << "\tmalloc\n";
-                        break;
-                    case CALLOC_ALLOC:
-                        file << "\tcalloc\n";
-                        break;
-                    case REALLOC_ALLOC:
-                        file << "\trealloc\n";
-                        break;
-                    case REALLOCARRAY_ALLOC:
-                        file << "\treallocarray\n";
-                        break;
-                    default:
-                        file << "\tunknown\n";
-                        break;
-                }
 
                 for (const auto& st : callStack)
                 {

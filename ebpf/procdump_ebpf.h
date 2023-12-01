@@ -63,7 +63,7 @@ struct {
 //
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, 256 * 1024 /* 256 KB */);
+	__uint(max_entries, 10 * 1024 * 1024 /* 10 MB */);
 } ringBuffer SEC(".maps");
 
 #endif // __PROCDUMP_EBPF_H__

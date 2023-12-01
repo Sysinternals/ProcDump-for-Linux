@@ -267,6 +267,13 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->MemoryThreshold = NULL;
     }
 
+    for (const auto& pair : self->memAllocMap)
+    {
+        if(pair.second)
+        {
+            free(pair.second);
+        }
+    }
     self->memAllocMap.clear();
 
     Trace("FreeProcDumpConfiguration: Exit");

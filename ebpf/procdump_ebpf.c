@@ -95,14 +95,12 @@ int BPF_KPROBE(uprobe_malloc, long size)
 
     //
     // Setup the event we want to transfer to usermode.
-    // Note that we use a callstack ID instead of the actual callstack.
-    // The call to bpf_get_stackid populates the specified map with the
-    // actual call stack.
     //
     event->allocSize = size;
     event->pid = target_PID;
     event->resourceType = MALLOC_ALLOC;
     event->allocAddress = 0;
+    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Update the arguments hashmap with the entry. We'll fetch the entry when
@@ -151,7 +149,6 @@ int BPF_KRETPROBE(uretprobe_malloc, void* ret)
     }
 
     event->allocAddress = (unsigned long) ret;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Send the event to the ring buffer (user land)
@@ -241,9 +238,6 @@ int BPF_KRETPROBE(uretprobe_free, void* ret)
     {
         return 1;
     }
-    {
-        return 1;
-    }
 
     //
     // Get the map storage for event.
@@ -312,6 +306,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
     event->pid = target_PID;
     event->resourceType = CALLOC_ALLOC;
     event->allocAddress = 0;
+    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Update the arguments hashmap with the entry. We'll fetch the entry when
@@ -359,7 +354,6 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
     }
 
     event->allocAddress = (unsigned long) ret;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Send the event to the ring buffer (user land)
@@ -415,6 +409,7 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
     event->pid = target_PID;
     event->resourceType = REALLOC_ALLOC;
     event->allocAddress = 0;
+    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Update the arguments hashmap with the entry. We'll fetch the entry when
@@ -463,7 +458,6 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
     }
 
     event->allocAddress = (unsigned long) ret;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Send the event to the ring buffer (user land)
@@ -520,6 +514,7 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
     event->pid = target_PID;
     event->resourceType = REALLOCARRAY_ALLOC;
     event->allocAddress = 0;
+    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Update the arguments hashmap with the entry. We'll fetch the entry when
@@ -567,7 +562,6 @@ int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
     }
 
     event->allocAddress = (unsigned long) ret;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
     //
     // Send the event to the ring buffer (user land)
