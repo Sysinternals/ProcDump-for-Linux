@@ -158,7 +158,7 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
 {
     ResourceInformation* event = (ResourceInformation*) data;
 
-    if(event->resourceType == MALLOC_ALLOC || event->resourceType == CALLOC_ALLOC || event->resourceType == REALLOC_ALLOC || event->resourceType == REALLOCARRAY_ALLOC)
+    if(event->resourceType == RESTRACK_ALLOC)
     {
         //
         // We need to make a copy of the data otherwise the ring buffer might free/overwrite.
@@ -184,7 +184,7 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
 
         pthread_mutex_unlock(&activeConfigurationsMutex);
     }
-    else if (event->resourceType == MALLOC_FREE)
+    else if (event->resourceType == RESTRACK_FREE)
     {
         pthread_mutex_lock(&activeConfigurationsMutex);
         if(activeConfigurations.find(event->pid) != activeConfigurations.end())

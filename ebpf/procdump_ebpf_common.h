@@ -19,11 +19,8 @@
 
 #define MAX_CALL_STACK_FRAMES   100
 
-#define MALLOC_ALLOC       0x00000001
-#define MALLOC_FREE        0x00000002
-#define CALLOC_ALLOC       0x00000003
-#define REALLOC_ALLOC      0x00000004
-#define REALLOCARRAY_ALLOC 0x00000005
+#define RESTRACK_ALLOC       0x00000001
+#define RESTRACK_FREE        0x00000002
 
 struct ResourceInformation
 {

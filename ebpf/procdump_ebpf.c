@@ -98,7 +98,7 @@ int BPF_KPROBE(uprobe_malloc, long size)
     //
     event->allocSize = size;
     event->pid = target_PID;
-    event->resourceType = MALLOC_ALLOC;
+    event->resourceType = RESTRACK_ALLOC;
     event->allocAddress = 0;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
@@ -200,7 +200,7 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
     // Setup the event we want to transfer to usermode.
     //
     event->pid = target_PID;
-    event->resourceType = MALLOC_FREE;
+    event->resourceType = RESTRACK_FREE;
     event->allocAddress = (unsigned long) alloc;
 
     //
@@ -304,7 +304,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
     //
     event->allocSize = size * count;
     event->pid = target_PID;
-    event->resourceType = CALLOC_ALLOC;
+    event->resourceType = RESTRACK_ALLOC;
     event->allocAddress = 0;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
@@ -407,7 +407,7 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
     //
     event->allocSize = size;
     event->pid = target_PID;
-    event->resourceType = REALLOC_ALLOC;
+    event->resourceType = RESTRACK_ALLOC;
     event->allocAddress = 0;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 
@@ -512,7 +512,7 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
     //
     event->allocSize = size*count;
     event->pid = target_PID;
-    event->resourceType = REALLOCARRAY_ALLOC;
+    event->resourceType = RESTRACK_ALLOC;
     event->allocAddress = 0;
     event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
 

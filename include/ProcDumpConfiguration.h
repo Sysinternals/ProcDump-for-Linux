@@ -33,6 +33,7 @@
 #include <signal.h>
 
 #include "Restrack.h"
+#include "procdump_ebpf_common.h"
 
 #include <unordered_map>
 

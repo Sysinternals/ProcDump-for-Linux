@@ -188,6 +188,7 @@ target_include_directories(procdump PUBLIC
                            ${PROJECT_BINARY_DIR}
                            /usr/include
                            ${sym_SOURCE_DIR}
+                           ${procdump_ebpf_SOURCE_DIR}
                           )
 
 add_dependencies(procdump libbpf procdump_ebpf)
