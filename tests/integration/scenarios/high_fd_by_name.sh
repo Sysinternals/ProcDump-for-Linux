@@ -6,7 +6,7 @@ source $runProcDumpAndValidate
 TESTPROGNAME="ProcDumpTestApplication"
 TESTPROGMODE="fc"
 
-# This are all the ProcDump switches preceeding the PID
+# These are all the ProcDump switches preceeding the PID
 PREFIX="-fc 100"
 
 # This are all the ProcDump switches after the PID

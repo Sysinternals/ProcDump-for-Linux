@@ -220,8 +220,7 @@ inline int strlwr(char* str, size_t len)
 {
     for (size_t i = 0; i < len; ++i)
     {
-        if ((str[i] >= u'A') && (str[i] <= u'Z'))
-        str[i] = str[i] + (u'a' - u'A');
+        str[i] = tolower(str[i]);
     }
     return 0;
 }

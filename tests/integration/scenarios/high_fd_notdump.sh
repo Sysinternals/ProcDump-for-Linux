@@ -9,7 +9,7 @@ TESTPROGMODE="fc"
 # TARGETVALUE is only used for stress-ng
 #TARGETVALUE=3M
 
-# This are all the ProcDump switches preceeding the PID
+# These are all the ProcDump switches preceeding the PID
 PREFIX="-fc 1000"
 
 # This are all the ProcDump switches after the PID

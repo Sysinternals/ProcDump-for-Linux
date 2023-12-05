@@ -6,7 +6,7 @@ source $runProcDumpAndValidate
 # TARGETVALUE is only used for stress-ng
 TARGETVALUE=90M
 
-# This are all the ProcDump switches preceeding the PID
+# These are all the ProcDump switches preceeding the PID
 PREFIX="-c 100 -m 80"
 
 # This are all the ProcDump switches after the PID

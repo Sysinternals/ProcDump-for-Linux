@@ -1505,8 +1505,6 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
     struct procdump_ebpf* skel = NULL;
     int rc = 0;
 
-    void SetMaxRLimit();
-
     if ((skel = RunRestrack(config)) == NULL)
     {
         Trace("RestrackThread: Failed to run restrack eBPF program.");
