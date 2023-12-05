@@ -20,9 +20,9 @@ function runProcDumpAndValidate {
 	if [ -z "$TESTPROGNAME" ]; then
   	    echo [`date +"%T.%3N"`] Starting stress-ng
 		if [ "$RESTYPE" == "MEM" ]; then
-			stress-ng --vm 1 --vm-hang 0 --vm-bytes $TARGETVALUE --timeout 20s -q&
+			stress-ng --vm 1 --vm-hang 0 --vm-bytes $TARGETVALUE -q&
 		else
-			stress-ng -c 1 -l $TARGETVALUE --timeout 20s -q&
+			stress-ng -c 1 -l $TARGETVALUE -q&
 		fi
 		pid=$!
 		echo "PID: $pid"
@@ -48,6 +48,10 @@ function runProcDumpAndValidate {
 	    if ps -p $pidPD > /dev/null
 	    then
 		    kill -9 $pidPD > /dev/null
+	    fi
+	    if ps -p $childpid > /dev/null
+	    then
+		    kill -9 $childpid > /dev/null
 	    fi
 	else
 		# We launch procdump in background and wait for target process to start
