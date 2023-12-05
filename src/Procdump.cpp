@@ -33,11 +33,11 @@ void OnExit()
 //--------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    // print banner and begin intialization
+    // print banner and begin initialization
     PrintBanner();
     InitProcDump();
 
-    // print privelege warning
+    // print privilege warning
     if(geteuid() != 0)
     {
         Log(warn, "Procdump not running with elevated credentials. If your uid does not match the uid of the target process procdump will not be able to capture memory dumps");

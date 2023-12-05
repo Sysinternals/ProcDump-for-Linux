@@ -6,7 +6,6 @@
 // General purpose helpers
 //
 //--------------------------------------------------------------------
-#define _GNU_SOURCE
 #include "Includes.h"
 #include <syscall.h>
 
@@ -43,7 +42,7 @@ int* GetSeparatedValues(char* src, char* separator, int* numValues)
 
     if(i > 0)
     {
-        ret = malloc(i*sizeof(int));
+        ret = (int*) malloc(i*sizeof(int));
         if(ret)
         {
             i = 0;
@@ -97,32 +96,31 @@ bool ConvertToInt(const char* src, int* conv)
 
 //--------------------------------------------------------------------
 //
-// CheckKernelVersion - Check to see if current kernel is 3.5+.
+// CheckKernelVersion - Check to see if current kernel is greater than
+// specified.
 //
-// ProcDump won't proceed if current kernel is less than 3.5.
-// Returns true if >= 3.5+, returns false otherwise or error.
 //--------------------------------------------------------------------
-bool CheckKernelVersion()
+bool CheckKernelVersion(int major, int minor)
 {
-    struct utsname kernelInfo;
+    struct utsname kernelInfo = {};
     if(uname(&kernelInfo) == 0)
     {
         int version, patch = 0;
         if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2)
         {
-            Log(error, "Cannot validate kernel version");
-            Trace("%s",strerror(errno));
             return false;
         }
 
-        if(version > MIN_KERNEL_VERSION) return true;
-        if(version == MIN_KERNEL_VERSION && patch >= MIN_KERNEL_PATCH) return true;
+        if(version > major)
+        {
+            return true;
+        }
+        else if(version == major && patch >= minor)
+        {
+            return true;
+        }
+    }
 
-    }
-    else
-    {
-        Log(error, strerror(errno));
-    }
     return false;
 }
 
@@ -160,8 +158,8 @@ uint16_t* GetUint16(char* buffer)
 
     if(buffer!=NULL)
     {
-	len = strlen(buffer) + 1;
-        dumpFileNameW = malloc((len)*sizeof(uint16_t));
+        len = strlen(buffer) + 1;
+        dumpFileNameW = (uint16_t*) malloc((len)*sizeof(uint16_t));
         if(dumpFileNameW==NULL)
         {
             return NULL;
@@ -456,7 +454,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         if(targetPid)
         {
             int len = snprintf(NULL, 0, "/tmp/%s%d-%d", prefix, pid, targetPid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -467,7 +465,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         else
         {
             int len = snprintf(NULL, 0, "/tmp/%s%d", prefix, pid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -481,7 +479,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         if(targetPid)
         {
             int len = snprintf(NULL, 0, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -492,7 +490,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
         else
         {
             int len = snprintf(NULL, 0, "%s/%s%d", prefixTmpFolder, prefix, pid);
-            t = malloc(len+1);
+            t = (char*) malloc(len+1);
             if(t==NULL)
             {
                 return NULL;
@@ -565,7 +563,7 @@ int recv_all(int socket, void* buffer, size_t length)
 // Note: SYS_gettid is not POSIX compliant.
 //
 //--------------------------------------------------------------------
-pid_t gettid()
+pid_t gettid() noexcept
 {
 #ifdef SYS_gettid
     return syscall(SYS_gettid);

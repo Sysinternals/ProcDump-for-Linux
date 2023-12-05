@@ -1,3 +1,6 @@
+* Tue Dec 5 2023 Mario Hewardt <marioh@microsoft.com> - 3.0
+- Adds resource tracking and reporting feature
+
 * Wed Sep 6 2023 Mario Hewardt <marioh@microsoft.com> - 2.2
 - Adds Azure Linux package
 - Fixes memory leaks

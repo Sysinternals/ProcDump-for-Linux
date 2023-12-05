@@ -5,9 +5,22 @@ TESTPROGNAME="ProcDumpTestApplication"
 TESTPROGMODE="sleep"
 source $runProcDumpAndValidate
 
-stressPercentage=10
-procDumpType="-cl"
-procDumpTrigger=20
-shouldDump=true
+# TARGETVALUE is only used for stress-ng
+TARGETVALUE=10
 
-runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "CPU"
+# These are all the ProcDump switches preceeding the PID
+PREFIX="-cl 20"
+
+# This are all the ProcDump switches after the PID
+POSTFIX=""
+
+# Indicates whether the test should result in a dump or not
+SHOULDDUMP=true
+
+# Only applicable to stress-ng and can be either MEM or CPU
+RESTYPE="CPU"
+
+# The dump target
+DUMPTARGET=""
+
+runProcDumpAndValidate

@@ -22,22 +22,25 @@ Please see build instructions [here](BUILD.md).
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
 ```
 procdump [-n Count]
-        [-s Seconds]
-        [-c|-cl CPU_Usage]
-        [-m|-ml Commit_Usage1[,Commit_Usage2,...]]
-        [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
-        [-gcgen Generation]
-        [-tc Thread_Threshold]
-        [-fc FileDescriptor_Threshold]
-        [-sig Signal_Number]
-        [-e]
-        [-f Include_Filter,...]
-        [-pf Polling_Frequency]
-        [-o]
-        [-log]
-        {
-          {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-        }
+         [-s Seconds]
+         [-c|-cl CPU_Usage]
+         [-m|-ml Commit_Usage1[,Commit_Usage2...]]
+         [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
+         [-gcgen Generation]
+         [-restrack]
+         [-sr Sample_Rate]
+         [-tc Thread_Threshold]
+         [-fc FileDescriptor_Threshold]
+         [-sig Signal_Number]
+         [-e]
+         [-f Include_Filter,...]
+         [-fx Exclude_Filter]
+         [-pf Polling_Frequency]
+         [-o]
+         [-log]
+         {
+           {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+         }
 
 Options:
    -n      Number of dumps to write before exiting.
@@ -48,11 +51,14 @@ Options:
    -ml     Memory commit threshold(s) (MB) below which to create dumps.
    -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).
    -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.
+   -restrack Enable memory leak tracking (malloc family of APIs).
+   -sr     Sample rate when using -restrack.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
    -sig    Signal number to intercept to create a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
-   -f      [.NET] Filter (include) on the (comma seperated) exception name(s) and exception message(s). Supports wildcards.
+   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.
+   -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.
@@ -93,6 +99,18 @@ sudo procdump -c 65 -m 100 1234
 The following will create a core dump when memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
 ```
 sudo procdump -m 100,200 1234
+```
+The following will create a core dump and a memory leak report when memory usage is >= 100 MB
+```
+sudo procdump -m 100 -restrack 1234
+```
+The following will create a core dump and a memory leak report when memory usage is >= 100 MB by sampling every 10th memory allocation.
+```
+sudo procdump -m 100 -restrack -sr 10 1234
+```
+The following will create a core dump and a memory leak report when memory usage is >= 100 MB and exclude any call stacks that contain frames with the string "cache" in them
+```
+sudo procdump -m 100 -restrack -fx *cache* 1234
 ```
 The following will create a core dump when the total .NET memory usage is >= 100 MB followed by another dump when memory usage is >= 200MB.
 ```
@@ -165,3 +183,9 @@ Please see also our [Code of Conduct](CODE_OF_CONDUCT.md).
 Copyright (c) Microsoft Corporation. All rights reserved.
 
 Licensed under the MIT License.
+
+ProcDump for Linux:
+
+* Clones, compiles and statically links against libbpf (https://github.com/libbpf/libbpf)
+* Copies symbol resolution source code from BCC (https://github.com/iovisor/bcc).
+* Uses eBPF

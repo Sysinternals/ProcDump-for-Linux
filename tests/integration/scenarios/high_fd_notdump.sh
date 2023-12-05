@@ -6,9 +6,22 @@ source $runProcDumpAndValidate
 TESTPROGNAME="ProcDumpTestApplication"
 TESTPROGMODE="fc"
 
-stressPercentage=90
-procDumpType="-fc"
-procDumpTrigger=1000
-shouldDump=false
+# TARGETVALUE is only used for stress-ng
+#TARGETVALUE=3M
 
-runProcDumpAndValidate $stressPercentage $procDumpType $procDumpTrigger $shouldDump "FILEDESCCOUNT"
+# These are all the ProcDump switches preceeding the PID
+PREFIX="-fc 1000"
+
+# This are all the ProcDump switches after the PID
+POSTFIX=""
+
+# Indicates whether the test should result in a dump or not
+SHOULDDUMP=false
+
+# Only applicable to stress-ng and can be either MEM or CPU
+RESTYPE=""
+
+# The dump target
+DUMPTARGET=""
+
+runProcDumpAndValidate

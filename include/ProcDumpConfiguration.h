@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdint.h>
 #include <strings.h>
 #include <syslog.h>
 #include <limits.h>
@@ -28,9 +29,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sys/queue.h>
 #include <fcntl.h>
 #include <signal.h>
+
+#include "Restrack.h"
+#include "procdump_ebpf_common.h"
+
+#include <unordered_map>
 
 #define MAX_TRIGGERS 10
 #define NO_PID INT_MAX
@@ -55,7 +60,8 @@ struct MonitoredProcessMapEntry
     long long starttime;
 };
 
-struct ProcDumpConfiguration {
+struct ProcDumpConfiguration
+{
     // Process and System info
     pid_t ProcessId;
     pid_t ProcessGroup;         // -pgid
@@ -104,7 +110,18 @@ struct ProcDumpConfiguration {
     char *CoreDumpName;             //
     bool bOverwriteExisting;        // -o
     bool bDumpOnException;          // -e
-    char *ExceptionFilter;          // -f
+    char *ExceptionFilter;          // -f (unfortunately we named this ExceptionFilter event hough it can be used for other include filters as well)
+    char *ExcludeFilter;            // -fx (exclude filter)
+    bool bRestrackEnabled;          // -restrack
+    bool bLeakReportInProgress;
+    int SampleRate;                 // Record every X resource allocation in restrack
+
+    //
+    // Keeps track of the memory allocations when -restrack is specified.
+    // Access must be protected by memAllocMapMutex.
+    //
+    std::unordered_map<uintptr_t, ResourceInformation*> memAllocMap;
+    pthread_mutex_t memAllocMapMutex;
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)
@@ -126,12 +143,6 @@ struct ProcDumpConfiguration {
 
     // External
     pid_t gcorePid;
-};
-
-struct ConfigQueueEntry {
-    struct ProcDumpConfiguration * config;
-
-    TAILQ_ENTRY(ConfigQueueEntry) element;
 };
 
 int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[]);

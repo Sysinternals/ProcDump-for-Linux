@@ -23,10 +23,11 @@ RUN yum install git \
     nmap \
     wget \
     clang \
-    redhat-lsb
-
-# Make sure gcc-10 is enabled
-RUN echo "source scl_source enable gcc-toolset-10" > /etc/profile.d/gcc.sh
+    redhat-lsb \
+    cmake \
+    elfutils-libelf-devel \
+    libbpf-devel \
+    bpftool
 
 # install JQ since it doesn't have a .rpm package
 RUN curl https://stedolan.github.io/jq/download/linux64/jq > /usr/bin/jq && chmod +x /usr/bin/jq

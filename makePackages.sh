@@ -25,7 +25,7 @@
 #################################################################################
 
 if [ "$5" = "" ]; then
-    echo "Usage: $0 <SourceDir> <BinaryDir> <package name> <package version> <package release>"
+    echo "Usage: $0 <SourceDir> <BinaryDir> <package name> <package version> <package release> <PackageType>"
     exit 1
 fi
 
@@ -35,56 +35,66 @@ PROJECT_BINARY_DIR=$2
 PACKAGE_NAME=$3
 PACKAGE_VER=$4
 PACKAGE_REL=$5
+PACKAGE_TYPE=$6
 
 DEB_PACKAGE_NAME="${PACKAGE_NAME}_${PACKAGE_VER}_amd64"
 RPM_PACKAGE_NAME="${PACKAGE_NAME}-${PACKAGE_VER}-${PACKAGE_REL}"
 
-# find packaging tools
-DPKGDEB=`which dpkg-deb`
-RPMBUILD=`which rpmbuild`
+if [ "$PACKAGE_TYPE" = "deb" ]; then
+    DPKGDEB=`which dpkg-deb`
 
-# clean up first
-if [ -d "${PROJECT_BINARY_DIR}/deb" ]; then
-    rm -rf "${PROJECT_BINARY_DIR}/deb"
+    if [ -d "${PROJECT_BINARY_DIR}/deb" ]; then
+        rm -rf "${PROJECT_BINARY_DIR}/deb"
+    fi
+
+    # copy deb files
+    mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}"
+    #cp -a "${CMAKE_SOURCE_DIR}/dist/DEBIAN" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/"
+    mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/DEBIAN"
+    cp "${PROJECT_BINARY_DIR}/DEBIANcontrol" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/DEBIAN/control"
+    mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/doc/procdump"
+    cp "${PROJECT_BINARY_DIR}/changelog.gz" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/doc/procdump"
+    mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/man/man1"
+    cp -a "${PROJECT_BINARY_DIR}/procdump.1.gz" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/man/man1"
+    mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/bin"
+    cp "${PROJECT_BINARY_DIR}/procdump" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/bin/"
+
+    # make the deb
+    if [ "$DPKGDEB" != "" ]; then
+        cd "${PROJECT_BINARY_DIR}/deb"
+        "$DPKGDEB" -Zxz --build --root-owner-group "${DEB_PACKAGE_NAME}"
+        RET=$?
+    else
+        echo "No dpkg-deb found"
+        RET=1
+    fi
+
+    exit 0
 fi
 
-if [ -d "${PROJECT_BINARY_DIR}/rpm" ]; then
-    rm -rf "${PROJECT_BINARY_DIR}/rpm"
+if [ "$PACKAGE_TYPE" = "rpm" ]; then
+    RPMBUILD=`which rpmbuild`
+
+    if [ -d "${PROJECT_BINARY_DIR}/rpm" ]; then
+        rm -rf "${PROJECT_BINARY_DIR}/rpm"
+    fi
+
+    # copy rpm files
+    mkdir -p "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/SPECS"
+    cp -a "${PROJECT_BINARY_DIR}/SPECS.spec" "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/SPECS/${RPM_PACKAGE_NAME}.spec"
+    mkdir "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/BUILD/"
+    cp "${PROJECT_BINARY_DIR}/procdump.1.gz" "${PROJECT_BINARY_DIR}/changelog" "${PROJECT_BINARY_DIR}/procdump" "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/BUILD/"
+
+    # make the rpm
+    if [ "$RPMBUILD" != "" ]; then
+        cd "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}"
+        "$RPMBUILD" --define "_topdir `pwd`" -v -bb "SPECS/${RPM_PACKAGE_NAME}.spec"
+        RET=$?
+        cp RPMS/x86_64/*.rpm ..
+    else
+        echo "No rpmbuild found"
+        RET=1
+    fi
 fi
 
-
-# copy deb files
-mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}"
-#cp -a "${CMAKE_SOURCE_DIR}/dist/DEBIAN" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/"
-mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/DEBIAN"
-cp "${PROJECT_BINARY_DIR}/DEBIANcontrol" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/DEBIAN/control"
-mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/doc/procdump"
-cp "${PROJECT_BINARY_DIR}/changelog.gz" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/doc/procdump"
-mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/man/man1"
-cp -a "${PROJECT_BINARY_DIR}/procdump.1.gz" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/share/man/man1"
-mkdir -p "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/bin"
-cp "${PROJECT_BINARY_DIR}/procdump" "${PROJECT_BINARY_DIR}/deb/${DEB_PACKAGE_NAME}/usr/bin/"
-
-# make the deb
-if [ "$DPKGDEB" != "" ]; then
-    cd "${PROJECT_BINARY_DIR}/deb"
-    echo "$DPKGDEB" -Zxz --build --root-owner-group "${DEB_PACKAGE_NAME}"
-    "$DPKGDEB" -Zxz --build --root-owner-group "${DEB_PACKAGE_NAME}"
-else
-    echo "No dpkg-deb found"
-fi
-
-# copy rpm files
-mkdir -p "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/SPECS"
-cp -a "${PROJECT_BINARY_DIR}/SPECS.spec" "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/SPECS/${RPM_PACKAGE_NAME}.spec"
-mkdir "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/BUILD/"
-cp "${PROJECT_BINARY_DIR}/procdump.1.gz" "${PROJECT_BINARY_DIR}/changelog" "${PROJECT_BINARY_DIR}/procdump" "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}/BUILD/"
-
-# make the rpm
-if [ "$RPMBUILD" != "" ]; then
-    cd "${PROJECT_BINARY_DIR}/rpm/${RPM_PACKAGE_NAME}"
-    "$RPMBUILD" --define "_topdir `pwd`" -v -bb "SPECS/${RPM_PACKAGE_NAME}.spec"
-    cp RPMS/x86_64/*.rpm ..
-else
-    echo "No rpmbuild found"
-fi
+exit $RET

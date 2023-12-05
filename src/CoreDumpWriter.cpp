@@ -46,7 +46,7 @@ char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName,
     char date[DATE_LENGTH];
     char* gcorePrefixName = NULL;
 
-    gcorePrefixName = malloc(PATH_MAX+1);
+    gcorePrefixName = (char*) malloc(PATH_MAX+1);
     if(!gcorePrefixName)
     {
         Log(error, INTERNAL_ERROR);
@@ -99,9 +99,10 @@ char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName,
 //          1   - Quit/Limit reached
 //
 //--------------------------------------------------------------------
-int WriteCoreDump(struct CoreDumpWriter *self)
+char* WriteCoreDump(struct CoreDumpWriter *self)
 {
     int rc = 0;
+    char* dumpFileName = NULL;
 
     // Enter critical section (block till we decrement semaphore)
     rc = WaitForQuitOrEvent(self->Config, &self->Config->semAvailableDumpSlots, INFINITE_WAIT);
@@ -122,7 +123,7 @@ int WriteCoreDump(struct CoreDumpWriter *self)
             {
                 char* socketName = NULL;
                 IsCoreClrProcess(self->Config->ProcessId, &socketName);
-                if ((rc = WriteCoreDumpInternal(self, socketName)) == 0) {
+                if ((dumpFileName = WriteCoreDumpInternal(self, socketName)) != NULL) {
                     // We're done here, unlock (increment) the sem
                     if(sem_post(&self->Config->semAvailableDumpSlots.semaphore) == -1){
                         Log(error, INTERNAL_ERROR);
@@ -146,7 +147,7 @@ int WriteCoreDump(struct CoreDumpWriter *self)
         exit(-1);
     }
 
-    return rc;
+    return dumpFileName;
 }
 
 // --------------------------------------------------------------------------------------
@@ -154,9 +155,9 @@ int WriteCoreDump(struct CoreDumpWriter *self)
 // Should only ever have <max number of dump slots> running concurrently
 // The default value of which is 1 (hard coded) and is set in
 // ProcDumpConfiguration.semAvailableDumpSlots
-// Returns 1 if we trigger quit in the crit section, 0 otherwise
+// Returns NULL if we fail to generate a core dump else returns the name of the core dump
 // --------------------------------------------------------------------------------------
-int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
+char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 {
     char command[BUFFER_LENGTH];
     char ** outputBuffer;
@@ -194,7 +195,7 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     if(access(coreDumpFileName, F_OK)==0 && !self->Config->bOverwriteExisting)
     {
         Log(info, "Dump file %s already exists and was not overwritten (use -o to overwrite)", coreDumpFileName);
-        return -1;
+        return NULL;
     }
 
     // check if we're allowed to write into the target directory
@@ -339,6 +340,6 @@ int WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
     free(name);
 
-    return rc;
+    return strdup(coreDumpFileName);
 }
 

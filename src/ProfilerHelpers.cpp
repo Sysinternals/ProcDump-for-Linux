@@ -100,11 +100,11 @@ int LoadProfiler(pid_t pid, char* clientData)
     unsigned int payloadSize = sizeof(attachTimeout);
 
     // profiler guid
-    StringToGuid(PROFILER_GUID, &profilerGuid);
+    StringToGuid(const_cast<char*>(PROFILER_GUID), &profilerGuid);
     payloadSize += sizeof(profilerGuid);
 
     //profiler path
-    profilerPathW = GetUint16(PROCDUMP_DIR "/" PROFILER_FILE_NAME);
+    profilerPathW = GetUint16(const_cast<char*>(PROCDUMP_DIR "/" PROFILER_FILE_NAME));
     if(profilerPathW==NULL)
     {
         Trace("LoadProfiler: Failed to GetUint16.");
@@ -151,7 +151,7 @@ int LoadProfiler(pid_t pid, char* clientData)
         (uint16_t)0x0000
     };
 
-    void* temp_buffer_cur = temp_buffer;
+    char* temp_buffer_cur = (char*) temp_buffer;
 
     memcpy(temp_buffer_cur, &dumpHeader, sizeof(struct IpcHeader));
     temp_buffer_cur += sizeof(struct IpcHeader);
@@ -313,7 +313,7 @@ char* GetEncodedExceptionFilter(char* exceptionFilterCmdLine, unsigned int numDu
 
     totalExceptionNameLen++; // NULL terminator
 
-    exceptionFilter = malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2+2)); // +1 for : seperator +1 for ; seperator +2 for 2 '*' wildcard
+    exceptionFilter = (char*) malloc(totalExceptionNameLen+numExceptions*(numberOfDumpsLen+2+2)); // +1 for : seperator +1 for ; seperator +2 for 2 '*' wildcard
     if(exceptionFilter==NULL)
     {
         free(cpy);

@@ -6,16 +6,36 @@
 // Monitor functions
 //
 //--------------------------------------------------------------------
+#define _Bool bool
+#include "procdump_ebpf.skel.h"
+
 #include "Includes.h"
 
-static pthread_t sig_thread_id;
+#include <vector>
+#include <string>
 
-TAILQ_HEAD(, ConfigQueueEntry) configQueueHead;
-pthread_mutex_t queue_mutex;
+static pthread_t sig_thread_id;
 
 extern struct ProcDumpConfiguration g_config;
 extern struct ProcDumpConfiguration * target_config;
 extern sigset_t sig_set;
+
+//
+// Set when a SIGINT is received.
+//
+bool g_sigint = false;
+
+//
+// List of all active monitor configurations.
+// All access to this map must be protected by activeConfigurationMutex
+//
+std::unordered_map<int, ProcDumpConfiguration*> activeConfigurations;
+pthread_mutex_t activeConfigurationsMutex;
+
+//
+// Map of which processes are being monitored
+//
+std::unordered_map<int, MonitoredProcessMapEntry> monitoredProcessMap;
 
 //------------------------------------------------------------------------------------------------------
 //
@@ -41,7 +61,7 @@ extern sigset_t sig_set;
 //    #14 0x7f6cd08719ff  (/lib/x86_64-linux-gnu/libc.so.6+0x1269ff)
 //------------------------------------------------------------------------------------------------------
 __attribute__((no_sanitize("address")))
-void *SignalThread(void *input)
+void* SignalThread(void *input)
 {
     Trace("SignalThread: Enter [id=%d]", gettid());
     int sig_caught, rc;
@@ -56,16 +76,17 @@ void *SignalThread(void *input)
     {
         case SIGINT:
             Trace("SignalThread: Got a SIGINT");
+            g_sigint = true;
 
             // In case of CTRL-C we need to iterate over all the outstanding monitors and handle them appropriately
-            pthread_mutex_lock(&queue_mutex);
-            TAILQ_FOREACH(item, &configQueueHead, element)
+            pthread_mutex_lock(&activeConfigurationsMutex);
+            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); it++)
             {
-                if(!IsQuit(item->config)) SetQuit(item->config, 1);
+                if(!IsQuit(it->second)) SetQuit(it->second, 1);
 
-                if(item->config->gcorePid != NO_PID) {
+                if(it->second->gcorePid != NO_PID) {
                     Log(info, "Shutting down gcore");
-                    if((rc = kill(-item->config->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
+                    if((rc = kill(-it->second->gcorePid, SIGKILL)) != 0) {            // pass negative PID to kill entire PGRP with value of gcore PID
                         Log(error, "Failed to shutdown gcore.");
                     }
                 }
@@ -75,17 +96,17 @@ void *SignalThread(void *input)
                 // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
                 // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
                 // break it out of waitpid call.
-                if(item->config->SignalNumber != -1)
+                if(it->second->SignalNumber != -1)
                 {
-                    for(int i=0; i<item->config->nThreads; i++)
+                    for(int i=0; i<it->second->nThreads; i++)
                     {
-                        if(item->config->Threads[i].trigger == Signal)
+                        if(it->second->Threads[i].trigger == Signal)
                         {
-                            pthread_mutex_lock(&item->config->ptrace_mutex);
-                            ptrace(PTRACE_DETACH, item->config->ProcessId, 0, 0);
-                            pthread_mutex_unlock(&item->config->ptrace_mutex);
+                            pthread_mutex_lock(&it->second->ptrace_mutex);
+                            ptrace(PTRACE_DETACH, it->second->ProcessId, 0, 0);
+                            pthread_mutex_unlock(&it->second->ptrace_mutex);
 
-                            if ((rc = pthread_cancel(item->config->Threads[i].thread)) != 0) {
+                            if ((rc = pthread_cancel(it->second->Threads[i].thread)) != 0) {
                                 Log(error, "An error occurred while cancelling SignalMonitorThread.\n");
                                 exit(-1);
                             }
@@ -93,10 +114,10 @@ void *SignalThread(void *input)
                     }
                 }
             }
+            pthread_mutex_unlock(&activeConfigurationsMutex);
 
             Log(info, "Quit");
             SetQuit(&g_config, 1);                  // Make sure to signal the global config
-            pthread_mutex_unlock(&queue_mutex);
             break;
 
         default:
@@ -110,25 +131,62 @@ void *SignalThread(void *input)
 
 //--------------------------------------------------------------------
 //
+// GetNewMonitorConfiguration
+// Gets a new configuration based off of the passed in config.
+// Also adds the configuration to both activeConfigurations and
+// monitoredProcessMap meaning it is now considered an active and monitored
+// process.
+//
+//--------------------------------------------------------------------
+ProcDumpConfiguration* GetNewMonitorConfiguration(ProcDumpConfiguration* sourceConfig, char* processName, int procPid, unsigned long long starttime)
+{
+    ProcDumpConfiguration* config = CopyProcDumpConfiguration(sourceConfig);
+    if(config == NULL)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("MonitorProcesses: failed to alloc struct for process.");
+        return NULL;
+    }
+
+    // populate fields for this target
+    if(procPid != -1)
+    {
+        config->ProcessId = procPid;
+    }
+
+    if(processName != NULL)
+    {
+        config->ProcessName = processName;
+    }
+
+    // insert config into queue
+    pthread_mutex_lock(&activeConfigurationsMutex);
+    activeConfigurations[config->ProcessId] = config;
+    monitoredProcessMap[config->ProcessId].active = true;
+    monitoredProcessMap[config->ProcessId].starttime = starttime;
+    pthread_mutex_unlock(&activeConfigurationsMutex);
+
+    return config;
+}
+
+
+//--------------------------------------------------------------------
+//
 // MonitorProcesses
 // MonitorProcess is the starting point of where the monitors get
 // created. It uses a list to store all the monitors that are active.
 // All monitors must go on this list as there are other places (for
 // example, SignalThread) that relies on all active monitors to be part
-// of the list. Any access to this list must be protected by queue_mutex.
+// of the list.
 //
 //--------------------------------------------------------------------
 void MonitorProcesses(struct ProcDumpConfiguration *self)
 {
-    auto_free struct MonitoredProcessMapEntry* monitoredProcessMap = NULL;
-
     if (self->WaitingForProcessName)    Log(info, "Waiting for processes '%s' to launch\n", self->ProcessName);
     if (self->bProcessGroup == true)    Log(info, "Monitoring processes of PGID '%d'\n", self->ProcessGroup);
 
     // allocate list of configs for process monitoring
-    TAILQ_INIT(&configQueueHead);
     int numMonitoredProcesses = 0;
-    struct ConfigQueueEntry * item;
 
     // create binary map to track processes we have already tracked and closed
     int maxPid = GetMaximumPID();
@@ -139,13 +197,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         return;
     }
 
-    monitoredProcessMap = (struct MonitoredProcessMapEntry*) calloc(maxPid, sizeof(struct MonitoredProcessMapEntry));
-    if(!monitoredProcessMap)
-    {
-        Log(error, INTERNAL_ERROR);
-        Trace("CreateMonitorThreads: failed to allocate memory for monitorProcessMap.");
-        return;
-    }
+    monitoredProcessMap.reserve(maxPid);
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
     // Note: We only create ONE per instance of procdump rather than per monitor.
@@ -193,50 +245,34 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
         }
 
-        item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-        if(item==NULL)
+        ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, NULL, -1, 0);
+        if(config == NULL)
         {
             Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to allocate memory for item");
+            Trace("MonitorProcesses: failed to get new monitor configuration.");
             return;
         }
-
-        item->config = CopyProcDumpConfiguration(self);
-
-        if(item->config == NULL)
-        {
-            Log(error, INTERNAL_ERROR);
-            Trace("MonitorProcesses: failed to alloc struct for process.");
-            return;
-        }
-
-        // insert config into queue
-        pthread_mutex_lock(&queue_mutex);
-        TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId].active = true;
-        pthread_mutex_unlock(&queue_mutex);
 
         // print config here
-        PrintConfiguration(self);
+        PrintConfiguration(config);
 
-        if(StartMonitor(self)!=0)
+        if(StartMonitor(config)!=0)
         {
             Trace("MonitorProcesses: Failed to start the monitor.");
             Log(error, "MonitorProcesses: Failed to start the monitor.");
             return;
         }
 
-        WaitForAllMonitorsToTerminate(self);
-        Log(info, "Stopping monitor for process %s (%d)", self->ProcessName, self->ProcessId);
-        WaitForSignalThreadToTerminate(self);
+        WaitForAllMonitorsToTerminate(config);
+        Log(info, "Stopping monitor for process %s (%d)", config->ProcessName, config->ProcessId);
+        WaitForSignalThreadToTerminate(config);
 
-        pthread_mutex_lock(&queue_mutex);
-        TAILQ_REMOVE(&configQueueHead, item, element);
-        monitoredProcessMap[item->config->ProcessId].active = false;
-        pthread_mutex_unlock(&queue_mutex);
-        FreeProcDumpConfiguration(item->config);
-        free(item->config);
-        free(item);
+        pthread_mutex_lock(&activeConfigurationsMutex);
+        activeConfigurations.erase(config->ProcessId);
+        monitoredProcessMap[config->ProcessId].active = false;
+        pthread_mutex_unlock(&activeConfigurationsMutex);
+        FreeProcDumpConfiguration(config);
+        free(config);
     }
     else
     {
@@ -277,36 +313,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
                         if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
-                            // allocate for new queue entry
-                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                            if(item==NULL)
+                            ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, GetProcessName(procPid), procPid, procStat.starttime);
+                            if(config == NULL)
                             {
                                 Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                Trace("MonitorProcesses: failed to get new monitor configuration.");
                                 return;
                             }
 
-                            item->config = CopyProcDumpConfiguration(self);
-
-                            if(item->config == NULL)
-                            {
-                                Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to alloc struct for process.");
-                                return;
-                            }
-
-                            // populate fields for this target
-                            item->config->ProcessId = procPid;
-                            item->config->ProcessName = GetProcessName(procPid);
-
-                            // insert config into queue
-                            pthread_mutex_lock(&queue_mutex);
-                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId].active = true;
-                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
-                            pthread_mutex_unlock(&queue_mutex);
-
-                            if(StartMonitor(item->config)!=0)
+                            if(StartMonitor(config)!=0)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
@@ -331,36 +346,15 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
                         // Note: To solve the PID reuse case, we uniquely identify an entry via {PID}{starttime}
                         if(ret && (monitoredProcessMap[procPid].active == false || monitoredProcessMap[procPid].starttime != procStat.starttime))
                         {
-                            // allocate for new queue entry
-                            item = (struct ConfigQueueEntry*)malloc(sizeof(struct ConfigQueueEntry));
-                            if(item==NULL)
+                            ProcDumpConfiguration* config = GetNewMonitorConfiguration(self, strdup(nameForPid), procPid, procStat.starttime);
+                            if(config == NULL)
                             {
                                 Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to allocate memory for item");
+                                Trace("MonitorProcesses: failed to get new monitor configuration.");
                                 return;
                             }
 
-                            item->config = CopyProcDumpConfiguration(self);
-
-                            if(item->config == NULL)
-                            {
-                                Log(error, INTERNAL_ERROR);
-                                Trace("MonitorProcesses: failed to alloc struct for named process.");
-                                return;
-                            }
-
-                            // populate fields for this target
-                            item->config->ProcessId = procPid;
-                            item->config->ProcessName = strdup(nameForPid);
-
-                            // insert config into queue
-                            pthread_mutex_lock(&queue_mutex);
-                            TAILQ_INSERT_HEAD(&configQueueHead, item, element);
-                            monitoredProcessMap[item->config->ProcessId].active = true;
-                            monitoredProcessMap[item->config->ProcessId].starttime = procStat.starttime;
-                            pthread_mutex_unlock(&queue_mutex);
-
-                            if(StartMonitor(item->config)!=0)
+                            if(StartMonitor(config)!=0)
                             {
                                 Log(error, INTERNAL_ERROR);
                                 Trace("MonitorProcesses: Failed to start the monitor.");
@@ -384,55 +378,25 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // cleanup process configs for child processes that have exited or for monitors that have captured N dumps
-            pthread_mutex_lock(&queue_mutex);
-
-            // TALQ_FOREACH does not support changing the list while iterating.
-            // We use a seperate delete list instead.
-            int count = 0;
-            TAILQ_FOREACH(item, &configQueueHead, element)
+            pthread_mutex_lock(&activeConfigurationsMutex);
+            for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
             {
-                count++;
-            }
-
-            struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
-            if(deleteList == NULL)
-            {
-                Log(error, INTERNAL_ERROR);
-                Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-                return;
-            }
-
-            count = 0;
-
-            // Iterate over the queue and store the items to delete
-            TAILQ_FOREACH(item, &configQueueHead, element)
-            {
-                // The conditions under which we stop monitoring a process are:
-                // 1. Process has been terminated
-                // 2. The monitoring thread has exited
-                // 3. The monitor has collected the required number of dumps
-                if(item->config->bTerminated || item->config->nQuit || item->config->NumberOfDumpsCollected == item->config->NumberOfDumpsToCollect)
+                if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
                 {
-                    Log(info, "Stopping monitors for process: %s (%d)", item->config->ProcessName, item->config->ProcessId);
-                    WaitForAllMonitorsToTerminate(item->config);
+                    Log(info, "Stopping monitors for process: %s (%d)", it->second->ProcessName, it->second->ProcessId);
+                    WaitForAllMonitorsToTerminate(it->second);
+                    FreeProcDumpConfiguration(it->second);
+                    delete it->second;
 
-                    deleteList[count++] = item;
-
+                    it = activeConfigurations.erase(it);
                     numMonitoredProcesses--;
                 }
+                else
+                {
+                    ++it;
+                }
             }
-
-            // Iterate over the delete list and actually delete the items from the queue
-            for(int i=0; i<count; i++)
-            {
-                // free config entry
-                FreeProcDumpConfiguration(deleteList[i]->config);
-                free(deleteList[i]->config);
-                TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
-                free(deleteList[i]);
-            }
-            free(deleteList);
-            pthread_mutex_unlock(&queue_mutex);
+            pthread_mutex_unlock(&activeConfigurationsMutex);
 
             // Exit if we are monitoring PGID and there are no more processes to monitor.
             // If we are monitoring for processes based on a process name we keep monitoring
@@ -449,41 +413,26 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         } while ((numMonitoredProcesses >= 0 || self->WaitingForProcessName == true) && !IsQuit(&g_config));
 
         // cleanup monitoring queue
-        pthread_mutex_lock(&queue_mutex);
-        int count = 0;
-        TAILQ_FOREACH(item, &configQueueHead, element)
+        pthread_mutex_lock(&activeConfigurationsMutex);
+
+        for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
         {
-            count++;
+            if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
+            {
+                SetQuit(it->second, 1);
+                WaitForAllMonitorsToTerminate(it->second);
+
+                FreeProcDumpConfiguration(it->second);
+                delete it->second;
+
+                it = activeConfigurations.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
         }
-
-        struct ConfigQueueEntry** deleteList = (struct ConfigQueueEntry**) malloc(count*(sizeof(struct ConfigQueueEntry*)));
-        if(deleteList == NULL)
-        {
-            Log(error, INTERNAL_ERROR);
-            Trace("WriteCoreDumpInternal: failed to allocate memory for deleteList");
-            return;
-        }
-
-        count = 0;
-
-        TAILQ_FOREACH(item, &configQueueHead, element)
-        {
-            SetQuit(item->config, 1);
-            WaitForAllMonitorsToTerminate(item->config);
-
-            deleteList[count++] = item;
-        }
-
-        // Iterate over the delete list and actually delete the items from the queue
-        for(int i=0; i<count; i++)
-        {
-            // free config entry
-            FreeProcDumpConfiguration(deleteList[i]->config);
-            TAILQ_REMOVE(&configQueueHead, deleteList[i], element);
-            free(deleteList[i]);
-        }
-        free(deleteList);
-        pthread_mutex_unlock(&queue_mutex);
+        pthread_mutex_unlock(&activeConfigurationsMutex);
 
         free(target_config);
     }
@@ -506,6 +455,34 @@ bool MonitorDotNet(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
+// CreateMonitorThread - Create a specific monitor thread
+//
+//--------------------------------------------------------------------
+int CreateMonitorThread(struct ProcDumpConfiguration *self, enum TriggerType triggerType, void *(*monitorThread) (void *), void *arg)
+{
+    int rc = -1;
+
+    if (self->nThreads < MAX_TRIGGERS)
+    {
+        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, monitorThread, arg)) != 0)
+        {
+            return rc;
+        }
+
+        self->Threads[self->nThreads].trigger = triggerType;
+        self->nThreads++;
+
+    }
+    else
+    {
+        Trace("CreateMonitorThread: max number of triggers reached.");
+    }
+
+    return rc;
+}
+
+//--------------------------------------------------------------------
+//
 // CreateMonitorThreads - Create each of the threads that will be running as a trigger
 //
 //--------------------------------------------------------------------
@@ -518,137 +495,74 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
     // create threads
     if (MonitorDotNet(self) == true)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Exception, DotNetMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, DotNetMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create DotNetMonitoringThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Exception;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create DotNetMonitoringThread.");
+            return rc;
         }
     }
 
     if (self->CpuThreshold != -1)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Processor, CpuMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CpuMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create CpuThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Processor;
-            self->nThreads++;
-
+            Trace("CreateMonitorThreads: failed to create CpuThread.");
+            return rc;
         }
-        else
-        {
-            tooManyTriggers = true;
-            }
     }
 
     if (self->MemoryThreshold != NULL && !tooManyTriggers && self->bMonitoringGCMemory == false)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Commit, CommitMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, CommitMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create CommitThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Commit;
-            self->nThreads++;
-
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create CommitThread.");
+            return rc;
         }
     }
 
     if (self->ThreadThreshold != -1 && !tooManyTriggers)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, ThreadCount, ThreadCountMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, ThreadCountMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create ThreadThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = ThreadCount;
-            self->nThreads++;
-
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create ThreadThread.");
+            return rc;
         }
     }
 
     if (self->FileDescriptorThreshold != -1 && !tooManyTriggers)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, FileDescriptorCount, FileDescriptorCountMonitoringThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, FileDescriptorCountMonitoringThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create FileDescriptorThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = FileDescriptorCount;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create FileDescriptorThread.");
+            return rc;
         }
     }
 
     if (self->SignalNumber != -1 && !tooManyTriggers)
     {
-        if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, SignalMonitoringThread, (void *)self)) != 0)
+        if ((rc = CreateMonitorThread(self, Signal, SignalMonitoringThread, (void *)self)) != 0 )
         {
             Trace("CreateMonitorThreads: failed to create SignalMonitoringThread.");
             return rc;
         }
-
-        self->Threads[self->nThreads].trigger = Signal;
-        self->nThreads++;
     }
 
-    if (self->bTimerThreshold && !tooManyTriggers)
+    if (self->bTimerThreshold)
     {
-        if (self->nThreads < MAX_TRIGGERS)
+        if ((rc = CreateMonitorThread(self, Timer, TimerThread, (void *)self)) != 0 )
         {
-            if ((rc = pthread_create(&self->Threads[self->nThreads].thread, NULL, TimerThread, (void *)self)) != 0)
-            {
-                Trace("CreateMonitorThreads: failed to create TimerThread.");
-                return rc;
-            }
-
-            self->Threads[self->nThreads].trigger = Timer;
-            self->nThreads++;
-        }
-        else
-        {
-            tooManyTriggers = true;
+            Trace("CreateMonitorThreads: failed to create TimerThread.");
+            return rc;
         }
     }
 
-    if (tooManyTriggers)
+    if (self->bRestrackEnabled)
     {
-        Log(error, "Too many triggers.  ProcDump only supports up to %d triggers.", MAX_TRIGGERS);
-        return -1;
+        if ((rc = CreateMonitorThread(self, Restrack, RestrackThread, (void *)self)) != 0 )
+        {
+            Trace("CreateMonitorThreads: failed to create RestrackThread.");
+            return rc;
+        }
     }
 
     return 0;
@@ -745,6 +659,46 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
     return wait;
 }
 
+
+pthread_t GetRestrackThread(struct ProcDumpConfiguration *self)
+{
+    pthread_t restrackThread = 0;
+
+    for(int i=0; i<self->nThreads; i++)
+    {
+        if(self->Threads[i].trigger == Restrack)
+        {
+            restrackThread = self->Threads[i].thread;
+            break;
+        }
+    }
+
+    return restrackThread;
+}
+
+//--------------------------------------------------------------------
+//
+// CancelRestrackThread - Cancel the restrack thread
+//
+//--------------------------------------------------------------------
+int CancelRestrackThread(struct ProcDumpConfiguration *self)
+{
+    Trace("CancelRestrackThread: Enter");
+    int rc = 0;
+    pthread_t restrackThread = 0;
+
+    restrackThread = GetRestrackThread(self);
+
+    if(restrackThread != 0)
+    {
+        Trace("CancelRestrackThread: cancel restrack thread");
+        rc = pthread_cancel(restrackThread);
+    }
+
+    Trace("CancelRestrackThread: Exit");
+    return rc;
+}
+
 //--------------------------------------------------------------------
 //
 // WaitForAllMonitorsToTerminate - Wait for all monitors to terminate
@@ -753,18 +707,40 @@ int WaitForQuitOrEvent(struct ProcDumpConfiguration *self, struct Handle *handle
 int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
 {
     int rc = 0;
+    pthread_t restrackThread = 0;
 
-    // Wait for the other monitoring threads
-    for (int i = 0; i < self->nThreads; i++) {
-        if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0) {
-            Log(error, "An error occurred while joining threads\n");
+    // Wait for the other monitoring threads. We exclude restrack
+    // since we want that thread to exit last
+    for (int i = 0; i < self->nThreads; i++)
+    {
+        if(self->Threads[i].trigger != Restrack)
+        {
+            if ((rc = pthread_join(self->Threads[i].thread, NULL)) != 0)
+            {
+                Log(error, "An error occurred while joining threads\n");
+                exit(-1);
+            }
+        }
+        else
+        {
+            restrackThread = self->Threads[i].thread;
+        }
+    }
+
+    //
+    // If we have a restrack thread, cancel it and wait for it to exit
+    //
+    if(CancelRestrackThread(self) != 0)
+    {
+        if ((rc = pthread_join(restrackThread, NULL)) != 0)
+        {
+            Log(error, "An error occurred while joining restrack thread\n");
             exit(-1);
         }
     }
 
     return rc;
 }
-
 
 //--------------------------------------------------------------------
 //
@@ -819,6 +795,18 @@ int SetQuit(struct ProcDumpConfiguration *self, int quit)
 //--------------------------------------------------------------------
 bool ContinueMonitoring(struct ProcDumpConfiguration *self)
 {
+    // Procdump exiting
+    if (self->nQuit == 1)
+    {
+        return false;
+    }
+
+    // Are we generating leak reports?
+    if (self->bLeakReportInProgress == true)
+    {
+        return true;
+    }
+
     // Have we reached the dump limit?
     if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect)
     {
@@ -864,6 +852,27 @@ bool BeginMonitoring(struct ProcDumpConfiguration *self)
 
 extern long HZ;                                // clock ticks per second
 
+//--------------------------------------------------------------------
+//
+// WaitThreads - Cancels the threads and waits for the specified threads
+// using join.
+//
+//--------------------------------------------------------------------
+void WaitThreads(std::vector<pthread_t>& threads)
+{
+    for (auto& thread : threads)
+    {
+        //
+        // If user hit CTRL+C, cancel the thread.
+        //
+        if(g_sigint == true)
+        {
+            pthread_cancel(thread);
+        }
+
+        pthread_join(thread, NULL);
+    }
+}
 
 //--------------------------------------------------------------------
 //
@@ -880,6 +889,8 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(COMMIT, config);
 
@@ -900,11 +911,28 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold[config->MemoryCurrentThreshold])))
                 {
                     Log(info, "Trigger: Commit usage:%ldMB on process ID: %d", memUsage, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
                     }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
+                    }
+
 
                     config->MemoryCurrentThreshold++;
 
@@ -921,6 +949,11 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("CommitMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -939,6 +972,8 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(THREAD, config);
 
@@ -951,10 +986,26 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                 if (proc.num_threads >= config->ThreadThreshold)
                 {
                     Log(info, "Trigger: Thread count:%ld on process ID: %d", proc.num_threads, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -970,6 +1021,11 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("ThreadCountMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -990,6 +1046,8 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     struct ProcessStat proc = {0};
     int rc = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(FILEDESC, config);
 
@@ -1002,10 +1060,26 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
                     Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -1021,6 +1095,11 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("FileDescriptorCountMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1043,8 +1122,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     int wstatus;
     int signum=-1;
     int rc = 0;
-    int dumpStatus = 0;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(SIGNAL, config);
 
@@ -1085,10 +1165,26 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
                     // Write core dump
                     Log(info, "Trigger: Signal:%d on process ID: %d", signum, config->ProcessId);
-                    dumpStatus = WriteCoreDump(writer);
-                    if(dumpStatus != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     kill(config->ProcessId, SIGCONT);
@@ -1119,13 +1215,18 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                 pthread_mutex_unlock(&config->ptrace_mutex);
 
-                if(dumpStatus != 0)
+                if(dumpFileName == NULL)
                 {
                     break;
                 }
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("SignalMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1146,6 +1247,8 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     struct sysinfo sysInfo;
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(CPU, config);
 
@@ -1170,10 +1273,26 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     (!config->bCpuTriggerBelowValue && (cpuUsage >= config->CpuThreshold)))
                 {
                     Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
-                    rc = WriteCoreDump(writer);
-                    if(rc != 0)
+                    dumpFileName = WriteCoreDump(writer);
+                    if(dumpFileName == NULL)
                     {
                         SetQuit(config, 1);
+                    }
+
+                    //
+                    // Check to see if restrack is specified, if so, save current resource usage to file.
+                    //
+                    if(config->bRestrackEnabled == true)
+                    {
+                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        if (id == 0)
+                        {
+                            SetQuit(config, 1);
+                        }
+                        else
+                        {
+                            leakReportThreads.push_back(id);
+                        }
                     }
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
@@ -1189,6 +1308,11 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("CpuTCpuMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1206,6 +1330,8 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free struct CoreDumpWriter *writer = NULL;
+    auto_free char* dumpFileName = NULL;
+    std::vector<pthread_t> leakReportThreads;
 
     writer = NewCoreDumpWriter(TIME, config);
 
@@ -1216,10 +1342,26 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
             Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->PollingInterval/1000, config->ProcessId);
-            rc = WriteCoreDump(writer);
-            if(rc != 0)
+            dumpFileName = WriteCoreDump(writer);
+            if(dumpFileName == NULL)
             {
                 SetQuit(config, 1);
+            }
+
+            //
+            // Check to see if restrack is specified, if so, save current resource usage to file.
+            //
+            if(config->bRestrackEnabled == true)
+            {
+                pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                if (id == 0)
+                {
+                    SetQuit(config, 1);
+                }
+                else
+                {
+                    leakReportThreads.push_back(id);
+                }
             }
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
@@ -1227,6 +1369,11 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             }
         }
     }
+
+    //
+    // Wait for the leak reporting threads to finish
+    //
+    WaitThreads(leakReportThreads);
 
     Trace("TimerThread: Exit [id=%d]", gettid());
     return NULL;
@@ -1260,7 +1407,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             // We don't have a dump name so we just use the path (append a '/' to indicate its a base path)
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)-1] != '/')
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + 2);    // +1 = '\0', +1 = '/'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1271,7 +1418,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + 1);
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + 1);
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1286,7 +1433,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             // We have a dump name, let's append to dump path
             if(config->CoreDumpPath[strlen(config->CoreDumpPath)] != '/')
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 2);    // +1 = '\0', +1 = '/'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1297,7 +1444,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                fullDumpPath = malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0'
+                fullDumpPath = (char*) malloc(strlen(config->CoreDumpPath) + strlen(config->CoreDumpName) + 1);    // +1 = '\0'
                 if(fullDumpPath == NULL)
                 {
                     Trace("DotNetMonitoringThread: Failed to allocate memory.");
@@ -1342,6 +1489,65 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     }
 
     Trace("DotNetMonitoringThread: Exit [id=%d]", gettid());
+    return NULL;
+}
+
+//--------------------------------------------------------------------
+//
+// RestrackThread - Thread that handles resource tracking
+//
+//--------------------------------------------------------------------
+void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
+{
+    Trace("RestrackThread: Enter [id=%d]", gettid());
+    struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
+    auto_free char* fullDumpPath = NULL;
+    struct procdump_ebpf* skel = NULL;
+    int rc = 0;
+
+    if ((skel = RunRestrack(config)) == NULL)
+    {
+        Trace("RestrackThread: Failed to run restrack eBPF program.");
+        return NULL;
+    }
+
+	//
+    // Set up ring buffer polling
+    //
+	struct ring_buffer *ringBuffer = ring_buffer__new(bpf_map__fd(skel->maps.ringBuffer), RestrackHandleEvent, NULL, NULL);
+	if (!ringBuffer)
+    {
+        Trace("RestrackThread: Failed to create ring buffer.");
+		return NULL;
+    }
+
+    if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
+    {
+        while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
+        {
+            //
+            // Loop and poll eBPF buffer for memory allocation events
+            //
+            int err = ring_buffer__poll(ringBuffer, 100);
+            if (err == -EINTR)
+            {
+                err = 0;
+                break;
+            }
+            if (err < 0)
+            {
+                printf("RestrackThread: Error polling ring buffer: %d\n", err);
+                break;
+            }
+
+            if ((rc = WaitForQuit(config, 1000)) != WAIT_TIMEOUT)
+            {
+                break;
+            }
+        }
+    }
+
+    Trace("RestrackThread: Exit [id=%d]", gettid());
     return NULL;
 }
 
@@ -1435,7 +1641,7 @@ char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* 
     va_copy(args_copy, args);
     clientDataSize = clientDataPrefixSize + vsnprintf(NULL, 0, format, args_copy) + 1;
     va_end(args_copy);
-    clientData = malloc(clientDataSize);
+    clientData = (char*) malloc(clientDataSize);
     if(clientData == NULL)
     {
         Trace("GetClientDataHelper: Failed to allocate memory for client data.");
@@ -1480,7 +1686,7 @@ char* GetThresholds(struct ProcDumpConfiguration *self)
 
     thresholdLen++;     // NULL terminator
 
-    thresholds = malloc(thresholdLen);
+    thresholds = (char*) malloc(thresholdLen);
     if(thresholds != NULL)
     {
         char* writePos = thresholds;
@@ -1535,7 +1741,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
     auto_free char* tmpFolder = NULL;
     auto_free_fd int s=-1;
 
-    tmpFolder = GetSocketPath("procdump/procdump-status-", getpid(), config->ProcessId);
+    tmpFolder = GetSocketPath(const_cast<char*>("procdump/procdump-status-"), getpid(), config->ProcessId);
     config->socketPath = tmpFolder;
     Trace("WaitForProfilerCompletion: Status socket path: %s", tmpFolder);
 
@@ -1672,7 +1878,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
                 return NULL;
             }
 
-            char* dump = malloc(dumpLen+1);
+            char* dump =(char*) malloc(dumpLen+1);
             if(dump==NULL)
             {
                 Trace("WaitForProfilerCompletion: Failed to allocate memory for dump\n");
