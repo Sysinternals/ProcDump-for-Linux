@@ -65,6 +65,10 @@ add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
                    DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
                   )
 
+install(FILES ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+	DESTINATION "/usr/share/man/man1/"
+       )
+
 #
 # Change log
 #
@@ -290,3 +294,7 @@ add_custom_command(OUTPUT procdump_ebpf.o
                   )
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES procdump.ebpf.o)
+
+install(TARGETS procdump
+	DESTINATION ${CMAKE_INSTALL_BINDIR}
+       )
