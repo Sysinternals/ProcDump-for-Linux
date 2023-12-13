@@ -65,7 +65,6 @@ void* SignalThread(void *input)
 {
     Trace("SignalThread: Enter [id=%d]", gettid());
     int sig_caught, rc;
-    struct ConfigQueueEntry * item;
 
     if ((rc = sigwait(&sig_set, &sig_caught)) != 0) {
         Log(error, "Failed to wait on signal");
