@@ -166,7 +166,6 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     auto_free char* gcorePrefixName = NULL;
     int  lineLength;
     int  i = 0;
-    int  rc = 0;
     pid_t gcorePid;
     FILE *commandPipe = NULL;
 
@@ -294,8 +293,6 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                     Log(error, "GCORE - %s", outputBuffer[j]);
                 }
             }
-
-            rc = gcoreStatus;
         }
         else
         {
@@ -324,7 +321,6 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
                     if (self->Config->NumberOfDumpsCollected >= self->Config->NumberOfDumpsToCollect)
                     {
                         SetEvent(&self->Config->evtQuit.event); // shut it down, we're done here
-                        rc = 1;
                     }
                 }
             }

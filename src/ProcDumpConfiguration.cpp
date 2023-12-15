@@ -189,7 +189,6 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     pthread_mutex_init(&self->dotnetMutex, NULL);
     pthread_cond_init(&self->dotnetCond, NULL);
 
-    long s = self->memAllocMap.size();
     if(self->memAllocMap.size() > 0)
     {
         self->memAllocMap.clear();
