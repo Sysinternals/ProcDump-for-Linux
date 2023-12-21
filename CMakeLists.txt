@@ -191,8 +191,17 @@ target_include_directories(procdump PUBLIC
                            ${procdump_ebpf_SOURCE_DIR}
                           )
 
-add_dependencies(procdump libbpf procdump_ebpf)
-target_link_libraries(procdump ${libbpf_SOURCE_DIR}/src/libbpf.a elf z pthread)
+add_dependencies(procdump procdump_ebpf)
+
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(Libelf REQUIRED)
+target_link_libraries(procdump
+	Libelf::Libelf
+	ZLIB::ZLIB
+	Threads::Threads
+)
 
 #
 # Copy integration test directory
