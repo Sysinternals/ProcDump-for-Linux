@@ -106,32 +106,54 @@ char* WriteCoreDump(struct CoreDumpWriter *self)
 
     // Enter critical section (block till we decrement semaphore)
     rc = WaitForQuitOrEvent(self->Config, &self->Config->semAvailableDumpSlots, INFINITE_WAIT);
-    if(rc == 0){
+    if(rc == 0)
+    {
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDump: failed WaitForQuitOrEvent.");
         exit(-1);
     }
-    if(pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL) != 0){
+    if(pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL) != 0)
+    {
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDump: failed pthread_setcanceltype.");
         exit(-1);
     }
-    switch (rc) {
+    switch (rc)
+    {
         case WAIT_OBJECT_0: // QUIT!  Time for cleanup, no dump
             break;
         case WAIT_OBJECT_0+1: // We got a dump slot!
             {
                 char* socketName = NULL;
                 IsCoreClrProcess(self->Config->ProcessId, &socketName);
-                if ((dumpFileName = WriteCoreDumpInternal(self, socketName)) != NULL) {
+                unsigned int currentCoreDumpFilter = -1;
+                if(self->Config->CoreDumpMask != -1)
+                {
+                    currentCoreDumpFilter = GetCoreDumpFilter(self->Config->ProcessId);
+                    SetCoreDumpFilter(self->Config->ProcessId, self->Config->CoreDumpMask);
+                }
+                if ((dumpFileName = WriteCoreDumpInternal(self, socketName)) != NULL)
+                {
                     // We're done here, unlock (increment) the sem
-                    if(sem_post(&self->Config->semAvailableDumpSlots.semaphore) == -1){
+                    if(sem_post(&self->Config->semAvailableDumpSlots.semaphore) == -1)
+                    {
                         Log(error, INTERNAL_ERROR);
                         Trace("WriteCoreDump: failed sem_post.");
                         if(socketName) free(socketName);
+                        if(self->Config->CoreDumpMask != -1 && currentCoreDumpFilter != -1)
+                        {
+                            SetCoreDumpFilter(self->Config->ProcessId, currentCoreDumpFilter);
+                        }
+
                         exit(-1);
                     }
                 }
+
+                if(self->Config->CoreDumpMask != -1 && currentCoreDumpFilter != -1)
+                {
+                    SetCoreDumpFilter(self->Config->ProcessId, currentCoreDumpFilter);
+                }
+
                 if(socketName) free(socketName);
             }
             break;
@@ -141,7 +163,9 @@ char* WriteCoreDump(struct CoreDumpWriter *self)
             Trace("WriteCoreDump: Error in default case");
             break;
     }
-    if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0){
+
+    if(pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL) != 0)
+    {
         Log(error, INTERNAL_ERROR);
         Trace("WriteCoreDump: failed pthread_setcanceltype.");
         exit(-1);

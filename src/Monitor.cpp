@@ -95,7 +95,7 @@ void* SignalThread(void *input)
                 // access to the signal path (in SignalMonitoringThread). Note, there is still a race but
                 // acceptable since it is very unlikely to occur. We also cancel the SignalMonitorThread to
                 // break it out of waitpid call.
-                if(it->second->SignalNumber != -1)
+                if(it->second->SignalCount > 0)
                 {
                     for(int i=0; i<it->second->nThreads; i++)
                     {
@@ -537,7 +537,7 @@ int CreateMonitorThreads(struct ProcDumpConfiguration *self)
         }
     }
 
-    if (self->SignalNumber != -1 && !tooManyTriggers)
+    if (self->SignalCount > 0 && !tooManyTriggers)
     {
         if ((rc = CreateMonitorThread(self, Signal, SignalMonitoringThread, (void *)self)) != 0 )
         {
@@ -1152,7 +1152,17 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                 // We are now in a signal-stop state
 
                 signum = WSTOPSIG(wstatus);
-                if(signum == config->SignalNumber)
+                bool found = false;
+                for(int i = 0; i < config->SignalCount; i++)
+                {
+                    if(signum == config->SignalNumber[i])
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if(found == true)
                 {
                     // We have to detach in a STOP state so we can invoke gcore
                     if(ptrace(PTRACE_DETACH, config->ProcessId, 0, SIGSTOP) == -1)
@@ -1186,7 +1196,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                         }
                     }
 
-                    kill(config->ProcessId, SIGCONT);
+                    ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
 
                     if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
                     {
@@ -1195,8 +1205,6 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                         pthread_mutex_unlock(&config->ptrace_mutex);
                         break;
                     }
-
-                    ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
 
                     // Re-attach to the target process
                     if (ptrace(PTRACE_SEIZE, config->ProcessId, NULL, NULL) == -1)
@@ -1209,15 +1217,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     pthread_mutex_unlock(&config->ptrace_mutex);
                     continue;
                 }
-
                 // Resume execution of the target process
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                 pthread_mutex_unlock(&config->ptrace_mutex);
-
-                if(dumpFileName == NULL)
-                {
-                    break;
-                }
             }
         }
     }

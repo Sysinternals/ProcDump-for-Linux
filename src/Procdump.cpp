@@ -9,6 +9,8 @@
 //--------------------------------------------------------------------
 #include "Includes.h"
 
+#include <sys/resource.h>
+
 extern struct ProcDumpConfiguration g_config;
 
 //--------------------------------------------------------------------
@@ -53,6 +55,11 @@ int main(int argc, char *argv[])
 
         // Register exit handler
         atexit(OnExit);
+
+        struct rlimit rlim;
+        rlim.rlim_cur = 1000000000;
+        rlim.rlim_max = 1000000000;
+        setrlimit(RLIMIT_CORE, &rlim);
 
         // monitor for all specified processes
         MonitorProcesses(&g_config);

@@ -7,6 +7,7 @@
 //
 //--------------------------------------------------------------------
 #include "Includes.h"
+#include <string>
 
 //--------------------------------------------------------------------
 //
@@ -517,6 +518,28 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     return true;
 }
 
+//--------------------------------------------------------------------
+//
+// GetProcessName - Gets the process name only in cases where the
+//                  specified process name is the command line and
+//                  contains arguments.
+//
+//--------------------------------------------------------------------
+char * GetProcessName(char* processName)
+{
+    char* retString = processName;
+
+    std::string procName = "";
+    std::string inputString = processName;
+    size_t firstSpacePos = inputString.find(' ');
+    if (firstSpacePos != std::string::npos)
+    {
+        procName = inputString.substr(0, firstSpacePos);
+        retString = const_cast<char*>(procName.c_str());
+    }
+
+    return strdup(retString);
+}
 
 //--------------------------------------------------------------------
 //
@@ -524,7 +547,8 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 //                  Returns EMPTY_PROC_NAME for null process name.
 //
 //--------------------------------------------------------------------
-char * GetProcessName(pid_t pid){
+char * GetProcessName(pid_t pid)
+{
     char procFilePath[32];
     char fileBuffer[MAX_CMDLINE_LEN];
     int charactersRead = 0;
@@ -533,24 +557,27 @@ char * GetProcessName(pid_t pid){
     char * processName;
     auto_free_file FILE * procFile = NULL;
 
-    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0) {
+    if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0)
+    {
         return NULL;
     }
 
     procFile = fopen(procFilePath, "r");
 
-    if(procFile != NULL) {
-        if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
-
-            if(strlen(fileBuffer) == 0) {
+    if(procFile != NULL)
+    {
+        if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL)
+        {
+            if(strlen(fileBuffer) == 0)
+            {
                 Log(debug, "Empty cmdline.\n");
             }
-            else{
-            }
+
             return NULL;
         }
     }
-    else {
+    else
+    {
         Log(debug, "Failed to open %s.\n", procFilePath);
         return NULL;
     }
@@ -559,21 +586,28 @@ char * GetProcessName(pid_t pid){
     // Extract process name
     stringItr = fileBuffer;
     charactersRead  = strlen(fileBuffer);
-    for(int i = 0; i <= charactersRead; i++){
-        if(fileBuffer[i] == '\0'){
+    for(int i = 0; i <= charactersRead; i++)
+    {
+        if(fileBuffer[i] == '\0')
+        {
             itr = i - itr;
 
-            if(strcmp(stringItr, "sudo") != 0){		// do we have the process name including filepath?
+            // do we have the process name including filepath?
+            if(strcmp(stringItr, "sudo") != 0)
+            {
                 processName = strrchr(stringItr, '/');	// does this process include a filepath?
 
-                if(processName != NULL){
-                    return strdup(processName + 1);	// +1 to not include '/' character
+                if(processName != NULL)
+                {
+                    return GetProcessName(processName + 1);	// +1 to not include '/' character
                 }
-                else{
-                    return strdup(stringItr);
+                else
+                {
+                    return GetProcessName(stringItr);
                 }
             }
-            else{
+            else
+            {
                 stringItr += (itr+1); 	// +1 to move past '\0'
             }
         }

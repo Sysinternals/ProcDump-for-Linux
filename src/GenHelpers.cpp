@@ -96,6 +96,45 @@ bool ConvertToInt(const char* src, int* conv)
 
 //--------------------------------------------------------------------
 //
+// ConvertToIntHex - Helper to convert from a char* (hex) to int
+//
+//--------------------------------------------------------------------
+bool ConvertToIntHex(const char* src, int* conv)
+{
+    int temp = 0;
+
+    for (size_t i=0; src[i] != '\0'; i++)
+    {
+        if ((src[i] >= '0') && (src[i] <= '9'))
+        {
+            // Shift left by 0x10 (16) and add the digit using an ASCII delta
+            temp *= 0x10;
+            temp += src[i] - '0';
+        }
+        else if ((src[i] >= 'A') && (src[i] <= 'F'))
+        {
+            // Shift left by 0x10 (16) and add the digit using an ASCII delta
+            temp *= 0x10;
+            temp += 10 + (src[i] - 'A');
+        }
+        else if ((src[i] >= 'a') && (src[i] <= 'f'))
+        {
+            // Shift left by 0x10 (16) and add the digit using an ASCII delta
+            temp *= 0x10;
+            temp += 10 + (src[i] - 'a');
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    *conv = temp;
+    return true;
+}
+
+//--------------------------------------------------------------------
+//
 // CheckKernelVersion - Check to see if current kernel is greater than
 // specified.
 //
@@ -570,4 +609,52 @@ pid_t gettid() noexcept
 #endif
 
     return 0;
+}
+
+//--------------------------------------------------------------------
+//
+// GetCoreDumpFilter
+//
+// Returns the core dump filter for the specified process id.
+//--------------------------------------------------------------------
+unsigned long GetCoreDumpFilter(int pid)
+{
+    unsigned long filter = -1;
+
+    char filepath[PATH_MAX];
+    snprintf(filepath, sizeof(filepath), "/proc/%d/coredump_filter", pid);
+
+    FILE* file = fopen(filepath, "r");
+    if (file != NULL)
+    {
+        fscanf(file, "%lx", &filter);
+    }
+
+    fclose(file);
+    return filter;
+}
+
+//--------------------------------------------------------------------
+//
+// SetCoreDumpFilter
+//
+// Sets the core dump filter for the specified process id.
+//--------------------------------------------------------------------
+bool SetCoreDumpFilter(int pid, unsigned long filter)
+{
+    bool ret = false;
+    char filepath[PATH_MAX];
+    snprintf(filepath, sizeof(filepath), "/proc/%d/coredump_filter", pid);
+
+    FILE *file = fopen(filepath, "w");
+    if (file != NULL)
+    {
+        if(fprintf(file, "%ld", filter) > 0)
+        {
+            ret = true;
+        }
+    }
+
+    fclose(file);
+    return ret;
 }
