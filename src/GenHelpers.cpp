@@ -627,7 +627,11 @@ unsigned long GetCoreDumpFilter(int pid)
     FILE* file = fopen(filepath, "r");
     if (file != NULL)
     {
-        fscanf(file, "%lx", &filter);
+        int itemsRead = fscanf(file, "%lx", &filter);
+        if (itemsRead != 1)
+        {
+            filter = -1;
+        }
     }
 
     fclose(file);
