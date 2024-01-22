@@ -1177,7 +1177,9 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     dumpFileName = WriteCoreDump(writer);
                     if(dumpFileName == NULL)
                     {
-                        SetQuit(config, 1);
+                        ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+                        ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
+                        break;
                     }
 
                     //
@@ -1186,11 +1188,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
-                        if (id == 0)
-                        {
-                            SetQuit(config, 1);
-                        }
-                        else
+                        if (id != 0)
                         {
                             leakReportThreads.push_back(id);
                         }
@@ -1201,8 +1199,8 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
                     {
                         // If we are over the max number of dumps to collect, send the original signal we intercepted.
-                        kill(config->ProcessId, signum);
                         pthread_mutex_unlock(&config->ptrace_mutex);
+                        ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
                         break;
                     }
 
@@ -1217,6 +1215,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     pthread_mutex_unlock(&config->ptrace_mutex);
                     continue;
                 }
+
                 // Resume execution of the target process
                 ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
                 pthread_mutex_unlock(&config->ptrace_mutex);

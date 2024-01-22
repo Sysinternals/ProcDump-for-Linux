@@ -520,17 +520,16 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 
 //--------------------------------------------------------------------
 //
-// GetProcessName - Gets the process name only in cases where the
-//                  specified process name is the command line and
-//                  contains arguments.
+// GetProcessName - Extracts the process name from the specified
+//                  commandline.
 //
 //--------------------------------------------------------------------
-char * GetProcessName(char* processName)
+char * GetProcessNameFromCmdLine(char* cmdLine)
 {
-    char* retString = processName;
+    char* retString = cmdLine;
 
     std::string procName = "";
-    std::string inputString = processName;
+    std::string inputString = cmdLine;
     size_t firstSpacePos = inputString.find(' ');
     if (firstSpacePos != std::string::npos)
     {
@@ -599,11 +598,11 @@ char * GetProcessName(pid_t pid)
 
                 if(processName != NULL)
                 {
-                    return GetProcessName(processName + 1);	// +1 to not include '/' character
+                    return GetProcessNameFromCmdLine(processName + 1);	// +1 to not include '/' character
                 }
                 else
                 {
-                    return GetProcessName(stringItr);
+                    return GetProcessNameFromCmdLine(stringItr);
                 }
             }
             else
