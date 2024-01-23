@@ -276,7 +276,8 @@ struct ProcessStatus {
 // -----------------------------------------------------------
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc);
-char * GetProcessName(pid_t pid);
+char* GetProcessName(pid_t pid);
+char* GetProcessNameFromCmdLine(char* cmdLine);
 pid_t GetProcessPgid(pid_t pid);
 bool LookupProcessByPid(pid_t pid);
 bool LookupProcessByPgid(pid_t pid);

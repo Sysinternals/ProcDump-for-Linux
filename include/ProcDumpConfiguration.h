@@ -104,7 +104,8 @@ struct ProcDumpConfiguration
     bool DiagnosticsLoggingEnabled; // -log
     int ThreadThreshold;            // -tc
     int FileDescriptorThreshold;    // -fc
-    int SignalNumber;               // -sig
+    int* SignalNumber;              // -sig
+    int SignalCount;
     int PollingInterval;            // -pf
     char *CoreDumpPath;             //
     char *CoreDumpName;             //
@@ -115,6 +116,7 @@ struct ProcDumpConfiguration
     bool bRestrackEnabled;          // -restrack
     bool bLeakReportInProgress;
     int SampleRate;                 // Record every X resource allocation in restrack
+    int CoreDumpMask;               // -mc (core dump mask)
 
     //
     // Keeps track of the memory allocations when -restrack is specified.
