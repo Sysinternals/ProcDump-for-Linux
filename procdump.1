@@ -1,5 +1,5 @@
 .\" Manpage for procdump.
-.TH man 8 "9/6/2023" "2.2" "procdump manpage"
+.TH man 8 "1/23/2024" "3.1" "procdump manpage"
 .SH NAME
 procdump \- generate coredumps based off performance triggers.
 .SH SYNOPSIS
@@ -13,10 +13,11 @@ procdump [-n Count]
          [-sr Sample_Rate]
          [-tc Thread_Threshold]
          [-fc FileDescriptor_Threshold]
-         [-sig Signal_Number]
+         [-sig Signal_Number1[,Signal_Number2...]]
          [-e]
          [-f Include_Filter,...]
          [-fx Exclude_Filter]
+         [-mc Custom_Dump_Mask]
          [-pf Polling_Frequency]
          [-o]
          [-log]
@@ -37,10 +38,11 @@ Options:
    -sr     Sample rate when using -restrack.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
-   -sig    Signal number to intercept to create a dump of the process.
+   -sig    Comma separated list of signal number(s) during which any signal results in a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
    -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.
    -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.
+   -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.

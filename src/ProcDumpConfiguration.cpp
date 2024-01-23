@@ -1228,7 +1228,7 @@ int PrintUsage()
     printf("   -sr     Sample rate when using -restrack.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
-    printf("   -sig    Comma separated list of signal number(s) during which either signal results in a dump of the process.\n");
+    printf("   -sig    Comma separated list of signal number(s) during which any signal results in a dump of the process.\n");
     printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
     printf("   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.\n");
     printf("   -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.\n");

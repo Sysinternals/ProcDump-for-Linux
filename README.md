@@ -21,26 +21,28 @@ Please see build instructions [here](BUILD.md).
 ## Usage
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
 ```
-procdump [-n Count]
-         [-s Seconds]
-         [-c|-cl CPU_Usage]
-         [-m|-ml Commit_Usage1[,Commit_Usage2...]]
-         [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
-         [-gcgen Generation]
-         [-restrack]
-         [-sr Sample_Rate]
-         [-tc Thread_Threshold]
-         [-fc FileDescriptor_Threshold]
-         [-sig Signal_Number]
-         [-e]
-         [-f Include_Filter,...]
-         [-fx Exclude_Filter]
-         [-pf Polling_Frequency]
-         [-o]
-         [-log]
-         {
-           {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
-         }
+Capture Usage:
+   procdump [-n Count]
+            [-s Seconds]
+            [-c|-cl CPU_Usage]
+            [-m|-ml Commit_Usage1[,Commit_Usage2...]]
+            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
+            [-gcgen Generation]
+            [-restrack]
+            [-sr Sample_Rate]
+            [-tc Thread_Threshold]
+            [-fc FileDescriptor_Threshold]
+            [-sig Signal_Number1[,Signal_Number2...]]
+            [-e]
+            [-f Include_Filter,...]
+            [-fx Exclude_Filter]
+            [-mc Custom_Dump_Mask]
+            [-pf Polling_Frequency]
+            [-o]
+            [-log]
+            {
+             {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
+            }
 
 Options:
    -n      Number of dumps to write before exiting.
@@ -55,10 +57,11 @@ Options:
    -sr     Sample rate when using -restrack.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
-   -sig    Signal number to intercept to create a dump of the process.
+   -sig    Comma separated list of signal number(s) during which any signal results in a dump of the process.
    -e      [.NET] Create dump when the process encounters an exception.
    -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.
    -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.
+   -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
    -log    Writes extended ProcDump tracing to syslog.
@@ -139,6 +142,10 @@ sudo procdump 1234 dump
 The following will create a core dump when a SIGSEGV occurs.
 ```
 sudo procdump -sig 11 1234
+```
+The following will create a core dump when a SIGSEGV occures where the core dump contains only anonymous private mappings.
+```
+sudo procdump -mc 1 -sig 11 1234
 ```
 The following will create a core dump when the target .NET application throws a System.InvalidOperationException
 ```

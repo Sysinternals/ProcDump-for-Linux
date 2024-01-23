@@ -1,3 +1,7 @@
+* Tue Jan 23 2024 Mario Hewardt <marioh@microsoft.com> - 3.1
+- Adds ability to specify multiple comma separated signals
+- Adds the new -mc switch which controls what type of memory is included in the core dumps
+
 * Tue Dec 5 2023 Mario Hewardt <marioh@microsoft.com> - 3.0
 - Adds resource tracking and reporting feature
 
