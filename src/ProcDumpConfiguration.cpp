@@ -1066,17 +1066,37 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         {
             printf("%-40s%s\n", "Commit Threshold:", "n/a");
         }
-
-        // Restrack
-        if (self->bRestrackEnabled == true)
+        // GC Generation
+        if (self->DumpGCGeneration != -1)
         {
-            printf("%-40s%s\n", "Resource tracking", "On");
-            printf("%-40s%d\n", "Resource tracking sample rate", self->SampleRate);
+            printf("%-40s", "GC Generation/heap:");
+            if(self->DumpGCGeneration == 3)
+            {
+                printf("LOH\n");
+            }
+            else if(self->DumpGCGeneration == 4)
+            {
+                printf("POH\n");
+            }
+            else
+            {
+                printf("%d\n", self->DumpGCGeneration);
+            }
         }
         else
         {
-            printf("%-40s%s\n", "Resource tracking", "n/a");
-            printf("%-40s%s\n", "Resource tracking sample rate", "n/a");
+            printf("%-40s%s\n", "GC Generation:", "n/a");
+        }
+        // Restrack
+        if (self->bRestrackEnabled == true)
+        {
+            printf("%-40s%s\n", "Resource tracking:", "On");
+            printf("%-40s%d\n", "Resource tracking sample rate:", self->SampleRate);
+        }
+        else
+        {
+            printf("%-40s%s\n", "Resource tracking:", "n/a");
+            printf("%-40s%s\n", "Resource tracking sample rate:", "n/a");
         }
 
         // Thread
@@ -1123,26 +1143,17 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         // Exception
         if (self->bDumpOnException)
         {
-            printf("%-40s%s\n", "Exception monitor", "On");
-            printf("%-40s%s\n", "Exception filter", self->ExceptionFilter ? self->ExceptionFilter : "n/a");
+            printf("%-40s%s\n", "Exception monitor:", "On");
+            printf("%-40s%s\n", "Exception filter:", self->ExceptionFilter ? self->ExceptionFilter : "n/a");
         }
         else
         {
-            printf("%-40s%s\n", "Exception monitor", "n/a");
+            printf("%-40s%s\n", "Exception monitor:", "n/a");
         }
         // Exclude filter
         if (self->ExcludeFilter)
         {
-            printf("%-40s%s\n", "Exclude filter", self->ExcludeFilter);
-        }
-        // GC Generation
-        if (self->DumpGCGeneration != -1)
-        {
-            printf("%-40s%d\n", "GC Generation", self->DumpGCGeneration);
-        }
-        else
-        {
-            printf("%-40s%s\n", "GC Generation", "n/a");
+            printf("%-40s%s\n", "Exclude filter:", self->ExcludeFilter);
         }
 
         // Polling inverval

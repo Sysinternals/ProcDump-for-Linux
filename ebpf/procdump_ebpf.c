@@ -61,128 +61,79 @@ static inline void ZeroMemory(char* ptr, unsigned int size)
 }
 
 // ------------------------------------------------------------------------------------------
-// uprobe_malloc
+// SendEvent
 //
-// This is the entry point for the malloc uprobe. It's called when malloc is called.
+// Sends the allocation/free event
 // ------------------------------------------------------------------------------------------
-SEC("uprobe/libc.so.6:malloc")
-int BPF_KPROBE(uprobe_malloc, long size)
+__attribute__((always_inline))
+static inline int SendEvent(void* alloc)
 {
-    struct ResourceInformation* event;
-    int element = 0;
-    long ret = 0;
+    struct ResourceInformation* event = NULL;
     uint64_t pidTid = bpf_get_current_pid_tgid();
+    int ret = 1;
 
     //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || CheckSampleRate() == false)
-    {
-        return 1;
-    }
-
-    //
-    // Get heap element from the map
-    //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event == NULL)
-    {
-		return 1;
-    }
-
-    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
-
-    //
-    // Setup the event we want to transfer to usermode.
-    //
-    event->allocSize = size;
-    event->pid = target_PID;
-    event->resourceType = RESTRACK_ALLOC;
-    event->allocAddress = 0;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
-
-    //
-    // Update the arguments hashmap with the entry. We'll fetch the entry when
-    // we exit the malloc and update other fields (such as allocation ptr) and then
-    // send to user mode.
-    //
-    if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
-    {
-        BPF_PRINTK("Failed to update arguments hashmap\n");
-        return 1;
-    }
-
-    BPF_PRINTK("malloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
-	return 0;
-}
-
-// ------------------------------------------------------------------------------------------
-// uretprobe_malloc
-//
-// This is the entry point for the malloc exit uprobe. It's called when malloc is exiting.
-// ------------------------------------------------------------------------------------------
-SEC("uretprobe/libc.so.6:malloc")
-int BPF_KRETPROBE(uretprobe_malloc, void* ret)
-{
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    struct ResourceInformation* event;
-
-    //
-    // Only trace PIDs that matched the target PID
+    // Only trace PIDs that matched the target PID and have non NULL allocations
     //
     uint64_t p = pidTid >> 32;
-    if (p != target_PID || ret == NULL)
+    if (p != target_PID || alloc == NULL)
     {
         return 1;
     }
 
     //
-    // Get the map storage for event.
-    // This was created on the preceding malloc enter probe.
-    // If the pid is in our map then we must have stored it
+    // Get event
     //
     event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
     if (event == NULL)
     {
+        BPF_PRINTK("[SendEvent] Failed: Getting event (allocation address: 0x%lx, target PID: %d)\n", alloc, target_PID);
         return 1;
     }
 
-    event->allocAddress = (unsigned long) ret;
+    //
+    // Set the allocation address
+    //
+    event->allocAddress = (unsigned long) alloc;
 
     //
     // Send the event to the ring buffer (user land)
     //
-	bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0);
+	if((ret = bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0)) != 0)
+    {
+        BPF_PRINTK("[SendEvent] Failed: Getting event (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
+        return ret;
+    }
 
-    //
-    // Cleanup args hashmap entry
-    //
-    bpf_map_delete_elem(&argsHashMap, &pidTid);
+    if((ret = bpf_map_delete_elem(&argsHashMap, &pidTid)) != 0)
+    {
+        BPF_PRINTK("[SendEvent] Failed: Getting event (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
+        return ret;
+    }
+
+    BPF_PRINTK("[SendEvent] Success: (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
     return 0;
 }
 
-
 // ------------------------------------------------------------------------------------------
-// uprobe_free
+// ResourceFreeHelper
 //
-// This is the entry point for the free uprobe. It's called when free is entered.
+// Helper for all the intercepted free functions.
 // ------------------------------------------------------------------------------------------
-SEC("uprobe/libc.so.6:free")
-int BPF_KRETPROBE(uprobe_free, void* alloc)
+__attribute__((always_inline))
+static inline int ResourceFreeHelper(void* alloc)
 {
-    struct ResourceInformation* event;
+    struct ResourceInformation* event = NULL;
     int element = 1;
-    long ret = 0;
     uint64_t pidTid = bpf_get_current_pid_tgid();
 
     //
     // Only trace PIDs that matched the target PID
     //
     uint64_t pid = pidTid >> 32;
-    if (pid != target_PID)
+    if (pid != target_PID || alloc == NULL)
     {
-        return 1;
+        return 0;
     }
 
     //
@@ -191,6 +142,7 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
     event = bpf_map_lookup_elem(&heapStorage, &element);
 	if (event == NULL)
     {
+        BPF_PRINTK("[ResourceFreeHelper] Failed: Getting event (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
 		return 1;
     }
 
@@ -208,59 +160,154 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
     // we free the allocation and update other fields (such as allocation ptr) and then
     // send to user mode.
     //
-    if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
+    if (bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY) != 0)
     {
-        BPF_PRINTK("Failed to update arguments hashmap\n");
+        BPF_PRINTK("[ResourceFreeHelper] Failed: Updating event (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
         return 1;
     }
 
-    BPF_PRINTK("Free exiting with pid=%d, alloc=0x%p\n", target_PID, alloc);
+    BPF_PRINTK("[ResourceFreeHelper] Success: (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
+    return 0;
+}
+
+
+// ------------------------------------------------------------------------------------------
+// ResourceAllocHelper
+//
+// Helper for all the intercepted allocation functions.
+// ------------------------------------------------------------------------------------------
+__attribute__((always_inline))
+static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx)
+{
+    struct ResourceInformation* event = NULL;
+    uint64_t pidTid = bpf_get_current_pid_tgid();
+    int element = 0;
+
+    //
+    // Only trace PIDs that matched the target PID and if we should sample this event.
+    //
+    uint64_t pid = pidTid >> 32;
+    if (pid != target_PID || CheckSampleRate() == false)
+    {
+        return 0;
+    }
+
+    //
+    // Get heap element from the map
+    //
+    event = bpf_map_lookup_elem(&heapStorage, &element);
+	if (event != NULL)
+    {
+		ZeroMemory((char*) event, sizeof(struct ResourceInformation));
+    }
+    else
+    {
+        BPF_PRINTK("[ResourceAllocHelper] Failed: Getting event (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+        return 1;
+    }
+
+    //
+    // Setup the event we want to transfer to usermode.
+    //
+    event->allocSize = size;
+    event->pid = target_PID;
+    event->resourceType = RESTRACK_ALLOC;
+    event->allocAddress = 0;
+    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
+
+    //
+    // Update the arguments hashmap with the entry. We'll fetch the entry when
+    // we exit the malloc and update other fields (such as allocation ptr) and then
+    // send to user mode.
+    //
+    if (bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY) != 0)
+    {
+        BPF_PRINTK("[ResourceAllocHelper] Failed: Updating event (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+        return 1;
+    }
+
+    BPF_PRINTK("[ResourceAllocHelper] Success: (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// sys_mmap_enter
+// ------------------------------------------------------------------------------------------
+SEC("uprobe/libc.so.6:mmap")
+int sys_mmap_enter(struct pt_regs *ctx)
+{
+    ResourceAllocHelper((unsigned long) PT_REGS_PARM2(ctx), ctx);
+	return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// sys_mmap_exit
+// ------------------------------------------------------------------------------------------
+SEC("uretprobe/libc.so.6:mmap")
+int sys_mmap_exit(struct pt_regs *ctx)
+{
+    SendEvent((void*) PT_REGS_RC(ctx));
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// sys_munmap_enter
+// ------------------------------------------------------------------------------------------
+SEC("uprobe/libc.so.6:munmap")
+int sys_munmap_enter(struct pt_regs *ctx)
+{
+    ResourceFreeHelper((void*) PT_REGS_PARM1(ctx));
+	return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// sys_munmap_exit
+// ------------------------------------------------------------------------------------------
+SEC("uretprobe/libc.so.6:munmap")
+int sys_munmap_exit(struct pt_regs *ctx)
+{
+    SendEvent((void*) PT_REGS_PARM1(ctx));
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// uprobe_malloc
+// ------------------------------------------------------------------------------------------
+SEC("uprobe/libc.so.6:malloc")
+int BPF_KPROBE(uprobe_malloc, unsigned long size)
+{
+    ResourceAllocHelper(size, ctx);
+	return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// uretprobe_malloc
+// ------------------------------------------------------------------------------------------
+SEC("uretprobe/libc.so.6:malloc")
+int BPF_KRETPROBE(uretprobe_malloc, void* ret)
+{
+    SendEvent(ret);
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------
+// uprobe_free
+// ------------------------------------------------------------------------------------------
+SEC("uprobe/libc.so.6:free")
+int BPF_KRETPROBE(uprobe_free, void* alloc)
+{
+    ResourceFreeHelper(alloc);
 	return 0;
 }
 
 
 // ------------------------------------------------------------------------------------------
 // uretprobe_free
-//
-// This is the entry point for the free exit uprobe. It's called when free is exiting.
 // ------------------------------------------------------------------------------------------
 SEC("uretprobe/libc.so.6:free")
 int BPF_KRETPROBE(uretprobe_free, void* ret)
 {
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    struct ResourceInformation* event;
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t p = pidTid >> 32;
-    if (p != target_PID || ret == NULL)
-    {
-        return 1;
-    }
-
-    //
-    // Get the map storage for event.
-    // This was created on the preceding free enter probe.
-    // If the pid is in our map then we must have stored it
-    //
-    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
-    if (event == NULL)
-    {
-        return 1;
-    }
-
-    BPF_PRINTK("free exit returned with alloc = 0x%lx, target PID = %d\n", event->allocAddress, target_PID);
-
-    //
-    // Send the event to the ring buffer (user land)
-    //
-	bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0);
-
-    //
-    // Cleanup args hashmap entry
-    //
-    bpf_map_delete_elem(&argsHashMap, &pidTid);
+    SendEvent(ret);
     return 0;
 }
 
@@ -270,55 +317,9 @@ int BPF_KRETPROBE(uretprobe_free, void* ret)
 // This is the entry point for the calloc uprobe. It's called when calloc is called.
 // ------------------------------------------------------------------------------------------
 SEC("uprobe/libc.so.6:calloc")
-int BPF_KPROBE(uprobe_calloc, int count, long size)
+int BPF_KPROBE(uprobe_calloc, int count, unsigned long size)
 {
-    struct ResourceInformation* event;
-    int element = 0;
-    long ret = 0;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || CheckSampleRate() == false)
-    {
-        return 1;
-    }
-
-    //
-    // Get heap element from the map
-    //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event == NULL)
-    {
-		return 1;
-    }
-
-    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
-
-    //
-    // Setup the event we want to transfer to usermode.
-    // The call to bpf_get_stack populates the specified map with the
-    // actual call stack.
-    //
-    event->allocSize = size * count;
-    event->pid = target_PID;
-    event->resourceType = RESTRACK_ALLOC;
-    event->allocAddress = 0;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
-
-    //
-    // Update the arguments hashmap with the entry. We'll fetch the entry when
-    // we exit the calloc and update other fields (such as allocation ptr) and then
-    // send to user mode.
-    //
-    if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
-    {
-        BPF_PRINTK("Failed to update arguments hashmap\n");
-        return 1;
-    }
-
+    ResourceAllocHelper(size, ctx);
 	return 0;
 }
 
@@ -330,40 +331,7 @@ int BPF_KPROBE(uprobe_calloc, int count, long size)
 SEC("uretprobe/libc.so.6:calloc")
 int BPF_KRETPROBE(uretprobe_calloc, void* ret)
 {
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    struct ResourceInformation* event;
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t p = pidTid >> 32;
-    if (p != target_PID || ret == NULL)
-    {
-        return 1;
-    }
-
-    //
-    // Get the map storage for event.
-    // This was created on the preceding calloc enter probe.
-    // If the pid is in our map then we must have stored it
-    //
-    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
-    if (event == NULL)
-    {
-        return 1;
-    }
-
-    event->allocAddress = (unsigned long) ret;
-
-    //
-    // Send the event to the ring buffer (user land)
-    //
-	bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0);
-
-    //
-    // Cleanup args hashmap entry
-    //
-    bpf_map_delete_elem(&argsHashMap, &pidTid);
+    SendEvent(ret);
     return 0;
 }
 
@@ -373,56 +341,9 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
 // This is the entry point for the realloc uprobe. It's called when realloc is called.
 // ------------------------------------------------------------------------------------------
 SEC("uprobe/libc.so.6:realloc")
-int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
+int BPF_KPROBE(uprobe_realloc, void* ptr, unsigned long size)
 {
-    struct ResourceInformation* event;
-    int element = 0;
-    long ret = 0;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || CheckSampleRate() == false)
-    {
-        return 1;
-    }
-
-    //
-    // Get heap element from the map
-    //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event == NULL)
-    {
-		return 1;
-    }
-
-    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
-
-    //
-    // Setup the event we want to transfer to usermode.
-    // The call to bpf_get_stack populates the specified map with the
-    // actual call stack.
-    //
-    event->allocSize = size;
-    event->pid = target_PID;
-    event->resourceType = RESTRACK_ALLOC;
-    event->allocAddress = 0;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
-
-    //
-    // Update the arguments hashmap with the entry. We'll fetch the entry when
-    // we exit the realloc and update other fields (such as allocation ptr) and then
-    // send to user mode.
-    //
-    if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
-    {
-        BPF_PRINTK("Failed to update arguments hashmap\n");
-        return 1;
-    }
-
-    BPF_PRINTK("realloc called with size = %d, target PID = %d, stacklen = %d\n", size, target_PID, event->callStackLen);
+    ResourceAllocHelper(size, ctx);
 	return 0;
 }
 
@@ -434,40 +355,7 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, long size)
 SEC("uretprobe/libc.so.6:realloc")
 int BPF_KRETPROBE(uretprobe_realloc, void* ret)
 {
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    struct ResourceInformation* event;
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t p = pidTid >> 32;
-    if (p != target_PID || ret == NULL)
-    {
-        return 1;
-    }
-
-    //
-    // Get the map storage for event.
-    // This was created on the preceding realloc enter probe.
-    // If the pid is in our map then we must have stored it
-    //
-    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
-    if (event == NULL)
-    {
-        return 1;
-    }
-
-    event->allocAddress = (unsigned long) ret;
-
-    //
-    // Send the event to the ring buffer (user land)
-    //
-	bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0);
-
-    //
-    // Cleanup args hashmap entry
-    //
-    bpf_map_delete_elem(&argsHashMap, &pidTid);
+    SendEvent(ret);
     return 0;
 }
 
@@ -478,99 +366,20 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
 // This is the entry point for the reallocarray uprobe. It's called when reallocarray is called.
 // ------------------------------------------------------------------------------------------
 SEC("uprobe/libc.so.6:reallocarray")
-int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, long size)
+int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, unsigned long size)
 {
-    struct ResourceInformation* event;
-    int element = 0;
-    long ret = 0;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || CheckSampleRate() == false)
-    {
-        return 1;
-    }
-
-    //
-    // Get heap element from the map
-    //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event == NULL)
-    {
-		return 1;
-    }
-
-    ZeroMemory((char*) event, sizeof(struct ResourceInformation));
-
-    //
-    // Setup the event we want to transfer to usermode.
-    // The call to bpf_get_stack populates the specified map with the
-    // actual call stack.
-    //
-    event->allocSize = size*count;
-    event->pid = target_PID;
-    event->resourceType = RESTRACK_ALLOC;
-    event->allocAddress = 0;
-    event->callStackLen = bpf_get_stack(ctx, event->stackTrace, sizeof(event->stackTrace), BPF_F_USER_STACK) / sizeof(__u64);
-
-    //
-    // Update the arguments hashmap with the entry. We'll fetch the entry when
-    // we exit the reallocarray and update other fields (such as allocation ptr) and then
-    // send to user mode.
-    //
-    if ((ret = bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY)) != 0)
-    {
-        BPF_PRINTK("Failed to update arguments hashmap\n");
-        return 1;
-    }
-
+    ResourceAllocHelper(size, ctx);
 	return 0;
 }
 
 // ------------------------------------------------------------------------------------------
-// uretprobe_remalloc
+// uretprobe_reallocarray
 //
 // This is the entry point for the reallocarray exit uprobe. It's called when reallocarray is exiting.
 // ------------------------------------------------------------------------------------------
 SEC("uretprobe/libc.so.6:reallocarray")
 int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
 {
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    struct ResourceInformation* event;
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t p = pidTid >> 32;
-    if (p != target_PID || ret == NULL)
-    {
-        return 1;
-    }
-
-    //
-    // Get the map storage for event.
-    // This was created on the preceding reallocarray enter probe.
-    // If the pid is in our map then we must have stored it
-    //
-    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
-    if (event == NULL)
-    {
-        return 1;
-    }
-
-    event->allocAddress = (unsigned long) ret;
-
-    //
-    // Send the event to the ring buffer (user land)
-    //
-	bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0);
-
-    //
-    // Cleanup args hashmap entry
-    //
-    bpf_map_delete_elem(&argsHashMap, &pidTid);
+    SendEvent(ret);
     return 0;
 }
