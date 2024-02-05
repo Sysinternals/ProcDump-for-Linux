@@ -237,7 +237,7 @@ SEC("uprobe/libc.so.6:mmap")
 int sys_mmap_enter(struct pt_regs *ctx)
 {
     ResourceAllocHelper((unsigned long) PT_REGS_PARM2(ctx), ctx);
-return 0;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
