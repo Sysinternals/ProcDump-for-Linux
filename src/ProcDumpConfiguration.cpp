@@ -1192,7 +1192,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
 void PrintBanner()
 {
     printf("\nProcDump v%s - Sysinternals process dump utility\n", STRFILEVER);
-    printf("Copyright (C) 2023 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
+    printf("Copyright (C) 2024 Microsoft Corporation. All rights reserved. Licensed under the MIT license.\n");
     printf("Mark Russinovich, Mario Hewardt, John Salem, Javid Habibi\n");
     printf("Sysinternals - www.sysinternals.com\n\n");
 
