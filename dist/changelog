@@ -1,3 +1,6 @@
+* Mon Feb 5 2024 Mario Hewardt <marioh@microsoft.com> - 3.2
+- Adds mmap/munmap to resource tracking
+
 * Tue Jan 23 2024 Mario Hewardt <marioh@microsoft.com> - 3.1
 - Adds ability to specify multiple comma separated signals
 - Adds the new -mc switch which controls what type of memory is included in the core dumps

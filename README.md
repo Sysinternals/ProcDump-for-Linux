@@ -68,6 +68,20 @@ Options:
    -w      Wait for the specified process to launch if it's not running.
    -pgid   Process ID specified refers to a process group ID.
 ```
+### Resource Tracking
+The -restrack switch activates resource tracking, allowing for the monitoring and reporting of any resource allocations that have not been freed at the time of generating the core dump. The results are saved to a file with a '.restrack' extension. Currently, the following resource allocation/deallocation functions are tracked:
+
+Allocation:
+* malloc
+* calloc
+* realloc
+* reallocarray
+* mmap
+
+Deallocation:
+* free
+* munmap
+
 ### Examples
 > The following examples all target a process with pid == 1234
 
