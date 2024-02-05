@@ -143,7 +143,7 @@ static inline int ResourceFreeHelper(void* alloc)
 	if (event == NULL)
     {
         BPF_PRINTK("[ResourceFreeHelper] Failed: Getting event (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
-		return 1;
+        return 1;
     }
 
     ZeroMemory((char*) event, sizeof(struct ResourceInformation));
@@ -237,7 +237,7 @@ SEC("uprobe/libc.so.6:mmap")
 int sys_mmap_enter(struct pt_regs *ctx)
 {
     ResourceAllocHelper((unsigned long) PT_REGS_PARM2(ctx), ctx);
-	return 0;
+return 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -257,7 +257,7 @@ SEC("uprobe/libc.so.6:munmap")
 int sys_munmap_enter(struct pt_regs *ctx)
 {
     ResourceFreeHelper((void*) PT_REGS_PARM1(ctx));
-	return 0;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -277,7 +277,7 @@ SEC("uprobe/libc.so.6:malloc")
 int BPF_KPROBE(uprobe_malloc, unsigned long size)
 {
     ResourceAllocHelper(size, ctx);
-	return 0;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -297,7 +297,7 @@ SEC("uprobe/libc.so.6:free")
 int BPF_KRETPROBE(uprobe_free, void* alloc)
 {
     ResourceFreeHelper(alloc);
-	return 0;
+    return 0;
 }
 
 
@@ -320,7 +320,7 @@ SEC("uprobe/libc.so.6:calloc")
 int BPF_KPROBE(uprobe_calloc, int count, unsigned long size)
 {
     ResourceAllocHelper(size, ctx);
-	return 0;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -344,7 +344,7 @@ SEC("uprobe/libc.so.6:realloc")
 int BPF_KPROBE(uprobe_realloc, void* ptr, unsigned long size)
 {
     ResourceAllocHelper(size, ctx);
-	return 0;
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
