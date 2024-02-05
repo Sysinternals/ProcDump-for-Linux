@@ -1070,7 +1070,12 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         if (self->DumpGCGeneration != -1)
         {
             printf("%-40s", "GC Generation/heap:");
-            if(self->DumpGCGeneration == 3)
+
+            if(self->DumpGCGeneration == CUMULATIVE_GC_SIZE)
+            {
+                printf("Cumulative\n");
+            }
+            else if(self->DumpGCGeneration == 3)
             {
                 printf("LOH\n");
             }
