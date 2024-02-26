@@ -21,12 +21,8 @@ sudo apt-get install procdump
 ## Debian 11
 #### 1. Register Microsoft key and feed
 ```sh
-wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.asc.gpg
-sudo mv microsoft.asc.gpg /etc/apt/trusted.gpg.d/
-wget -q https://packages.microsoft.com/config/debian/11/prod.list
-sudo mv prod.list /etc/apt/sources.list.d/microsoft-prod.list
-sudo chown root:root /etc/apt/trusted.gpg.d/microsoft.asc.gpg
-sudo chown root:root /etc/apt/sources.list.d/microsoft-prod.list
+wget -q https://packages.microsoft.com/config/debian/11/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
 ```
 
 #### 2. Install Procdump
@@ -40,12 +36,8 @@ sudo apt-get install procdump
 ## Debian 12
 #### 1. Register Microsoft key and feed
 ```sh
-wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.asc.gpg
-sudo mv microsoft.asc.gpg /etc/apt/trusted.gpg.d/
-wget -q https://packages.microsoft.com/config/debian/12/prod.list
-sudo mv prod.list /etc/apt/sources.list.d/microsoft-prod.list
-sudo chown root:root /etc/apt/trusted.gpg.d/microsoft.asc.gpg
-sudo chown root:root /etc/apt/sources.list.d/microsoft-prod.list
+wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
 ```
 
 #### 2. Install Procdump
@@ -59,8 +51,7 @@ sudo apt-get install procdump
 ## Fedora 37
 #### 1. Register Microsoft key and feed
 ```sh
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/fedora/37/prod.repo
+sudo rpm -Uvh https://packages.microsoft.com/config/fedora/37/packages-microsoft-prod.rpm
 ```
 
 #### 2. Install Procdump
@@ -71,8 +62,7 @@ sudo dnf install procdump
 ## Fedora 38
 #### 1. Register Microsoft key and feed
 ```sh
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/fedora/38/prod.repo
+sudo rpm -Uvh https://packages.microsoft.com/config/fedora/38/packages-microsoft-prod.rpm
 ```
 
 #### 2. Install Procdump
@@ -83,8 +73,7 @@ sudo dnf install procdump
 ## RHEL 7
 #### 1. Register Microsoft key and feed
 ```sh
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/rhel/7/prod.repo
+sudo rpm -Uvh https://packages.microsoft.com/config/rhel/7/packages-microsoft-prod.rpm
 ```
 
 #### 2. Install Procdump
@@ -95,8 +84,7 @@ sudo yum install procdump
 ## RHEL 8
 #### 1. Register Microsoft key and feed
 ```sh
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/rhel/8/prod.repo
+sudo rpm -Uvh https://packages.microsoft.com/config/rhel/8/packages-microsoft-prod.rpm
 ```
 
 #### 2. Install Procdump
@@ -107,8 +95,7 @@ sudo yum install procdump
 ## RHEL 9
 #### 1. Register Microsoft key and feed
 ```sh
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-sudo wget -q -O /etc/yum.repos.d/microsoft-prod.repo https://packages.microsoft.com/config/rhel/9/prod.repo
+sudo rpm -Uvh https://packages.microsoft.com/config/rhel/9/packages-microsoft-prod.rpm
 ```
 
 #### 2. Install Procdump
