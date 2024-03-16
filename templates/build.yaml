@@ -1,13 +1,11 @@
 parameters:
-- name: ccopts
+- name: srcPath
   type: string
-  default: ''
-- name: extra
-  type: string
-  default: ''
+  default: '.'
 
 steps:
 - script: |
+    cd ${{ parameters.srcPath }}
     mkdir procdump_build && cd procdump_build
     cmake ..
     make
