@@ -33,7 +33,7 @@ stages:
       - template: templates/build.yaml
 
       - script: |
-          cd build/tests/integration
+          cd procdump_build/tests/integration
           sudo ./run.sh
         displayName: 'Run unit tests'
 

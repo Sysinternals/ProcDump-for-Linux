@@ -8,7 +8,7 @@ parameters:
 
 steps:
 - script: |
-    mkdir build && cd build
+    mkdir procdump_build && cd procdump_build
     cmake ..
     make
   displayName: "Build ProcDump binaries"
