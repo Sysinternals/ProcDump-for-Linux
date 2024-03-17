@@ -2,6 +2,9 @@ parameters:
 - name: srcPath
   type: string
   default: '.'
+- name: runStaticAnalysis
+  type: boolean
+  default: False
 
 steps:
 - script: |
