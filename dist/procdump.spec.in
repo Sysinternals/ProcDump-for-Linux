@@ -39,12 +39,12 @@ general process dump utility that you can embed in other scripts.
 
 
 %build
-# The makefile doesn't like %%make_build (parallel make)
-make CFLAGS="%{optflags}"
+%cmake
+%cmake_build
 
 
 %install
-%make_install
+%cmake_install
 
 
 %files
