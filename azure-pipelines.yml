@@ -13,15 +13,14 @@ pr:
 stages:
  - stage: "Build"
    jobs:
-    - job: "ProcDump_Run_Unit_Tests"
+    - job: "ProcDump_Build_Run_Unit_Tests"
       pool:
-        name: "Sysinternals-for-Linux-AME"
-        demands:
-        - ImageOverride -equals procdump-ubuntu-build-agent
+        vmImage: "ubuntu-20.04"
       steps:
       - script: |
           clang --version
           clang++ --version
+          gcc --version
         displayName: 'List compiler versions'
 
       - script: |
@@ -29,6 +28,17 @@ stages:
           rm -f /run/rsyslogd.pid
           service rsyslog start || true
         displayName: 'Enable syslog'
+
+      - script: |
+          chmod +x .devcontainer/install-ubuntu-dependencies.sh
+          .devcontainer/install-ubuntu-dependencies.sh
+        displayName: "Install pre-reqs for Ubuntu"
+
+      - script: |
+          clang --version
+          clang++ --version
+          gcc --version
+        displayName: 'List compiler versions'
 
       - template: templates/build.yaml
 
@@ -57,12 +67,3 @@ stages:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)/logs/procdumpprofiler.log'
           ArtifactName: 'procdumpprofiler.log'
           publishLocation: 'Container'
-
-    - job: "Build_ProcDump"
-      pool:
-        name: "Sysinternals-for-Linux-AME"
-        demands:
-        - ImageOverride -equals procdump-ubuntu-build-agent
-      steps:
-      - template: templates/build.yaml
-      displayName: 'Build ProcDump'
