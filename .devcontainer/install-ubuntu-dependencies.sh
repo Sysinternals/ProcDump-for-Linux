@@ -40,7 +40,7 @@ sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-12 100
 sudo rm -rf /usr/sbin/bpftool
 git clone --recurse-submodules https://github.com/libbpf/bpftool.git
 cd bpftool/src
-sudo make install
+sudo make CC=clang-12 install
 sudo ln -s /usr/local/sbin/bpftool /usr/sbin/bpftool
 
 # install debbuild
