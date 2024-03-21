@@ -5,7 +5,7 @@ sudo apt-get update
 sudo apt -y install software-properties-common
 sudo add-apt-repository "deb http://security.ubuntu.com/ubuntu xenial-security main"
 sudo apt-get update
-sudo apt upgrade -y \
+sudo apt -y \
 && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
