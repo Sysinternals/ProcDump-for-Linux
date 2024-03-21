@@ -20,6 +20,7 @@ stages:
       - script: |
           clang --version
           clang++ --version
+          gcc --version
         displayName: 'List compiler versions'
 
       - script: |
@@ -36,6 +37,7 @@ stages:
       - script: |
           clang --version
           clang++ --version
+          gcc --version
         displayName: 'List compiler versions'
 
       - template: templates/build.yaml

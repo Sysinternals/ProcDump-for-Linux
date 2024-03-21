@@ -27,7 +27,6 @@ sudo apt-get install -y --no-install-recommends \
     pax \
     cmake \
     libelf-dev \
-    clang \
     clang-12 \
     llvm \
     build-essential \
@@ -35,13 +34,15 @@ sudo apt-get install -y --no-install-recommends \
 
 # Set preference to clang-12
 yes '' | sudo update-alternatives --force --all
+sudo update-alternatives --remove-all clang
 sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-12 100
+sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-12 100
+sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-12 100
 
 # Build and install bpftool
 sudo rm -rf /usr/sbin/bpftool
 git clone --recurse-submodules https://github.com/libbpf/bpftool.git
 cd bpftool/src
-make HOSTCC=clang-12
 sudo make install
 sudo ln -s /usr/local/sbin/bpftool /usr/sbin/bpftool
 
