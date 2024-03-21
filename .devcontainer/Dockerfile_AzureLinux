@@ -1,33 +1,6 @@
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 
-# install all needed packages for builds
-RUN yum install -y ca-certificates \
-    git \
-    gdb \
-    zlib-devel \
-    gcc \
-    rpm-build \
-    make \
-    curl \
-    libcurl-devel \
-    libicu-devel \
-    libunwind-devel \
-    nmap \
-    wget \
-    clang \
-    glibc-devel \
-    kernel-headers-5.15.125.1-2.cm2.noarch \
-    binutils \
-    lsb-release \
-    cmake \
-    bpftool \
-    libbpf-devel
-
-# install JQ since it doesn't have a .rpm package
-RUN curl https://stedolan.github.io/jq/download/linux64/jq > /usr/bin/jq && chmod +x /usr/bin/jq
-
-# install .net core 6 for ESRP signing and integration tests
-RUN yum install -y dotnet-sdk-6.0
-
-# Update packages to latest
-RUN yum update -y
+# Install dependencies
+COPY install-mariner-dependencies.sh /usr/local/bin/install_dependencies.sh
+RUN chmod +x /usr/local/bin/install_dependencies.sh && \
+    /usr/local/bin/install_dependencies.sh
