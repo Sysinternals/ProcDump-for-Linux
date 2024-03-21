@@ -33,6 +33,11 @@ stages:
           .devcontainer/install-ubuntu-dependencies.sh
         displayName: "Install pre-reqs for Ubuntu"
 
+      - script: |
+          clang --version
+          clang++ --version
+        displayName: 'List compiler versions'
+
       - template: templates/build.yaml
 
       - script: |
