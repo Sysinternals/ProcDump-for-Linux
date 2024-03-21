@@ -34,6 +34,7 @@ sudo apt-get install -y --no-install-recommends \
     libbpf-dev
 
 # Set preference to clang-12
+yes '' | sudo update-alternatives --force --all
 sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-12 100
 
 # Build and install bpftool
