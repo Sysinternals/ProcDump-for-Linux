@@ -39,7 +39,7 @@ sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-12 100
 # Build and install bpftool
 sudo rm -rf /usr/sbin/bpftool
 sudo git clone --recurse-submodules https://github.com/libbpf/bpftool.git
-sudo cd bpftool/src
+cd bpftool/src
 sudo make install
 sudo ln -s /usr/local/sbin/bpftool /usr/sbin/bpftool
 
