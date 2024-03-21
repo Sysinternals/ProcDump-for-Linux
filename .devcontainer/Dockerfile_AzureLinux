@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 
 # Install dependencies
-COPY install-mariner-dependencies.sh /usr/local/bin/install_dependencies.sh
+COPY install-azurelinux-dependencies.sh /usr/local/bin/install_dependencies.sh
 RUN chmod +x /usr/local/bin/install_dependencies.sh && \
     /usr/local/bin/install_dependencies.sh
