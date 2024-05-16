@@ -20,7 +20,7 @@ if [ $? -eq -1 ]; then
 fi
 
 # Wait for 3 GC commit thresholds (10, 20 and 30MB)
-sudo $PROCDUMPPATH -log -gcm POH:10,20,30 -w TestWebApi&
+sudo $PROCDUMPPATH -log stdout -gcm POH:10,20,30 -w TestWebApi&
 
 # waiting for procdump child process
 PROCDUMPCHILDPID=-1

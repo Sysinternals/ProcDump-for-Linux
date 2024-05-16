@@ -18,10 +18,37 @@
 #include "procdump_ebpf_common.h"
 
 pid_t target_PID;
+uint dev, inode;
 int sampleRate;
 int currentSampleCount;
+bool isLoggingEnabled;
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+
+// ------------------------------------------------------------------------------------------
+// GetFilterPidTgid
+//
+// Returns the PID and TID of the current process.
+// ------------------------------------------------------------------------------------------
+__attribute__((always_inline))
+static inline bool GetFilterPidTgid(struct bpf_pidns_info* pidns)
+{
+    if(bpf_get_ns_current_pid_tgid(dev, inode, pidns, sizeof(*pidns)))
+    {
+        return false;
+    }
+
+    //
+    // Only trace PIDs that matched the target PID and if we should sample this event.
+    //
+    if (pidns->tgid != target_PID)
+    {
+        return false;
+    }
+
+    return true;
+}
+
 
 // ------------------------------------------------------------------------------------------
 // CheckSampleRate
@@ -66,17 +93,15 @@ static inline void ZeroMemory(char* ptr, unsigned int size)
 // Sends the allocation/free event
 // ------------------------------------------------------------------------------------------
 __attribute__((always_inline))
-static inline int SendEvent(void* alloc)
+static inline int SendEvent(void* alloc, bool freeOp, struct bpf_pidns_info* pidns)
 {
     struct ResourceInformation* event = NULL;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
     int ret = 1;
 
     //
     // Only trace PIDs that matched the target PID and have non NULL allocations
     //
-    uint64_t p = pidTid >> 32;
-    if (p != target_PID || alloc == NULL)
+    if (freeOp == false && alloc == NULL)
     {
         return 1;
     }
@@ -84,34 +109,41 @@ static inline int SendEvent(void* alloc)
     //
     // Get event
     //
-    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidTid);
+    event = (struct ResourceInformation*) bpf_map_lookup_elem(&argsHashMap, &pidns->pid);
     if (event == NULL)
     {
-        BPF_PRINTK("[SendEvent] Failed: Getting event (allocation address: 0x%lx, target PID: %d)\n", alloc, target_PID);
+        BPF_PRINTK("   [SendEvent] Failed: Getting event (allocation address: 0x%lx, target PID: %d)", alloc, target_PID);
         return 1;
     }
 
     //
-    // Set the allocation address
+    // Set the allocation address if its an allocation operation
     //
-    event->allocAddress = (unsigned long) alloc;
+    if(freeOp == false)
+    {
+        event->allocAddress = (unsigned long) alloc;
+        BPF_PRINTK("   [SendEvent] Allocation size:0x%lx", event->allocSize);
+    }
+
+    {BPF_PRINTK("   [SendEvent] Allocation :0x%lx", event->allocAddress);}
 
     //
     // Send the event to the ring buffer (user land)
     //
-	if((ret = bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0)) != 0)
+    if((ret = bpf_ringbuf_output(&ringBuffer, event, sizeof(*event), 0)) != 0)
     {
-        BPF_PRINTK("[SendEvent] Failed: Getting event (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
+        BPF_PRINTK("   [SendEvent] Failed: Getting event (type: %d, allocation address: 0x%lx, target PID: %d)", event->resourceType, event->allocAddress, target_PID);
         return ret;
     }
 
-    if((ret = bpf_map_delete_elem(&argsHashMap, &pidTid)) != 0)
+    {BPF_PRINTK("   [SendEvent] Deleting event for %ld", pidns->pid);}
+    if((ret = bpf_map_delete_elem(&argsHashMap, &pidns->pid)) != 0)
     {
-        BPF_PRINTK("[SendEvent] Failed: Getting event (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
+        BPF_PRINTK("   [SendEvent] Failed: Deleting event (type: %d, allocation address: 0x%lx, target PID: %d)", event->resourceType, event->allocAddress, target_PID);
         return ret;
     }
 
-    BPF_PRINTK("[SendEvent] Success: (type: %d, allocation address: 0x%lx, target PID: %d)\n", event->resourceType, alloc, target_PID);
+    BPF_PRINTK("   [SendEvent] Success: (type: %d, allocation address: 0x%lx, target PID: %d)", event->resourceType, event->allocAddress, target_PID);
     return 0;
 }
 
@@ -121,28 +153,18 @@ static inline int SendEvent(void* alloc)
 // Helper for all the intercepted free functions.
 // ------------------------------------------------------------------------------------------
 __attribute__((always_inline))
-static inline int ResourceFreeHelper(void* alloc)
+static inline int ResourceFreeHelper(void* alloc, struct bpf_pidns_info* pidns)
 {
     struct ResourceInformation* event = NULL;
-    int element = 1;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-
-    //
-    // Only trace PIDs that matched the target PID
-    //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || alloc == NULL)
-    {
-        return 0;
-    }
+    uint32_t map_id = bpf_get_smp_processor_id();
 
     //
     // Get heap element from the map
     //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event == NULL)
+    event = bpf_map_lookup_elem(&heapStorage, &map_id);
+    if (event == NULL)
     {
-        BPF_PRINTK("[ResourceFreeHelper] Failed: Getting event (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
+        BPF_PRINTK("   [ResourceFreeHelper] Failed: Getting event (allocation: 0x%lx, target PID: %d)", alloc, target_PID);
         return 1;
     }
 
@@ -160,13 +182,13 @@ static inline int ResourceFreeHelper(void* alloc)
     // we free the allocation and update other fields (such as allocation ptr) and then
     // send to user mode.
     //
-    if (bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY) != 0)
+    if (bpf_map_update_elem(&argsHashMap, &pidns->pid, event, BPF_ANY) != 0)
     {
-        BPF_PRINTK("[ResourceFreeHelper] Failed: Updating event (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
+        BPF_PRINTK("   [ResourceFreeHelper] Failed: Updating event (allocation: 0x%lx, target PID: %d)", alloc, target_PID);
         return 1;
     }
 
-    BPF_PRINTK("[ResourceFreeHelper] Success: (allocation: 0x%lx, target PID: %d)\n", alloc, target_PID);
+    BPF_PRINTK("   [ResourceFreeHelper] Success: (allocation: 0x%lx, target PID: %d)", alloc, target_PID);
     return 0;
 }
 
@@ -177,17 +199,15 @@ static inline int ResourceFreeHelper(void* alloc)
 // Helper for all the intercepted allocation functions.
 // ------------------------------------------------------------------------------------------
 __attribute__((always_inline))
-static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx)
+static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx, struct bpf_pidns_info* pidns)
 {
     struct ResourceInformation* event = NULL;
-    uint64_t pidTid = bpf_get_current_pid_tgid();
-    int element = 0;
+    uint32_t map_id = bpf_get_smp_processor_id();
 
     //
-    // Only trace PIDs that matched the target PID and if we should sample this event.
+    // Only trace if we should sample this event.
     //
-    uint64_t pid = pidTid >> 32;
-    if (pid != target_PID || CheckSampleRate() == false)
+    if (CheckSampleRate() == false)
     {
         return 0;
     }
@@ -195,14 +215,14 @@ static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx)
     //
     // Get heap element from the map
     //
-    event = bpf_map_lookup_elem(&heapStorage, &element);
-	if (event != NULL)
+    event = bpf_map_lookup_elem(&heapStorage, &map_id);
+    if (event != NULL)
     {
-		ZeroMemory((char*) event, sizeof(struct ResourceInformation));
+        ZeroMemory((char*) event, sizeof(struct ResourceInformation));
     }
     else
     {
-        BPF_PRINTK("[ResourceAllocHelper] Failed: Getting event (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+        BPF_PRINTK("   [ResourceAllocHelper] Failed: Getting event (allocation size: 0x%lx, target PID: %d)", size, target_PID);
         return 1;
     }
 
@@ -220,13 +240,13 @@ static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx)
     // we exit the malloc and update other fields (such as allocation ptr) and then
     // send to user mode.
     //
-    if (bpf_map_update_elem(&argsHashMap, &pidTid, event, BPF_ANY) != 0)
+    if (bpf_map_update_elem(&argsHashMap, &pidns->pid, event, BPF_ANY) != 0)
     {
-        BPF_PRINTK("[ResourceAllocHelper] Failed: Updating event (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+        BPF_PRINTK("   [ResourceAllocHelper] Failed: Updating event (allocation size: 0x%lx, target PID: %d)", size, target_PID);
         return 1;
     }
 
-    BPF_PRINTK("[ResourceAllocHelper] Success: (allocation size: 0x%lx, target PID: %d)\n", size, target_PID);
+    BPF_PRINTK("   [ResourceAllocHelper] Success: (allocation size: 0x%lx, target PID: %d)", size, target_PID);
     return 0;
 }
 
@@ -236,7 +256,14 @@ static inline int ResourceAllocHelper(unsigned long size, struct pt_regs *ctx)
 SEC("uprobe/libc.so.6:mmap")
 int sys_mmap_enter(struct pt_regs *ctx)
 {
-    ResourceAllocHelper((unsigned long) PT_REGS_PARM2(ctx), ctx);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** sys_mmap_enter, pid: %ld, tgid: %ld, size: %ld]", pidns.pid, pidns.tgid, (unsigned long) PT_REGS_PARM2(ctx));}
+    ResourceAllocHelper((unsigned long) PT_REGS_PARM2(ctx), ctx, &pidns);
     return 0;
 }
 
@@ -246,7 +273,14 @@ int sys_mmap_enter(struct pt_regs *ctx)
 SEC("uretprobe/libc.so.6:mmap")
 int sys_mmap_exit(struct pt_regs *ctx)
 {
-    SendEvent((void*) PT_REGS_RC(ctx));
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** sys_mmap_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent((void*) PT_REGS_RC(ctx), false, &pidns);
     return 0;
 }
 
@@ -256,7 +290,14 @@ int sys_mmap_exit(struct pt_regs *ctx)
 SEC("uprobe/libc.so.6:munmap")
 int sys_munmap_enter(struct pt_regs *ctx)
 {
-    ResourceFreeHelper((void*) PT_REGS_PARM1(ctx));
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** sys_munmap_enter, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    ResourceFreeHelper((void*) PT_REGS_PARM1(ctx), &pidns);
     return 0;
 }
 
@@ -266,7 +307,14 @@ int sys_munmap_enter(struct pt_regs *ctx)
 SEC("uretprobe/libc.so.6:munmap")
 int sys_munmap_exit(struct pt_regs *ctx)
 {
-    SendEvent((void*) PT_REGS_PARM1(ctx));
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** sys_munmap_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(NULL, true, &pidns);
     return 0;
 }
 
@@ -276,7 +324,14 @@ int sys_munmap_exit(struct pt_regs *ctx)
 SEC("uprobe/libc.so.6:malloc")
 int BPF_KPROBE(uprobe_malloc, unsigned long size)
 {
-    ResourceAllocHelper(size, ctx);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** malloc_enter, pid:%ld, tgid: %ld, size: %ld]", pidns.pid, pidns.tgid, size);}
+    ResourceAllocHelper(size, ctx, &pidns);
     return 0;
 }
 
@@ -286,7 +341,14 @@ int BPF_KPROBE(uprobe_malloc, unsigned long size)
 SEC("uretprobe/libc.so.6:malloc")
 int BPF_KRETPROBE(uretprobe_malloc, void* ret)
 {
-    SendEvent(ret);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** malloc_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(ret, false, &pidns);
     return 0;
 }
 
@@ -294,9 +356,16 @@ int BPF_KRETPROBE(uretprobe_malloc, void* ret)
 // uprobe_free
 // ------------------------------------------------------------------------------------------
 SEC("uprobe/libc.so.6:free")
-int BPF_KRETPROBE(uprobe_free, void* alloc)
+int BPF_KPROBE(uprobe_free, void* alloc)
 {
-    ResourceFreeHelper(alloc);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** free_enter, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    ResourceFreeHelper(alloc, &pidns);
     return 0;
 }
 
@@ -307,7 +376,14 @@ int BPF_KRETPROBE(uprobe_free, void* alloc)
 SEC("uretprobe/libc.so.6:free")
 int BPF_KRETPROBE(uretprobe_free, void* ret)
 {
-    SendEvent(ret);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** free_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(NULL, true, &pidns);
     return 0;
 }
 
@@ -319,7 +395,14 @@ int BPF_KRETPROBE(uretprobe_free, void* ret)
 SEC("uprobe/libc.so.6:calloc")
 int BPF_KPROBE(uprobe_calloc, int count, unsigned long size)
 {
-    ResourceAllocHelper(size, ctx);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** calloc_enter, pid: %ld, tgid: %ld, size: %ld]", pidns.pid, pidns.tgid, size*count);}
+    ResourceAllocHelper(size*count, ctx, &pidns);
     return 0;
 }
 
@@ -331,7 +414,14 @@ int BPF_KPROBE(uprobe_calloc, int count, unsigned long size)
 SEC("uretprobe/libc.so.6:calloc")
 int BPF_KRETPROBE(uretprobe_calloc, void* ret)
 {
-    SendEvent(ret);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** calloc_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(ret, false, &pidns);
     return 0;
 }
 
@@ -343,7 +433,14 @@ int BPF_KRETPROBE(uretprobe_calloc, void* ret)
 SEC("uprobe/libc.so.6:realloc")
 int BPF_KPROBE(uprobe_realloc, void* ptr, unsigned long size)
 {
-    ResourceAllocHelper(size, ctx);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** realloc_enter, pid:%ld, tgid: %ld, size:%ld]", pidns.pid, pidns.tgid, size);}
+    ResourceAllocHelper(size, ctx, &pidns);
     return 0;
 }
 
@@ -355,7 +452,14 @@ int BPF_KPROBE(uprobe_realloc, void* ptr, unsigned long size)
 SEC("uretprobe/libc.so.6:realloc")
 int BPF_KRETPROBE(uretprobe_realloc, void* ret)
 {
-    SendEvent(ret);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** realloc_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(ret, false, &pidns);
     return 0;
 }
 
@@ -368,8 +472,15 @@ int BPF_KRETPROBE(uretprobe_realloc, void* ret)
 SEC("uprobe/libc.so.6:reallocarray")
 int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, unsigned long size)
 {
-    ResourceAllocHelper(size, ctx);
-	return 0;
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** reallocarray_enter, pid: %ld, tgid: %ld, size: %ld]", pidns.pid, pidns.tgid, size*count);}
+    ResourceAllocHelper(size*count, ctx, &pidns);
+    return 0;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -380,6 +491,13 @@ int BPF_KPROBE(uprobe_reallocarray, void* ptr, long count, unsigned long size)
 SEC("uretprobe/libc.so.6:reallocarray")
 int BPF_KRETPROBE(uretprobe_reallocarray, void* ret)
 {
-    SendEvent(ret);
+    struct bpf_pidns_info pidns = {};
+    if(GetFilterPidTgid(&pidns) == false)
+    {
+        return 0;
+    }
+
+    {BPF_PRINTK("[***** reallocarray_exit, pid: %ld, tgid: %ld]", pidns.pid, pidns.tgid);}
+    SendEvent(ret, false, &pidns);
     return 0;
 }

@@ -40,12 +40,6 @@ set(PROJECT_VERSION_TWEAK 0)
 file(READ "dist/changelog" CHANGE_LOG)
 
 #
-# enable Debug while pre-release; disable Debug in post-release
-#
-#set(CMAKE_BUILD_TYPE Debug)
-#option(DEBUG_K "Enter debug mode" On)
-
-#
 # package name
 #
 set(PACKAGE_NAME "procdump")

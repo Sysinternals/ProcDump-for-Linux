@@ -19,7 +19,7 @@
 #include <stdarg.h>
 #include <time.h>
 
-#define INTERNAL_ERROR "Internal Error has occurred. If problem continues to occur run procdump with -log flag to trace issue (traces go into syslog)"
+#define INTERNAL_ERROR "Internal Error has occurred. If problem continues to occur run procdump with -log flag to trace issue."
 
 // double-macro-stringify to expand __FILE__ and __LINE__ properly when they are injected in files
 #define S1(x) #x

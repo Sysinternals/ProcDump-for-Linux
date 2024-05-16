@@ -81,6 +81,7 @@ struct CoreDumpWriter {
 struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDumpConfiguration *config);
 char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName);
 char* WriteCoreDump(struct CoreDumpWriter *self);
-char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type);
+char* GetCoreDumpPrefixName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type);
+char* GetCoreDumpName(ProcDumpConfiguration* config, ECoreDumpType type);
 
 #endif // CORE_DUMP_WRITER_H

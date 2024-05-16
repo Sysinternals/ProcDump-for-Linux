@@ -60,6 +60,13 @@ struct MonitoredProcessMapEntry
     long long starttime;
 };
 
+enum DiagnosticsLogTarget
+{
+    none,
+    diag_syslog,
+    diag_stdout
+};
+
 struct ProcDumpConfiguration
 {
     // Process and System info
@@ -73,6 +80,7 @@ struct ProcDumpConfiguration
     // Runtime Values
     int NumberOfDumpsCollecting; // Number of dumps we're collecting
     int NumberOfDumpsCollected; // Number of dumps we have collected
+    int NumberOfLeakReportsCollected; // Number of leak reports we have collected
     bool bTerminated; // Do we know whether the process has terminated and subsequently whether we are terminating?
     char* socketPath;
     bool bExitProcessMonitor;
@@ -101,7 +109,7 @@ struct ProcDumpConfiguration
     bool bTimerThreshold;           // -s
     int NumberOfDumpsToCollect;     // -n
     bool WaitingForProcessName;     // -w
-    bool DiagnosticsLoggingEnabled; // -log
+    DiagnosticsLogTarget DiagnosticsLoggingEnabled; // -log
     int ThreadThreshold;            // -tc
     int FileDescriptorThreshold;    // -fc
     int* SignalNumber;              // -sig
@@ -114,6 +122,7 @@ struct ProcDumpConfiguration
     char *ExceptionFilter;          // -f (unfortunately we named this ExceptionFilter event hough it can be used for other include filters as well)
     char *ExcludeFilter;            // -fx (exclude filter)
     bool bRestrackEnabled;          // -restrack
+    bool bRestrackGenerateDump;     // -restrack generate dump flag
     bool bLeakReportInProgress;
     int SampleRate;                 // Record every X resource allocation in restrack
     int CoreDumpMask;               // -mc (core dump mask)

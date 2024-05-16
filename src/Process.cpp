@@ -7,25 +7,61 @@
 //
 //--------------------------------------------------------------------
 #include "Includes.h"
+#include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 //--------------------------------------------------------------------
 //
-// GetProcessStat - Gets the process stats for the given pid
+// GetUids - Gets the process uids for the given pid
 //
 //--------------------------------------------------------------------
-bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
-    char procFilePath[32];
-    char fileBuffer[1024];
-    char *token;
-    char *savePtr = NULL;
-    struct dirent* entry = NULL;
+bool GetUids(pid_t pid, struct ProcessStat* proc)
+{
 
-    auto_free_file FILE *procFile = NULL;
+    std::ostringstream path;
+    path << "/proc/" << pid << "/status";
+
+    std::ifstream statusFile(path.str());
+    if (!statusFile.is_open())
+    {
+        Log(error, "Failed to open status file for pid: %d", pid);
+        return false;
+    }
+
+    std::string line;
+    while (std::getline(statusFile, line))
+    {
+        if (line.find("Uid:") == 0)
+        {
+            std::istringstream iss(line);
+            std::string uidTag, realUid, effectiveUid, savedUid, fsUid;
+            iss >> uidTag >> realUid >> effectiveUid >> savedUid >> fsUid;
+            proc->real_uid = std::stoi(realUid);
+            proc->effective_uid = std::stoi(effectiveUid);
+            proc->saved_uid = std::stoi(savedUid);
+            proc->fs_uid = std::stoi(fsUid);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//--------------------------------------------------------------------
+//
+// GetNumFileDescriptors - Gets the process stats for the given pid
+//
+//--------------------------------------------------------------------
+bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
+{
     auto_free_dir DIR* fddir = NULL;
+    struct dirent* entry = NULL;
+    char procFilePath[32];
 
-    // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
-    if(sprintf(procFilePath, "/proc/%d/fdinfo", pid) < 0){
+    if(sprintf(procFilePath, "/proc/%d/fdinfo", pid) < 0)
+    {
         return false;
     }
 
@@ -40,13 +76,42 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     }
     else
     {
-        Log(error, "Failed to open %s. Exiting...", procFilePath);
+        Log(error, "Failed to open %s [%s]", procFilePath, strerror(errno));
         return false;
 
     }
 
     proc->num_filedescriptors-=2;                   // Account for "." and ".."
 
+    return true;
+}
+
+//--------------------------------------------------------------------
+//
+// GetProcessStat - Gets the process stats for the given pid
+//
+//--------------------------------------------------------------------
+bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
+    char procFilePath[32];
+    char fileBuffer[1024];
+    char *token;
+    char *savePtr = NULL;
+
+    auto_free_file FILE *procFile = NULL;
+
+    // Get UID's in /proc/%d/status
+    if(GetUids(pid, proc) == false)
+    {
+        Log(error, "Failed to get UID's");
+        return false;
+    }
+
+    // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
+    if(GetNumFileDescriptors(pid, proc) == false)
+    {
+        Log(error, "Failed to get number of file descriptors");
+        return false;
+    }
 
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){

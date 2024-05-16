@@ -16,7 +16,7 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config);
 void StopRestrack(struct procdump_ebpf* skel);
 int RestrackHandleEvent(void *ctx, void *data, size_t data_sz);
 void* ReportLeaks(void* args);
-pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filename);
+pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, ECoreDumpType type);
 
 #endif // RESTRACK_H
 

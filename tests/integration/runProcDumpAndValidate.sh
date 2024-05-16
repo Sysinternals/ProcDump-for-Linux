@@ -38,9 +38,9 @@ function runProcDumpAndValidate {
 		echo "ChildPID: $childpid"
 
 		# We launch procdump in background and wait for 10 secs to complete the monitoring
-		echo "$PROCDUMPPATH -log $PREFIX $childpid $POSTFIX $dumpParam "
+		echo "$PROCDUMPPATH -log stdout $PREFIX $childpid $POSTFIX $dumpParam "
 		echo [`date +"%T.%3N"`] Starting ProcDump
-		$PROCDUMPPATH -log $PREFIX $childpid $POSTFIX $dumpParam&
+		$PROCDUMPPATH -log stdout $PREFIX $childpid $POSTFIX $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
 		sleep 30s
@@ -56,8 +56,8 @@ function runProcDumpAndValidate {
 	else
 		# We launch procdump in background and wait for target process to start
 		echo [`date +"%T.%3N"`] Starting ProcDump
-		echo "$PROCDUMPPATH -log $PREFIX -w $TESTPROGNAME" $POSTFIX $dumpParam
-		$PROCDUMPPATH -log $PREFIX -w "$TESTPROGNAME" $POSTFIX $dumpParam&
+		echo "$PROCDUMPPATH -log stdout $PREFIX -w $TESTPROGNAME" $POSTFIX $dumpParam
+		$PROCDUMPPATH -log stdout $PREFIX -w "$TESTPROGNAME" $POSTFIX $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
 

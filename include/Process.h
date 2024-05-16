@@ -201,6 +201,12 @@ struct ProcessStat {
 
     // NOTE: This does not come from /proc/[pid]/stat rather is populated by enumerating the /proc/<pid>>/fdinfo
     int num_filedescriptors;
+
+    // NOTE: Populated by enumerating the /proc/<pid>>/status
+    uid_t real_uid;
+    uid_t effective_uid;
+    uid_t saved_uid;
+    uid_t fs_uid;
 };
 
 //
@@ -272,7 +278,7 @@ struct ProcessStatus {
 };
 
 // -----------------------------------------------------------
-// a series of functions for collecting infromation from /procfs
+// a series of functions for collecting information from /procfs
 // -----------------------------------------------------------
 
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc);

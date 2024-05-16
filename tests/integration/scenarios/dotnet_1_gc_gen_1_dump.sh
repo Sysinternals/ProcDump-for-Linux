@@ -20,7 +20,7 @@ if [ $? -eq -1 ]; then
 fi
 
 # Wait for 2 dumps (gc start and finish) for generation 1
-sudo $PROCDUMPPATH -log -gcgen 1 -w TestWebApi&
+sudo $PROCDUMPPATH -log stdout -gcgen 1 -w TestWebApi&
 
 # waiting for procdump child process
 PROCDUMPCHILDPID=-1

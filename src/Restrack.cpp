@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <string>
 #include <fstream>
+#include <memory>
 
 typedef struct {
     unsigned int type;
@@ -60,7 +61,7 @@ extern struct ProcDumpConfiguration g_config;
 // ------------------------------------------------------------------------------------------
 static int libbpf_print_fn(enum libbpf_print_level level, const char *format, va_list args)
 {
-    if(g_config.DiagnosticsLoggingEnabled == true)
+    if(g_config.DiagnosticsLoggingEnabled != none)
     {
         return vfprintf(stderr, format, args);
     }
@@ -114,7 +115,7 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config)
     //
     // Setup extended error logging
     //
-    if(config->DiagnosticsLoggingEnabled == true)
+    if(config->DiagnosticsLoggingEnabled != none)
     {
         libbpf_set_print(libbpf_print_fn);
     }
@@ -128,9 +129,26 @@ struct procdump_ebpf* RunRestrack(struct ProcDumpConfiguration *config)
         return skel;
     }
 
+    //
+    // Set eBPF program globals
+    //
+    std::string path = "/proc/" + std::to_string(config->ProcessId) + "/ns/pid";
+    struct stat sb = {};
+    if (stat(path.c_str(), &sb) == -1)
+    {
+        Trace("Failed to stat %s (%s)\n", path.c_str(), strerror(errno));
+        return NULL;
+    }
+
+    skel->bss->dev = sb.st_dev;
+    skel->bss->inode = sb.st_ino;
     skel->bss->target_PID = config->ProcessId;
     skel->bss->sampleRate = config->SampleRate;
     skel->bss->currentSampleCount = 1;
+    if(config->DiagnosticsLoggingEnabled != none)
+    {
+        skel->bss->isLoggingEnabled = true;
+    }
 
     ret = procdump_ebpf__load(skel);
     if (ret)
@@ -176,7 +194,7 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
             activeConfigurations[event->pid]->memAllocMap[(uintptr_t) event->allocAddress] = event;
             pthread_mutex_unlock(&activeConfigurations[event->pid]->memAllocMapMutex);
 
-            if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled == true)
+            if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled != none)
             {
                 Trace("Got event: Alloc size: %ld 0x%lx\n", event->allocSize, event->allocAddress);
             }
@@ -199,7 +217,7 @@ int RestrackHandleEvent(void *ctx, void *data, size_t data_sz)
                 activeConfigurations[event->pid]->memAllocMap.erase((uintptr_t) event->allocAddress);
                 pthread_mutex_unlock(&activeConfigurations[event->pid]->memAllocMapMutex);
 
-                if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled == true)
+                if(activeConfigurations[event->pid]->DiagnosticsLoggingEnabled != none)
                 {
                     Trace("Got event: free 0x%lx\n", event->allocAddress);
                 }
@@ -544,15 +562,22 @@ void* ReportLeaks(void* args)
 //
 // Writes the raw stack trace (IPs only) to the specified file.
 // ------------------------------------------------------------------------------------------
-pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filename)
+pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, ECoreDumpType type)
 {
+    //
+    // Generate the restrack filename
+    //
+    char* dumpFileName = GetCoreDumpName(config, type);
+    std::unique_ptr<char[]> owndumpFileName(dumpFileName);
+    std::string filename = (std::string(dumpFileName) + ".restrack");
+
     //
     // Create a thread to write the snapshot to avoid delays in the calling thread.
     // Important due to symbol resolution possibly taking a longer time.
     //
     leakThreadArgs* args = (leakThreadArgs*) malloc(sizeof(leakThreadArgs));
     args->config = config;
-    args->filename = strdup(filename);
+    args->filename = strdup(filename.c_str());
     pthread_t thread = 0;
     int ret = pthread_create(&thread, NULL, ReportLeaks, args);
     if(ret != 0)
@@ -561,5 +586,6 @@ pthread_t WriteRestrackSnapshot(ProcDumpConfiguration* config, const char* filen
         return 0;
     }
 
+    config->NumberOfLeakReportsCollected++;
     return thread;
 }

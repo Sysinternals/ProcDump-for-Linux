@@ -24,13 +24,12 @@
 #define USER_STACKID_FLAGS (0 | BPF_F_FAST_STACK_CMP | BPF_F_USER_STACK)
 #define ARGS_HASH_SIZE 10240
 
-#ifdef DEBUG_K
 #define BPF_PRINTK( format, ... ) \
-    char fmt[] = format; \
-    bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__ );
-#else
-#define BPF_PRINTK ((void)0);
-#endif
+    if(isLoggingEnabled == true) \
+    { \
+        char fmt[] = format; \
+        bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__ ); \
+    }
 
 //
 // This is a hashmap to hold resource arguments (such as size) between alloc and free calls.
@@ -40,10 +39,11 @@ struct argsStruct
     unsigned long size;
 };
 
-struct {
+struct
+{
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, ARGS_HASH_SIZE);
-    __type(key, uint64_t);
+    __type(key, int);
     __type(value, struct ResourceInformation);
 } argsHashMap SEC(".maps");
 
@@ -51,9 +51,10 @@ struct {
 //
 // Since stack space is minimal, we use this to store an event on the heap
 //
-struct {
+struct
+{
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-	__uint(max_entries, 2);
+	__uint(max_entries, 512);
 	__type(key, int);
 	__type(value, struct ResourceInformation);
 } heapStorage SEC(".maps");
@@ -61,7 +62,8 @@ struct {
 //
 // The ring buffer we use to communicate with user space
 //
-struct {
+struct
+{
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 10 * 1024 * 1024 /* 10 MB */);
 } ringBuffer SEC(".maps");

@@ -152,6 +152,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bProcessGroup =               false;
     self->ProcessGroup =                NO_PID;
     self->NumberOfDumpsCollected =      0;
+    self->NumberOfLeakReportsCollected = 0;
     self->NumberOfDumpsToCollect =      -1;
     self->CpuThreshold =                -1;
     self->bCpuTriggerBelowValue =       false;
@@ -168,7 +169,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->bMemoryTriggerBelowValue =    false;
     self->bTimerThreshold =             false;
     self->WaitingForProcessName =       false;
-    self->DiagnosticsLoggingEnabled =   false;
+    self->DiagnosticsLoggingEnabled =   none;
     self->gcorePid =                    NO_PID;
     self->PollingInterval =             -1;
     self->CoreDumpPath =                NULL;
@@ -179,6 +180,7 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     self->ExceptionFilter =             NULL;
     self->ExcludeFilter =               NULL;
     self->bRestrackEnabled =            false;
+    self->bRestrackGenerateDump =       true;
     self->bLeakReportInProgress =       false;
     self->SampleRate =                  0;
     self->CoreDumpMask =                -1;
@@ -312,6 +314,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         // copy runtime values from original config
         copy->NumberOfDumpsCollecting = self->NumberOfDumpsCollecting;
         copy->NumberOfDumpsCollected = self->NumberOfDumpsCollected;
+        copy->NumberOfLeakReportsCollected = self->NumberOfLeakReportsCollected;
         copy->bTerminated = self->bTerminated;
 
         // copy trigger behavior from original config
@@ -342,6 +345,7 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         }
 
         copy->bRestrackEnabled = self->bRestrackEnabled;
+        copy->bRestrackGenerateDump = self->bRestrackGenerateDump;
         copy->bLeakReportInProgress = self->bLeakReportInProgress;
         copy->SampleRate = self->SampleRate;
         copy->CoreDumpMask = self->CoreDumpMask;
@@ -572,6 +576,17 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
                 return PrintUsage();
             }
 
+            if( i+1 >= argc)
+            {
+                return PrintUsage();
+            }
+
+            if(strcasecmp(argv[i+1], "nodump") == 0 )
+            {
+                self->bRestrackGenerateDump = false;
+                i++;
+            }
+
             self->bRestrackEnabled = true;
         }
         else if( 0 == strcasecmp( argv[i], "/sr" ) ||
@@ -695,7 +710,23 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         else if( 0 == strcasecmp( argv[i], "/log" ) ||
                     0 == strcasecmp( argv[i], "-log" ))
         {
-            self->DiagnosticsLoggingEnabled = true;
+            if( i+1 >= argc) return PrintUsage();
+
+            if( 0 == strcasecmp( argv[i+1], "stdout" ) )
+            {
+                self->DiagnosticsLoggingEnabled = diag_stdout;
+            }
+            else if( 0 == strcasecmp( argv[i+1], "syslog" ) )
+            {
+                self->DiagnosticsLoggingEnabled = diag_syslog;
+            }
+            else
+            {
+                Log(error, "Invalid diagnostics stream specified.");
+                return PrintUsage();
+            }
+
+            i++;
         }
         else if( 0 == strcasecmp( argv[i], "/e" ) ||
                     0 == strcasecmp( argv[i], "-e" ))
@@ -1215,7 +1246,7 @@ int PrintUsage()
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation]\n");
-    printf("            [-restrack]\n");
+    printf("            [-restrack [nodump]]\n");
     printf("            [-sr Sample_Rate]\n");
     printf("            [-tc Thread_Threshold]\n");
     printf("            [-fc FileDescriptor_Threshold]\n");
@@ -1226,7 +1257,7 @@ int PrintUsage()
     printf("            [-mc Custom_Dump_Mask]\n");
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
-    printf("            [-log]\n");
+    printf("            [-log syslog|stdout]\n");
     printf("            {\n");
     printf("             {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}\n");
     printf("            }\n");
@@ -1240,7 +1271,7 @@ int PrintUsage()
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
     printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).\n");
     printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
-    printf("   -restrack Enable memory leak tracking (malloc family of APIs).\n");
+    printf("   -restrack Enable memory leak tracking (malloc family of APIs). Use the nodump option to prevent dump generation and only produce restrack report(s).\n");
     printf("   -sr     Sample rate when using -restrack.\n");
     printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
     printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
@@ -1251,7 +1282,7 @@ int PrintUsage()
     printf("   -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.\n");
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
-    printf("   -log    Writes extended ProcDump tracing to syslog.\n");
+    printf("   -log    Writes extended ProcDump tracing to the specified output stream (syslog or stdout).\n");
     printf("   -w      Wait for the specified process to launch if it's not running.\n");
     printf("   -pgid   Process ID specified refers to a process group ID.\n");
 
