@@ -37,11 +37,6 @@ else()
 endif()
 
 set(PROJECT_VERSION_TWEAK 0)
-message("Project version: ${PROJECT_VERSION}")
-message("Project MAJOR version: ${PROJECT_VERSION_MAJOR}")
-message("Project MINOR version: ${PROJECT_VERSION_MINOR}")
-message("Project PATCH version: ${PROJECT_VERSION_PATCH}")
-
 file(READ "dist/changelog" CHANGE_LOG)
 
 #
