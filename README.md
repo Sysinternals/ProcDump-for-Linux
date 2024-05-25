@@ -39,7 +39,7 @@ Capture Usage:
             [-mc Custom_Dump_Mask]
             [-pf Polling_Frequency]
             [-o]
-            [-log]
+            [-log syslog|stdout]
             {
              {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
             }
@@ -64,7 +64,7 @@ Options:
    -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
-   -log    Writes extended ProcDump tracing to syslog.
+   -log    Writes extended ProcDump tracing to the specified output stream (syslog or stdout).
    -w      Wait for the specified process to launch if it's not running.
    -pgid   Process ID specified refers to a process group ID.
 ```

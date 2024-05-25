@@ -37,6 +37,8 @@ else()
 endif()
 
 set(PROJECT_VERSION_TWEAK 0)
+message("Project version: ${PROJECT_VERSION}")
+
 file(READ "dist/changelog" CHANGE_LOG)
 
 #
