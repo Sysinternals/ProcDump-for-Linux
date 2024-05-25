@@ -8,6 +8,7 @@ parameters:
 
 steps:
 - script: |
+    echo "Version = $(VERSION)"
     cd ${{ parameters.srcPath }}
     mkdir procdump_build && cd procdump_build
     cmake ..
