@@ -8,6 +8,8 @@
 //--------------------------------------------------------------------
 #include "Includes.h"
 
+#include <memory>
+
 static const char *CoreDumpTypeStrings[] = { "commit", "cpu", "thread", "filedesc", "signal", "time", "exception", "manual" };
 
 //--------------------------------------------------------------------
@@ -32,13 +34,47 @@ struct CoreDumpWriter *NewCoreDumpWriter(enum ECoreDumpType type, struct ProcDum
     return writer;
 }
 
-
 //--------------------------------------------------------------------
 //
 // GetCoreDumpName - Gets the core dump name
 //
 //--------------------------------------------------------------------
-char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type)
+char* GetCoreDumpName(ProcDumpConfiguration* config, ECoreDumpType type)
+{
+    char* name = sanitize(config->ProcessName);
+    char* gcorePrefixName = GetCoreDumpPrefixName(config->ProcessId, name, config->CoreDumpPath, config->CoreDumpName, type);
+    char* dumpName = (char*) malloc(PATH_MAX+1);
+    if(!dumpName)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("GetCoreDumpName: Memory allocation failure");
+        free(name);
+        free(gcorePrefixName);
+        return NULL;
+    }
+
+    if(snprintf(dumpName, PATH_MAX, "%s.%d", gcorePrefixName, config->ProcessId) < 0)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("GetCoreDumpName: failed sprintf core file name");
+        free(dumpName);
+        free(name);
+        free(gcorePrefixName);
+        return NULL;
+    }
+
+    free(name);
+    free(gcorePrefixName);
+
+    return dumpName;
+}
+
+//--------------------------------------------------------------------
+//
+// GetCoreDumpPrefixName - Gets the core dump prefix name
+//
+//--------------------------------------------------------------------
+char* GetCoreDumpPrefixName(pid_t pid, char* procName, char* dumpPath, char* dumpName, enum ECoreDumpType type)
 {
     auto_free char *name = sanitize(procName);
     time_t rawTime = {0};
@@ -50,7 +86,7 @@ char* GetCoreDumpName(pid_t pid, char* procName, char* dumpPath, char* dumpName,
     if(!gcorePrefixName)
     {
         Log(error, INTERNAL_ERROR);
-        Trace("GetCoreDumpName: Memory allocation failure");
+        Trace("GetCoreDumpPrefixName: Memory allocation failure");
         exit(-1);
     }
 
@@ -196,7 +232,7 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     char *name = sanitize(self->Config->ProcessName);
     pid_t pid = self->Config->ProcessId;
 
-    gcorePrefixName = GetCoreDumpName(self->Config->ProcessId, name, self->Config->CoreDumpPath, self->Config->CoreDumpName, self->Type);
+    gcorePrefixName = GetCoreDumpPrefixName(self->Config->ProcessId, name, self->Config->CoreDumpPath, self->Config->CoreDumpName, self->Type);
 
     // assemble the command
     if(snprintf(command, BUFFER_LENGTH, "gcore -o %s %d 2>&1", gcorePrefixName, pid) < 0)

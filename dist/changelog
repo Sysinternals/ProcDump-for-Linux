@@ -1,3 +1,6 @@
+* Sat May 25 2024 Mario Hewardt <marioh@microsoft.com> - 3.3
+- Adds improvements related to containerized workflows
+
 * Mon Feb 5 2024 Mario Hewardt <marioh@microsoft.com> - 3.2
 - Adds mmap/munmap to resource tracking
 

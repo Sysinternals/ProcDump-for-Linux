@@ -19,7 +19,7 @@ if [ $? -eq -1 ]; then
     exit 1
 fi
 
-sudo $PROCDUMPPATH -log -m 10,20,30 -w TestWebApi&
+sudo $PROCDUMPPATH -log stdout -m 10,20,30 -w TestWebApi&
 
 # waiting for procdump child process
 PROCDUMPCHILDPID=-1

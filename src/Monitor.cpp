@@ -13,6 +13,7 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 
 static pthread_t sig_thread_id;
 
@@ -168,6 +169,29 @@ ProcDumpConfiguration* GetNewMonitorConfiguration(ProcDumpConfiguration* sourceC
     return config;
 }
 
+//--------------------------------------------------------------------
+//
+// CheckAccess
+//
+// Checks to make sure we have access to the target process.
+//
+//--------------------------------------------------------------------
+bool CheckAccess(struct ProcDumpConfiguration *self)
+{
+    struct ProcessStat proc;
+    if(GetProcessStat(self->ProcessId, &proc) == false)
+    {
+        return false;
+    }
+
+    uid_t euid = geteuid();
+    if(euid == 0 || euid == proc.effective_uid)
+    {
+        return true;
+    }
+
+    return false;
+}
 
 //--------------------------------------------------------------------
 //
@@ -380,7 +404,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             pthread_mutex_lock(&activeConfigurationsMutex);
             for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
             {
-                if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
+                if (it->second->bTerminated ||
+                    it->second->nQuit ||
+                    it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect ||
+                    it->second->NumberOfLeakReportsCollected == it->second->NumberOfDumpsToCollect)
                 {
                     Log(info, "Stopping monitors for process: %s (%d)", it->second->ProcessName, it->second->ProcessId);
                     WaitForAllMonitorsToTerminate(it->second);
@@ -416,7 +443,10 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
 
         for (auto it = activeConfigurations.begin(); it != activeConfigurations.end(); )
         {
-            if(it->second->bTerminated || it->second->nQuit || it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect)
+            if (it->second->bTerminated ||
+                it->second->nQuit ||
+                it->second->NumberOfDumpsCollected == it->second->NumberOfDumpsToCollect ||
+                it->second->NumberOfLeakReportsCollected == it->second->NumberOfDumpsToCollect)
             {
                 SetQuit(it->second, 1);
                 WaitForAllMonitorsToTerminate(it->second);
@@ -579,6 +609,12 @@ int StartMonitor(struct ProcDumpConfiguration* monitorConfig)
 {
     int ret = 0;
 
+    if(CheckAccess(monitorConfig) == false)
+    {
+        Log(error, "Procdump is not running with elevated credentials or the effective uid does not match the effective uid of the target process (pid %d).", monitorConfig->ProcessId);
+        return -1;
+    }
+
     if(CreateMonitorThreads(monitorConfig) != 0)
     {
         Log(error, INTERNAL_ERROR);
@@ -682,7 +718,8 @@ pthread_t GetRestrackThread(struct ProcDumpConfiguration *self)
 //--------------------------------------------------------------------
 int CancelRestrackThread(struct ProcDumpConfiguration *self)
 {
-    Trace("CancelRestrackThread: Enter");
+    Trace("CancelRestrackThread: Enter [id=%d]", gettid());
+
     int rc = 0;
     pthread_t restrackThread = 0;
 
@@ -691,10 +728,10 @@ int CancelRestrackThread(struct ProcDumpConfiguration *self)
     if(restrackThread != 0)
     {
         Trace("CancelRestrackThread: cancel restrack thread");
-        rc = pthread_cancel(restrackThread);
+        SetQuit(self, 1);
     }
 
-    Trace("CancelRestrackThread: Exit");
+    Trace("CancelRestrackThread: Exit [id=%d]", gettid());
     return rc;
 }
 
@@ -807,7 +844,7 @@ bool ContinueMonitoring(struct ProcDumpConfiguration *self)
     }
 
     // Have we reached the dump limit?
-    if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect)
+    if (self->NumberOfDumpsCollected >= self->NumberOfDumpsToCollect || self->NumberOfLeakReportsCollected >= self->NumberOfDumpsToCollect)
     {
         return false;
     }
@@ -910,10 +947,15 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     (!config->bMemoryTriggerBelowValue && (memUsage >= config->MemoryThreshold[config->MemoryCurrentThreshold])))
                 {
                     Log(info, "Trigger: Commit usage:%ldMB on process ID: %d", memUsage, config->ProcessId);
-                    dumpFileName = WriteCoreDump(writer);
-                    if(dumpFileName == NULL)
+
+                    if(config->bRestrackGenerateDump == true)
                     {
-                        SetQuit(config, 1);
+                        // Only generate core dump if user did not specify the "nodump" restrack option
+                        dumpFileName = WriteCoreDump(writer);
+                        if(dumpFileName == NULL)
+                        {
+                            SetQuit(config, 1);
+                        }
                     }
 
                     //
@@ -921,7 +963,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                         if (id == 0)
                         {
                             SetQuit(config, 1);
@@ -985,10 +1027,15 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                 if (proc.num_threads >= config->ThreadThreshold)
                 {
                     Log(info, "Trigger: Thread count:%ld on process ID: %d", proc.num_threads, config->ProcessId);
-                    dumpFileName = WriteCoreDump(writer);
-                    if(dumpFileName == NULL)
+
+                    if(config->bRestrackGenerateDump == true)
                     {
-                        SetQuit(config, 1);
+                        // Only generate core dump if user did not specify the "nodump" restrack option
+                        dumpFileName = WriteCoreDump(writer);
+                        if(dumpFileName == NULL)
+                        {
+                            SetQuit(config, 1);
+                        }
                     }
 
                     //
@@ -996,7 +1043,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                         if (id == 0)
                         {
                             SetQuit(config, 1);
@@ -1059,10 +1106,14 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
                     Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
-                    dumpFileName = WriteCoreDump(writer);
-                    if(dumpFileName == NULL)
+                    if(config->bRestrackGenerateDump == true)
                     {
-                        SetQuit(config, 1);
+                        // Only generate core dump if user did not specify the "nodump" restrack option
+                        dumpFileName = WriteCoreDump(writer);
+                        if(dumpFileName == NULL)
+                        {
+                            SetQuit(config, 1);
+                        }
                     }
 
                     //
@@ -1070,7 +1121,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                         if (id == 0)
                         {
                             SetQuit(config, 1);
@@ -1174,12 +1225,17 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
                     // Write core dump
                     Log(info, "Trigger: Signal:%d on process ID: %d", signum, config->ProcessId);
-                    dumpFileName = WriteCoreDump(writer);
-                    if(dumpFileName == NULL)
+
+                    if(config->bRestrackGenerateDump == true)
                     {
-                        ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
-                        ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
-                        break;
+                        // Only generate core dump if user did not specify the "nodump" restrack option
+                        dumpFileName = WriteCoreDump(writer);
+                        if(dumpFileName == NULL)
+                        {
+                            ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
+                            ptrace(PTRACE_DETACH, config->ProcessId, 0, 0);
+                            break;
+                        }
                     }
 
                     //
@@ -1187,7 +1243,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                         if (id != 0)
                         {
                             leakReportThreads.push_back(id);
@@ -1196,7 +1252,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
                     ptrace(PTRACE_CONT, config->ProcessId, NULL, signum);
 
-                    if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect)
+                    if(config->NumberOfDumpsCollected >= config->NumberOfDumpsToCollect || config->NumberOfLeakReportsCollected >= config->NumberOfDumpsToCollect)
                     {
                         // If we are over the max number of dumps to collect, send the original signal we intercepted.
                         pthread_mutex_unlock(&config->ptrace_mutex);
@@ -1273,10 +1329,14 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     (!config->bCpuTriggerBelowValue && (cpuUsage >= config->CpuThreshold)))
                 {
                     Log(info, "Trigger: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
-                    dumpFileName = WriteCoreDump(writer);
-                    if(dumpFileName == NULL)
+                    if(config->bRestrackGenerateDump == true)
                     {
-                        SetQuit(config, 1);
+                        // Only generate core dump if user did not specify the "nodump" restrack option
+                        dumpFileName = WriteCoreDump(writer);
+                        if(dumpFileName == NULL)
+                        {
+                            SetQuit(config, 1);
+                        }
                     }
 
                     //
@@ -1284,7 +1344,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     //
                     if(config->bRestrackEnabled == true)
                     {
-                        pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                        pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                         if (id == 0)
                         {
                             SetQuit(config, 1);
@@ -1342,10 +1402,14 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
         while ((rc = WaitForQuit(config, 0)) == WAIT_TIMEOUT)
         {
             Log(info, "Trigger: Timer:%ld(s) on process ID: %d", config->PollingInterval/1000, config->ProcessId);
-            dumpFileName = WriteCoreDump(writer);
-            if(dumpFileName == NULL)
+            if(config->bRestrackGenerateDump == true)
             {
-                SetQuit(config, 1);
+                // Only generate core dump if user did not specify the "nodump" restrack option
+                dumpFileName = WriteCoreDump(writer);
+                if(dumpFileName == NULL)
+                {
+                    SetQuit(config, 1);
+                }
             }
 
             //
@@ -1353,7 +1417,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             //
             if(config->bRestrackEnabled == true)
             {
-                pthread_t id = WriteRestrackSnapshot(config, (std::string(dumpFileName) + ".restrack").c_str());
+                pthread_t id = WriteRestrackSnapshot(config, writer->Type);
                 if (id == 0)
                 {
                     SetQuit(config, 1);
@@ -1924,9 +1988,24 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
                 config->socketPath = NULL;
                 break;
             }
-           else if(status=='H')
+            else if(status=='H')
             {
-                Trace("WaitForProfilerCompletion: Recieved health check ping from profiler");
+                Trace("WaitForProfilerCompletion: Received health check ping from profiler");
+
+                if(config->NumberOfLeakReportsCollected == config->NumberOfDumpsToCollect)
+                {
+                    //
+                    // Since the protocol between profiler and procdump dictates when and how dumps are generated,
+                    // we may still be in restrack only mode. In that case, we use the Health check call from the
+                    // profiler to check if the number of leak reports that have been generated are at max.
+                    //
+                    Trace("WaitForProfilerCompletion: Total leak report count has been reached: %d", config->NumberOfLeakReportsCollected);
+                    unlink(tmpFolder);
+                    free(dump);
+                    close(s2);
+                    config->socketPath = NULL;
+                    break;
+                }
             }
 
             free(dump);

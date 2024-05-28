@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "You can optionally specify a specific test script to run rather than running all (default)"
+
 failed=0
 failedTests="\n"
 
@@ -47,7 +49,13 @@ function runTest {
 
 for file in $DIR/scenarios/*.sh
 do
-  runTest $file
+    if [ ! -z "$1" ]; then
+         if [[ "$file" =~ "$1" ]]; then
+            runTest $file
+        fi
+    else
+        runTest $file
+    fi
 done
 
 printf "\nFailed tests: $failedTests"

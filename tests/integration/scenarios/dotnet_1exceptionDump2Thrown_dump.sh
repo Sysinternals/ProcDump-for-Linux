@@ -19,7 +19,7 @@ if [ $? -eq -1 ]; then
     exit 1
 fi
 
-sudo $PROCDUMPPATH -log -e -f System.InvalidOperationException -w TestWebApi&
+sudo $PROCDUMPPATH -log stdout -e -f System.InvalidOperationException -w TestWebApi&
 
 # waiting for procdump child process
 PROCDUMPCHILDPID=-1

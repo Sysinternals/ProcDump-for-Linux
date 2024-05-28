@@ -28,7 +28,7 @@ Capture Usage:
             [-m|-ml Commit_Usage1[,Commit_Usage2...]]
             [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]
             [-gcgen Generation]
-            [-restrack]
+            [-restrack [nodump]]
             [-sr Sample_Rate]
             [-tc Thread_Threshold]
             [-fc FileDescriptor_Threshold]
@@ -39,7 +39,7 @@ Capture Usage:
             [-mc Custom_Dump_Mask]
             [-pf Polling_Frequency]
             [-o]
-            [-log]
+            [-log syslog|stdout]
             {
              {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}
             }
@@ -53,7 +53,7 @@ Options:
    -ml     Memory commit threshold(s) (MB) below which to create dumps.
    -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).
    -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.
-   -restrack Enable memory leak tracking (malloc family of APIs).
+   -restrack Enable memory leak tracking (malloc family of APIs). Use the nodump option to prevent dump generation and only produce restrack report(s).
    -sr     Sample rate when using -restrack.
    -tc     Thread count threshold above which to create a dump of the process.
    -fc     File descriptor count threshold above which to create a dump of the process.
@@ -64,7 +64,7 @@ Options:
    -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.
    -pf     Polling frequency.
    -o      Overwrite existing dump file.
-   -log    Writes extended ProcDump tracing to syslog.
+   -log    Writes extended ProcDump tracing to the specified output stream (syslog or stdout).
    -w      Wait for the specified process to launch if it's not running.
    -pgid   Process ID specified refers to a process group ID.
 ```
@@ -120,6 +120,10 @@ sudo procdump -m 100,200 1234
 The following will create a core dump and a memory leak report when memory usage is >= 100 MB
 ```
 sudo procdump -m 100 -restrack 1234
+```
+The following will create a memory leak report (no dumps) when memory usage is >= 100 MB
+```
+sudo procdump -m 100 -restrack nodump 1234
 ```
 The following will create a core dump and a memory leak report when memory usage is >= 100 MB by sampling every 10th memory allocation.
 ```
