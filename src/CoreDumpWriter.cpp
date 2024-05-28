@@ -63,6 +63,9 @@ char* GetCoreDumpName(ProcDumpConfiguration* config, ECoreDumpType type)
         return NULL;
     }
 
+    free(name);
+    free(gcorePrefixName);
+
     return dumpName;
 }
 

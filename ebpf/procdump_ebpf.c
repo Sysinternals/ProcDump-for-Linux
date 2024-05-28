@@ -117,7 +117,7 @@ static inline int SendEvent(void* alloc, bool freeOp, struct bpf_pidns_info* pid
     }
 
     //
-    // Set the allocation address if its an allocation operation
+    // Set the allocation address if it's an allocation operation
     //
     if(freeOp == false)
     {
