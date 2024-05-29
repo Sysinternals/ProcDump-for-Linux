@@ -5,11 +5,13 @@ parameters:
 - name: runStaticAnalysis
   type: boolean
   default: False
+- name: builddir
+  type: string
+  default: 'build'    
 
 steps:
 - script: |
-    cd ${{ parameters.srcPath }}
-    mkdir procdump_build && cd procdump_build
+    mkdir -p ${{ parameters.srcPath }}/${{ parameters.builddir }} && cd ${{ parameters.srcPath }}/${{ parameters.builddir }}
     cmake ..
     make
   displayName: "Build ProcDump binaries"
