@@ -7,7 +7,7 @@ parameters:
   default: False
 - name: builddir
   type: string
-  default: 'build'    
+  default: 'procdump_build'    
 
 steps:
 - script: |
