@@ -223,7 +223,6 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
         Trace("Unable to get MAX_PID value\n");
         return;
     }
-
     monitoredProcessMap.reserve(maxPid);
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.

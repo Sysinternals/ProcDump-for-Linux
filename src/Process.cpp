@@ -12,6 +12,10 @@
 #include <sstream>
 #include <string>
 
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
+
 //--------------------------------------------------------------------
 //
 // GetUids - Gets the process uids for the given pid
@@ -679,6 +683,26 @@ char * GetProcessName(pid_t pid)
             }
         }
     }
+#elif __APPLE__
+    char* pathbuf = (char*) malloc(PROC_PIDPATHINFO_MAXSIZE);
+    if(pathbuf == NULL)
+    {
+        return NULL;
+    }
+
+    if (proc_pidpath(pid, pathbuf, PROC_PIDPATHINFO_MAXSIZE) > 0) 
+    {
+        // Extract the process name from the full path
+        char* process_name = strrchr(pathbuf, '/');
+        if (process_name) 
+        {
+            process_name++; 
+            char* proc_copy = strdup(process_name);
+            free(pathbuf);
+            return proc_copy;
+        }
+    }
+
 #endif
 
     return NULL;
@@ -762,6 +786,17 @@ bool LookupProcessByPid(pid_t pid)
 
     fd = fopen(statFilePath, "r");
     if (fd == NULL) {
+        return false;
+    }
+#elif __APPLE__
+    // On MacOS, we can't check if a process is running by looking at /proc
+    // Instead, we can use kill(pid, 0) to check if the process is running
+    if (kill(pid, 0) == 0)
+    {
+        return true;
+    }
+    else
+    {
         return false;
     }
 #endif
@@ -928,8 +963,9 @@ pid_t LookupProcessPidByName(const char* name)
 //--------------------------------------------------------------------
 int GetMaximumPID()
 {
-    auto_free_file FILE * pidMaxFile = NULL;
     int maxPIDs = -1;
+#ifdef __linux__
+    auto_free_file FILE * pidMaxFile = NULL;
 
     pidMaxFile = fopen(PID_MAX_KERNEL_CONFIG, "r");
     if(pidMaxFile != NULL)
@@ -939,6 +975,9 @@ int GetMaximumPID()
             maxPIDs = -1;
         }
     }
+#elif __APPLE__
+    maxPIDs = INT_MAX;
+#endif
 
     return maxPIDs;
 }

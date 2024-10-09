@@ -488,6 +488,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
+#ifdef __linux__        
         else if( 0 == strcasecmp( argv[i], "/gcm" ) ||
                     0 == strcasecmp( argv[i], "-gcm" ))
         {
@@ -677,6 +678,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
+#endif        
         else if( 0 == strcasecmp( argv[i], "/pf" ) ||
                     0 == strcasecmp( argv[i], "-pf" ))
         {
@@ -743,6 +745,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
+#ifdef __linux__        
         else if( 0 == strcasecmp( argv[i], "/e" ) ||
                     0 == strcasecmp( argv[i], "-e" ))
         {
@@ -801,6 +804,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
+#endif        
         else if( 0 == strcasecmp( argv[i], "/o" ) ||
                     0 == strcasecmp( argv[i], "-o" ))
         {
@@ -811,11 +815,13 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         {
             self->WaitingForProcessName = true;
         }
+#ifdef __linux__        
         else if( 0 == strcasecmp( argv[i], "/pgid" ) ||
                     0 == strcasecmp( argv[i], "-pgid" ))
         {
             self->bProcessGroup = true;
         }
+#endif        
         else
         {
             // Process targets
@@ -930,12 +936,14 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
     // Validate multi arguments
     //
 
+#ifdef __linux__
     // .NET triggers are mutually exclusive
     if(dotnetTriggerCount > 1)
     {
         Log(error, "Only one .NET trigger can be specified.");
         return PrintUsage();
     }
+#endif
 
     // Ensure consistency between number of thresholds specified and the -n switch
     if(self->MemoryThresholdCount > 1 && self->NumberOfDumpsToCollect != -1)
@@ -949,6 +957,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         self->NumberOfDumpsToCollect = self->MemoryThresholdCount;
     }
 
+#ifdef __linux__
     // If exception filter is provided with no -e switch exit
     if((self->ExceptionFilter && self->bDumpOnException == false))
     {
@@ -970,7 +979,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         Log(error, "Please use the -restrack switch when specifying an exclude filter (-fx)");
         return PrintUsage();
     }
-
+#endif
     // If no path was provided, assume the current directory
     if (self->CoreDumpPath == NULL) {
         self->CoreDumpPath = strdup(".");
@@ -1001,6 +1010,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         self->bTimerThreshold = true;
     }
 
+#ifdef __linux__
     // Signal trigger can only be specified alone
     if(self->SignalCount > 0 || self->bDumpOnException)
     {
@@ -1019,7 +1029,7 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
         // be attached via ptrace.
         self->bTimerThreshold = false;
     }
-
+#endif
     // If we are monitoring multiple process, setting dump name doesn't make sense (path is OK)
     if ((self->bProcessGroup || self->WaitingForProcessName) && self->CoreDumpName)
     {
