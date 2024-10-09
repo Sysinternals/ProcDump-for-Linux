@@ -47,7 +47,7 @@ enum EHandleType {
 struct Handle {
     union {
         struct Event event;
-        sem_t semaphore;
+        sem_t* semaphore;
     };
     enum EHandleType type;
 };

@@ -161,7 +161,9 @@ char* WriteCoreDump(struct CoreDumpWriter *self)
         case WAIT_OBJECT_0+1: // We got a dump slot!
             {
                 char* socketName = NULL;
+#ifdef __linux__                
                 IsCoreClrProcess(self->Config->ProcessId, &socketName);
+#endif                
                 unsigned int currentCoreDumpFilter = -1;
                 if(self->Config->CoreDumpMask != -1)
                 {
@@ -171,7 +173,7 @@ char* WriteCoreDump(struct CoreDumpWriter *self)
                 if ((dumpFileName = WriteCoreDumpInternal(self, socketName)) != NULL)
                 {
                     // We're done here, unlock (increment) the sem
-                    if(sem_post(&self->Config->semAvailableDumpSlots.semaphore) == -1)
+                    if(sem_post(self->Config->semAvailableDumpSlots.semaphore) == -1)
                     {
                         Log(error, INTERNAL_ERROR);
                         Trace("WriteCoreDump: failed sem_post.");
@@ -268,6 +270,7 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
     if(socketName!=NULL)
     {
+#ifdef __linux__
         // If we have a socket name, we're dumping a .NET process....
         if(GenerateCoreClrDump(socketName, coreDumpFileName)==false)
         {
@@ -280,6 +283,7 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
             self->Config->NumberOfDumpsCollected++; // safe to increment in crit section
         }
+#endif        
     }
     else
     {

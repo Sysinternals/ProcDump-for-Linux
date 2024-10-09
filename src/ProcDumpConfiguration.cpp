@@ -87,7 +87,7 @@ void InitProcDump()
             exit(-1);
         }
 
-        sprintf(t, "%s%s", prefixTmpFolder, "/procdump");
+        snprintf(t, len, "%s%s", prefixTmpFolder, "/procdump");
         createDir(t, 0777);
         free(t);
     }
@@ -121,10 +121,14 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     MAXIMUM_CPU = 100 * (int)sysconf(_SC_NPROCESSORS_ONLN);
     HZ = sysconf(_SC_CLK_TCK);
 
+#ifdef __linux__
     sysinfo(&(self->SystemInfo));
+#endif
 
+#ifdef __linux__
     pthread_mutex_init(&self->ptrace_mutex, NULL);
     pthread_mutex_init(&self->memAllocMapMutex, NULL);
+#endif
 
     InitNamedEvent(&(self->evtCtrlHandlerCleanupComplete.event), true, false, const_cast<char*>("CtrlHandlerCleanupComplete"));
     self->evtCtrlHandlerCleanupComplete.type = EVENT;
@@ -144,7 +148,8 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     InitNamedEvent(&(self->evtStartMonitoring.event), true, false, const_cast<char*>("StartMonitoring"));
     self->evtStartMonitoring.type = EVENT;
 
-    sem_init(&(self->semAvailableDumpSlots.semaphore), 0, 1);
+    //sem_init(&(self->semAvailableDumpSlots.semaphore), 0, 1);
+    self->semAvailableDumpSlots.semaphore = sem_open("/procdump_sem", O_CREAT, 0644, 1);
     self->semAvailableDumpSlots.type = SEMAPHORE;
 
     // Additional initialization
@@ -193,10 +198,12 @@ void InitProcDumpConfiguration(struct ProcDumpConfiguration *self)
     pthread_mutex_init(&self->dotnetMutex, NULL);
     pthread_cond_init(&self->dotnetCond, NULL);
 
+#ifdef __linux__
     if(self->memAllocMap.size() > 0)
     {
         self->memAllocMap.clear();
     }
+#endif    
 }
 
 //--------------------------------------------------------------------
@@ -215,8 +222,13 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
     DestroyEvent(&(self->evtStartMonitoring.event));
 
     pthread_mutex_destroy(&self->ptrace_mutex);
+#ifdef __linux__    
     pthread_mutex_destroy(&self->memAllocMapMutex);
-    sem_destroy(&(self->semAvailableDumpSlots.semaphore));
+#endif    
+    //sem_destroy(&(self->semAvailableDumpSlots.semaphore));
+    sem_close(self->semAvailableDumpSlots.semaphore);
+    sem_unlink("/procdump_sem");
+
 
     pthread_mutex_destroy(&self->dotnetMutex);
     pthread_cond_destroy(&self->dotnetCond);
@@ -276,6 +288,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         self->SignalNumber = NULL;
     }
 
+#ifdef __linux__
     for (const auto& pair : self->memAllocMap)
     {
         if(pair.second)
@@ -284,6 +297,7 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
         }
     }
     self->memAllocMap.clear();
+#endif
 
     Trace("FreeProcDumpConfiguration: Exit");
 }
@@ -392,8 +406,9 @@ struct ProcDumpConfiguration * CopyProcDumpConfiguration(struct ProcDumpConfigur
         copy->socketPath = self->socketPath == NULL ? NULL : strdup(self->socketPath);
         copy->bDumpOnException = self->bDumpOnException;
         copy->statusSocket = self->statusSocket;
+#ifdef __linux__        
         copy->memAllocMap = self->memAllocMap;
-
+#endif
         return copy;
     }
     else
@@ -1244,6 +1259,7 @@ int PrintUsage()
     printf("            [-s Seconds]\n");
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
+#ifdef __linux__    
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation]\n");
     printf("            [-restrack [nodump]]\n");
@@ -1255,11 +1271,16 @@ int PrintUsage()
     printf("            [-f Include_Filter,...]\n");
     printf("            [-fx Exclude_Filter]\n");
     printf("            [-mc Custom_Dump_Mask]\n");
+#endif    
     printf("            [-pf Polling_Frequency]\n");
     printf("            [-o]\n");
     printf("            [-log syslog|stdout]\n");
     printf("            {\n");
+#ifdef __linux__    
     printf("             {{[-w] Process_Name | [-pgid] PID} [Dump_File | Dump_Folder]}\n");
+#elif defined(__APPLE__)
+    printf("             {{[-w] Process_Name | PID} [Dump_File | Dump_Folder]}\n");
+#endif
     printf("            }\n");
     printf("\n");
     printf("Options:\n");
@@ -1267,6 +1288,7 @@ int PrintUsage()
     printf("   -s      Consecutive seconds before dump is written (default is 10).\n");
     printf("   -c      CPU threshold above which to create a dump of the process.\n");
     printf("   -cl     CPU threshold below which to create a dump of the process.\n");
+#ifdef __linux__
     printf("   -m      Memory commit threshold(s) (MB) above which to create dumps.\n");
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
     printf("   -gcm    [.NET] GC memory threshold(s) (MB) above which to create dumps for the specified generation or heap (default is total .NET memory usage).\n");
@@ -1280,11 +1302,12 @@ int PrintUsage()
     printf("   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.\n");
     printf("   -fx     Filter (exclude) on the content of -restrack call stacks. Wildcards (*) are supported.\n");
     printf("   -mc     Custom core dump mask (in hex) indicating what memory should be included in the core dump. Please see 'man core' (/proc/[pid]/coredump_filter) for available options.\n");
+    printf("   -pgid   Process ID specified refers to a process group ID.\n");
+#endif
     printf("   -pf     Polling frequency.\n");
     printf("   -o      Overwrite existing dump file.\n");
     printf("   -log    Writes extended ProcDump tracing to the specified output stream (syslog or stdout).\n");
     printf("   -w      Wait for the specified process to launch if it's not running.\n");
-    printf("   -pgid   Process ID specified refers to a process group ID.\n");
 
     return -1;
 }

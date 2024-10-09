@@ -10,7 +10,12 @@
 #ifndef GENHELPERS_H
 #define GENHELPERS_H
 
+#ifdef __linux__
 #include <linux/version.h>
+#elif __APPLE_
+#endif
+
+#include <pthread.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
@@ -96,7 +101,9 @@ static inline void cancel_pthread(unsigned long* val)
 {
     if(*val!=-1)
     {
+        #ifdef __linux__
         pthread_cancel(*val);
+        #endif
     }
 }
 

@@ -28,9 +28,12 @@ void* dFunc(int type)
         }
         else if (type == 3)
         {
+#ifdef __linux__                
                 void* lastAlloc = malloc(10000);
                 void* newAlloc = reallocarray(lastAlloc, 10, 20000);
                 return newAlloc;
+#endif                
+                return NULL;
         }
         else
         {

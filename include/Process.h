@@ -10,7 +10,11 @@
 #ifndef PROCFSLIB_PROCESS_H
 #define PROCFSLIB_PROCESS_H
 
+#ifdef __linux__
 #include <linux/version.h>
+#elif __APPLE_
+#endif
+
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>

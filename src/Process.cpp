@@ -56,6 +56,7 @@ bool GetUids(pid_t pid, struct ProcessStat* proc)
 //--------------------------------------------------------------------
 bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
 {
+#ifdef __linux__
     auto_free_dir DIR* fddir = NULL;
     struct dirent* entry = NULL;
     char procFilePath[32];
@@ -82,7 +83,7 @@ bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
     }
 
     proc->num_filedescriptors-=2;                   // Account for "." and ".."
-
+#endif
     return true;
 }
 
@@ -92,6 +93,7 @@ bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
 //
 //--------------------------------------------------------------------
 bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
+#ifdef __linux__
     char procFilePath[32];
     char fileBuffer[1024];
     char *token;
@@ -579,7 +581,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     }
 
     proc->exit_code = (int)strtol(token, NULL, 10);
-
+#endif
     return true;
 }
 
@@ -613,6 +615,7 @@ char * GetProcessNameFromCmdLine(char* cmdLine)
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid)
 {
+#ifdef __linux__    
     char procFilePath[32];
     char fileBuffer[MAX_CMDLINE_LEN];
     int charactersRead = 0;
@@ -676,6 +679,7 @@ char * GetProcessName(pid_t pid)
             }
         }
     }
+#endif
 
     return NULL;
 }
@@ -686,9 +690,10 @@ char * GetProcessName(pid_t pid)
 //                  Returns NO_PID on error
 //
 //--------------------------------------------------------------------
-pid_t GetProcessPgid(pid_t pid){
+pid_t GetProcessPgid(pid_t pid)
+{
     pid_t pgid = NO_PID;
-
+#ifdef __linux__
     char procFilePath[32];
     char fileBuffer[1024];
     char *token;
@@ -730,7 +735,7 @@ pid_t GetProcessPgid(pid_t pid){
     }
 
     pgid = (pid_t)strtol(token, NULL, 10);
-
+#endif
     return pgid;
 }
 
@@ -741,6 +746,7 @@ pid_t GetProcessPgid(pid_t pid){
 //--------------------------------------------------------------------
 bool LookupProcessByPid(pid_t pid)
 {
+#ifdef __linux__
     char statFilePath[32];
     auto_free_file FILE *fd = NULL;
 
@@ -758,7 +764,7 @@ bool LookupProcessByPid(pid_t pid)
     if (fd == NULL) {
         return false;
     }
-
+#endif
     return true;
 }
 
