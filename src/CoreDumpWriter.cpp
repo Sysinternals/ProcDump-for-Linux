@@ -236,14 +236,6 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
     gcorePrefixName = GetCoreDumpPrefixName(self->Config->ProcessId, name, self->Config->CoreDumpPath, self->Config->CoreDumpName, self->Type);
 
-    // assemble the command
-    if(snprintf(command, BUFFER_LENGTH, "gcore -o %s %d 2>&1", gcorePrefixName, pid) < 0)
-    {
-        Log(error, INTERNAL_ERROR);
-        Trace("WriteCoreDumpInternal: failed sprintf gcore command");
-        exit(-1);
-    }
-
     // assemble filename
     if(snprintf(coreDumpFileName, PATH_MAX, "%s.%d", gcorePrefixName, pid) < 0)
     {
@@ -257,6 +249,14 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
     {
         Log(info, "Dump file %s already exists and was not overwritten (use -o to overwrite)", coreDumpFileName);
         return NULL;
+    }
+
+    // assemble the command
+    if(snprintf(command, BUFFER_LENGTH, "gcore -o %s %d 2>&1", coreDumpFileName, pid) < 0)
+    {
+        Log(error, INTERNAL_ERROR);
+        Trace("WriteCoreDumpInternal: failed sprintf gcore command");
+        exit(-1);
     }
 
     // check if we're allowed to write into the target directory
@@ -342,7 +342,15 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         bool gcoreFailedMsg = false;    // in case error sneaks through the message output
 
         // check if gcore was able to generate the dump
-        if(gcoreStatus != 0 || pcloseStatus != 0 || (gcoreFailedMsg = (strstr(outputBuffer[i-1], "gcore: failed") != NULL)))
+        if(outputBuffer[i-1] != NULL)
+        {
+            if(strstr(outputBuffer[i-1], "gcore: failed") != NULL)
+            {
+                gcoreFailedMsg = true;
+            }
+        }
+        
+        if(gcoreStatus != 0 || pcloseStatus != 0 || (gcoreFailedMsg == true))
         {
             Log(error, "An error occurred while generating the core dump:");
             if (gcoreStatus != 0)
@@ -365,7 +373,6 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
         {
             // On WSL2 there is a delay between the core dump being written to disk and able to succesfully access it in the below check
             sleep(1);
-
             // validate that core dump file was generated
             if(access(coreDumpFileName, F_OK) != -1)
             {
@@ -402,7 +409,7 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
 
     free(name);
-
+    
     return strdup(coreDumpFileName);
 }
 

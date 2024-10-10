@@ -1325,7 +1325,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        while ((rc = WaitForQuit(config, /*config->PollingInterval*/ 1000)) == WAIT_TIMEOUT)
+        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {

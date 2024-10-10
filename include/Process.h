@@ -12,7 +12,6 @@
 
 #ifdef __linux__
 #include <linux/version.h>
-#elif __APPLE_
 #endif
 
 #include <unistd.h>

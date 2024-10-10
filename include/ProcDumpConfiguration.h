@@ -13,7 +13,6 @@
 #include <stdbool.h>
 #ifdef __linux__
 #include <sys/sysinfo.h>
-#elif __APPLE_
 #endif
 #include <zconf.h>
 #include <stdio.h>
@@ -38,7 +37,6 @@
 #ifdef __linux__
 #include "Restrack.h"
 #include "procdump_ebpf_common.h"
-#elif __APPLE_
 #endif
 
 #include <unordered_map>
