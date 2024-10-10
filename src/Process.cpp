@@ -11,9 +11,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <sys/sysctl.h>
 
 #ifdef __APPLE__
 #include <libproc.h>
+#include <mach/mach_time.h>
 #endif
 
 //--------------------------------------------------------------------
@@ -992,3 +994,73 @@ int FilterForPid(const struct dirent *entry)
     return IsValidNumberArg(entry->d_name);
 }
 
+
+//--------------------------------------------------------------------
+//
+// GetCpuUsage - Gets the CPU usage of a process.
+//
+//--------------------------------------------------------------------
+#ifdef __linux__
+int GetCpuUsage(ProcessStat* procStat)
+{
+    int cpuUsage = 0;
+    struct sysinfo sysInfo;
+    unsinged long totalTime;
+    unsigned long elapsedTime;
+
+    sysinfo(&sysInfo);
+
+    // Calc CPU
+    totalTime = (unsigned long)((procStat->utime + procStat->stime) / HZ);
+    elapsedTime = (unsigned long)(sysInfo.uptime - (long)(procStat->starttime / HZ));
+    cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
+
+    return cpuUsage;
+}
+#elif __APPLE__
+int GetCpuUsage(pid_t pid)
+{
+    int cpuUsage = 0;
+    pid_t* pids = NULL;
+    int ret = 0;
+    struct timeval boottime;
+    size_t size = sizeof(boottime);
+    int mib[2] = {CTL_KERN, KERN_BOOTTIME};    
+
+    if (sysctl(mib, 2, &boottime, &size, NULL, 0) != 0) 
+    {
+        return -1;
+    }    
+
+    mach_timebase_info_data_t timebaseInfo;
+    kern_return_t kr = mach_timebase_info(&timebaseInfo);
+
+    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, 0);
+    pids = (pid_t*) malloc(num_pids*sizeof(pid_t));
+    num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, num_pids*sizeof(pid_t));
+    for (int i = 0; i < num_pids / sizeof(pid_t); i++) 
+    {
+        if(pids[i] == pid)
+        {
+            struct proc_taskallinfo taskInfo;
+            int ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, &taskInfo, sizeof(taskInfo));
+            if (ret <= 0) 
+            {
+                Trace("[GetCpuUsage] Failed to get process information for pid: %d", pid);
+                free(pids);
+                return -1;
+            } 
+            else
+            {
+                unsigned long totalTime = ((taskInfo.ptinfo.pti_total_user * timebaseInfo.numer / timebaseInfo.denom)  + (taskInfo.ptinfo.pti_total_system * timebaseInfo.numer / timebaseInfo.denom)) / 1000000000;
+                unsigned long elapsedTime = ((time(NULL) - boottime.tv_sec)) - (taskInfo.pbsd.pbi_start_tvsec - boottime.tv_sec);
+                cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
+                break;
+            }           
+        }   
+    }
+
+    free(pids);
+    return cpuUsage;
+}
+#endif

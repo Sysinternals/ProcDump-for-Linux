@@ -769,6 +769,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
     //
     // If we have a restrack thread, cancel it and wait for it to exit
     //
+#ifdef __linux__    
     if(CancelRestrackThread(self) != 0)
     {
         if ((rc = pthread_join(restrackThread, NULL)) != 0)
@@ -777,6 +778,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
             exit(-1);
         }
     }
+#endif
 
     return rc;
 }
@@ -1305,16 +1307,16 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("CpuMonitoringThread: Enter [id=%d]", gettid());
-#ifdef __linux__    
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
 
     unsigned long totalTime = 0;
     unsigned long elapsedTime = 0;
-    struct sysinfo sysInfo;
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
+#ifdef __linuxx__
     std::vector<pthread_t> leakReportThreads;
+#endif
 
     writer = NewCoreDumpWriter(CPU, config);
 
@@ -1323,16 +1325,12 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     if ((rc = WaitForQuitOrEvent(config, &config->evtStartMonitoring, INFINITE_WAIT)) == WAIT_OBJECT_0 + 1)
     {
-        while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
+        while ((rc = WaitForQuit(config, /*config->PollingInterval*/ 1000)) == WAIT_TIMEOUT)
         {
-            sysinfo(&sysInfo);
-
             if (GetProcessStat(config->ProcessId, &proc))
             {
-                // Calc CPU
-                totalTime = (unsigned long)((proc.utime + proc.stime) / HZ);
-                elapsedTime = (unsigned long)(sysInfo.uptime - (long)(proc.starttime / HZ));
-                cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
+                cpuUsage = GetCpuUsage(config->ProcessId);
+                Trace("CpuMonitoringThread: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
 
                 // CPU Trigger
                 if ((config->bCpuTriggerBelowValue && (cpuUsage < config->CpuThreshold)) ||
@@ -1352,6 +1350,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     //
                     // Check to see if restrack is specified, if so, save current resource usage to file.
                     //
+#ifdef __linux__                    
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -1364,6 +1363,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                             leakReportThreads.push_back(id);
                         }
                     }
+#endif                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -1382,9 +1382,11 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     //
     // Wait for the leak reporting threads to finish
     //
+#ifdef __linux__    
     WaitThreads(leakReportThreads);
 #endif
-    Trace("CpuTCpuMonitoringThread: Exit [id=%d]", gettid());
+
+    Trace("CpuMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
 }
 

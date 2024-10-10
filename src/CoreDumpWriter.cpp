@@ -334,7 +334,10 @@ char* WriteCoreDumpInternal(struct CoreDumpWriter *self, char* socketName)
 
         // close pipe reading from gcore
         self->Config->gcorePid = NO_PID;                // reset gcore pid so that signal handler knows we aren't dumping
+        int pcloseStatus = 0;
+#ifdef __linux__        
         int pcloseStatus = pclose(commandPipe);
+#endif
 
         bool gcoreFailedMsg = false;    // in case error sneaks through the message output
 
