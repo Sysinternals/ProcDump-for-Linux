@@ -17,6 +17,10 @@
 #include <string>
 #include <memory>
 
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
+
 static pthread_t sig_thread_id;
 
 extern struct ProcDumpConfiguration g_config;
@@ -943,9 +947,13 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {
+#ifdef __linux__                
                 // Calc Commit
                 memUsage = (proc.rss * pageSize_kb) >> 10;    // get Resident Set Size
                 memUsage += (proc.nswap * pageSize_kb) >> 10; // get Swap size
+#elif __APPLE__
+                memUsage = proc.rss / (1024.0 * 1024.0);       // get Resident Set Size
+#endif
 
                 // Commit Trigger
                 if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold[config->MemoryCurrentThreshold])) ||
@@ -992,7 +1000,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                Log(error, "An error occurred while parsing procfs\n");
+                Log(error, "An error occurred while fetching memory info\n");
                 exit(-1);
             }
         }

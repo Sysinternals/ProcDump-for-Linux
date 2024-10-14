@@ -89,9 +89,50 @@ bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
     }
 
     proc->num_filedescriptors-=2;                   // Account for "." and ".."
+#elif __APPLE__
+    int size = size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, NULL, 0);
+    if (size <= 0) 
+    {
+        Trace("[GetNumFileDescriptors] Failed to get required size for process information for pid: %d", pid);
+        return false;
+    }
+
+    struct proc_fdinfo* fdInfo = (struct proc_fdinfo *)malloc(size);
+    if (fdInfo == NULL) 
+    {
+        Trace("[GetNumFileDescriptors] Failed to alloc mem");        
+        return -1;
+    }
+
+    int ret = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fdInfo, size);
+    if (ret <= 0) 
+    {
+        Trace("[GetNumFileDescriptors] Failed to get process information for pid: %d", pid);
+        free(fdInfo);
+        return false;
+    } 
+
+    proc->num_filedescriptors = ret/sizeof(struct proc_fdinfo);
+    Trace("File descriptors: %d", proc->num_filedescriptors);
+
+    free(fdInfo);
 #endif
     return true;
 }
+
+#ifdef __APPLE__
+bool GetTaskInfo(struct proc_taskallinfo* taskInfo, pid_t pid)
+{
+    int ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, taskInfo, sizeof(struct proc_taskallinfo));
+    if (ret <= 0) 
+    {
+        Trace("[GetTaskInfo] Failed to get process information for pid: %d", pid);
+        return false;
+    } 
+
+    return true;
+}
+#endif
 
 //--------------------------------------------------------------------
 //
@@ -113,6 +154,15 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         Log(error, "Failed to get UID's");
         return false;
     }
+#endif
+
+#ifdef __APPLE__
+    struct proc_taskallinfo taskInfo;
+    if(GetTaskInfo(&taskInfo, pid) == false)
+    {
+        return false;
+    }
+#endif
 
     // Get number of file descriptors in /proc/%d/fdinfo. This directory only contains sub directories for each file descriptor.
     if(GetNumFileDescriptors(pid, proc) == false)
@@ -121,6 +171,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
 
+#ifdef __linux__
     // Read /proc/[pid]/stat
     if(sprintf(procFilePath, "/proc/%d/stat", pid) < 0){
         return false;
@@ -299,7 +350,14 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     }
 
     proc->num_threads = strtol(token, NULL, 10);
+#endif    
 
+#ifdef __APPLE__
+    proc->num_threads = taskInfo.ptinfo.pti_threadnum;
+    Trace("Number of threads: %d", proc->num_threads);
+#endif
+
+#ifdef __linux__
     // (21) itrealvalue
     token = strtok_r(NULL, " ", &savePtr);
     if(token == NULL){
@@ -334,8 +392,13 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         return false;
     }
 
-    proc->rss = strtol(token, NULL, 10);
+    proc->rss = strtol(token, NULL, 10);    
+#endif
+#ifdef __APPLE__
+    proc->rss = taskInfo.ptinfo.pti_resident_size; 
+#endif
 
+#ifdef __linux__
     // (25) rsslim
     token = strtok_r(NULL, " ", &savePtr);
     if(token == NULL){
@@ -587,7 +650,7 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
     }
 
     proc->exit_code = (int)strtol(token, NULL, 10);
-#endif
+#endif    
     return true;
 }
 

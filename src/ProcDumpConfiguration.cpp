@@ -618,32 +618,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
             i++;
         }
-        else if( 0 == strcasecmp( argv[i], "/tc" ) ||
-                    0 == strcasecmp( argv[i], "-tc" ))
-        {
-            if( i+1 >= argc || self->ThreadThreshold != -1 ) return PrintUsage();
-            if(!ConvertToInt(argv[i+1], &self->ThreadThreshold)) return PrintUsage();
-            if(self->ThreadThreshold < 0)
-            {
-                Log(error, "Invalid thread threshold count specified.");
-                return PrintUsage();
-            }
-
-            i++;
-        }
-        else if( 0 == strcasecmp( argv[i], "/fc" ) ||
-                    0 == strcasecmp( argv[i], "-fc" ))
-        {
-            if( i+1 >= argc || self->FileDescriptorThreshold != -1 ) return PrintUsage();
-            if(!ConvertToInt(argv[i+1], &self->FileDescriptorThreshold)) return PrintUsage();
-            if(self->FileDescriptorThreshold < 0)
-            {
-                Log(error, "Invalid file descriptor threshold count specified.");
-                return PrintUsage();
-            }
-
-            i++;
-        }
         else if( 0 == strcasecmp( argv[i], "/sig" ) ||
                     0 == strcasecmp( argv[i], "-sig" ))
         {
@@ -679,6 +653,32 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
             i++;
         }
 #endif        
+        else if( 0 == strcasecmp( argv[i], "/tc" ) ||
+                    0 == strcasecmp( argv[i], "-tc" ))
+        {
+            if( i+1 >= argc || self->ThreadThreshold != -1 ) return PrintUsage();
+            if(!ConvertToInt(argv[i+1], &self->ThreadThreshold)) return PrintUsage();
+            if(self->ThreadThreshold < 0)
+            {
+                Log(error, "Invalid thread threshold count specified.");
+                return PrintUsage();
+            }
+
+            i++;
+        }
+        else if( 0 == strcasecmp( argv[i], "/fc" ) ||
+                    0 == strcasecmp( argv[i], "-fc" ))
+        {
+            if( i+1 >= argc || self->FileDescriptorThreshold != -1 ) return PrintUsage();
+            if(!ConvertToInt(argv[i+1], &self->FileDescriptorThreshold)) return PrintUsage();
+            if(self->FileDescriptorThreshold < 0)
+            {
+                Log(error, "Invalid file descriptor threshold count specified.");
+                return PrintUsage();
+            }
+
+            i++;
+        }
         else if( 0 == strcasecmp( argv[i], "/pf" ) ||
                     0 == strcasecmp( argv[i], "-pf" ))
         {
@@ -1122,6 +1122,28 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         {
             printf("%-40s%s\n", "Commit Threshold:", "n/a");
         }
+
+        // Thread
+        if (self->ThreadThreshold != -1)
+        {
+            printf("%-40s%d\n", "Thread Threshold:", self->ThreadThreshold);
+        }
+        else
+        {
+            printf("%-40s%s\n", "Thread Threshold:", "n/a");
+        }
+
+        // File descriptor
+        if (self->FileDescriptorThreshold != -1)
+        {
+            printf("%-40s%d\n", "File Descriptor Threshold:", self->FileDescriptorThreshold);
+        }
+        else
+        {
+            printf("%-40s%s\n", "File Descriptor Threshold:", "n/a");
+        }
+
+#ifdef __linux__
         // GC Generation
         if (self->DumpGCGeneration != -1)
         {
@@ -1159,27 +1181,6 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
             printf("%-40s%s\n", "Resource tracking:", "n/a");
             printf("%-40s%s\n", "Resource tracking sample rate:", "n/a");
         }
-
-        // Thread
-        if (self->ThreadThreshold != -1)
-        {
-            printf("%-40s%d\n", "Thread Threshold:", self->ThreadThreshold);
-        }
-        else
-        {
-            printf("%-40s%s\n", "Thread Threshold:", "n/a");
-        }
-
-        // File descriptor
-        if (self->FileDescriptorThreshold != -1)
-        {
-            printf("%-40s%d\n", "File Descriptor Threshold:", self->FileDescriptorThreshold);
-        }
-        else
-        {
-            printf("%-40s%s\n", "File Descriptor Threshold:", "n/a");
-        }
-
         // Signal
         if (self->SignalCount > 0)
         {
@@ -1216,6 +1217,7 @@ bool PrintConfiguration(struct ProcDumpConfiguration *self)
         {
             printf("%-40s%s\n", "Exclude filter:", self->ExcludeFilter);
         }
+#endif
 
         // Polling inverval
         printf("%-40s%d\n", "Polling Interval (ms):", self->PollingInterval);
@@ -1269,13 +1271,13 @@ int PrintUsage()
     printf("            [-s Seconds]\n");
     printf("            [-c|-cl CPU_Usage]\n");
     printf("            [-m|-ml Commit_Usage1[,Commit_Usage2...]]\n");
+    printf("            [-tc Thread_Threshold]\n");
+    printf("            [-fc FileDescriptor_Threshold]\n");
 #ifdef __linux__    
     printf("            [-gcm [<GCGeneration>: | LOH: | POH:]Memory_Usage1[,Memory_Usage2...]]\n");
     printf("            [-gcgen Generation]\n");
     printf("            [-restrack [nodump]]\n");
     printf("            [-sr Sample_Rate]\n");
-    printf("            [-tc Thread_Threshold]\n");
-    printf("            [-fc FileDescriptor_Threshold]\n");
     printf("            [-sig Signal_Number1[,Signal_Number2...]]\n");
     printf("            [-e]\n");
     printf("            [-f Include_Filter,...]\n");
@@ -1298,6 +1300,8 @@ int PrintUsage()
     printf("   -s      Consecutive seconds before dump is written (default is 10).\n");
     printf("   -c      CPU threshold above which to create a dump of the process.\n");
     printf("   -cl     CPU threshold below which to create a dump of the process.\n");
+    printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
+    printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
 #ifdef __linux__
     printf("   -m      Memory commit threshold(s) (MB) above which to create dumps.\n");
     printf("   -ml     Memory commit threshold(s) (MB) below which to create dumps.\n");
@@ -1305,8 +1309,6 @@ int PrintUsage()
     printf("   -gcgen  [.NET] Create dump when the garbage collection of the specified generation starts and finishes.\n");
     printf("   -restrack Enable memory leak tracking (malloc family of APIs). Use the nodump option to prevent dump generation and only produce restrack report(s).\n");
     printf("   -sr     Sample rate when using -restrack.\n");
-    printf("   -tc     Thread count threshold above which to create a dump of the process.\n");
-    printf("   -fc     File descriptor count threshold above which to create a dump of the process.\n");
     printf("   -sig    Comma separated list of signal number(s) during which any signal results in a dump of the process.\n");
     printf("   -e      [.NET] Create dump when the process encounters an exception.\n");
     printf("   -f      Filter (include) on the content of .NET exceptions (comma separated). Wildcards (*) are supported.\n");
