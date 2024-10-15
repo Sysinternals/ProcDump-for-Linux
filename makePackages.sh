@@ -100,15 +100,16 @@ fi
 
 if [ "$PACKAGE_TYPE" = "brew" ]; then
 
+    cp $CMAKE_SOURCE_DIR/procdump.rb $PROJECT_BINARY_DIR
     # create brew package
-    tar "cfz" ${BREW_PACKAGE_NAME}.tar.gz procdump
+    tar "cfz" $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.tar.gz $PROJECT_BINARY_DIR/procdump
 
     # Update formula file
-    shasum -a 256 ${BREW_PACKAGE_NAME}.tar.gz | awk '{print $1}' > hash.txt
-    NEW_SHA256=$(cat hash.txt)
-    sed -i '' "s|^    sha256 \".*\"|    sha256 \"$NEW_SHA256\"|" procdump.rb
-    sed -i '' "s|^    version \".*\"|    version \"$PACKAGE_VER\"|" procdump.rb
-    sed -i '' "s|^    url \".*\"|    url \"https://github.com/Sysinternals/ProcDump-for-Linux/releases/download/$PACKAGE_VER/$BREW_PACKAGE_NAME.tar.gz\"|" procdump.rb
+    shasum -a 256 $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.tar.gz | awk '{print $1}' > $PROJECT_BINARY_DIR/hash.txt
+    NEW_SHA256=$(cat $PROJECT_BINARY_DIR/hash.txt)
+    sed -i '' "s|^    sha256 \".*\"|    sha256 \"$NEW_SHA256\"|" $PROJECT_BINARY_DIR/procdump.rb
+    sed -i '' "s|^    version \".*\"|    version \"$PACKAGE_VER\"|" $PROJECT_BINARY_DIR/procdump.rb
+    sed -i '' "s|^    url \".*\"|    url \"https://github.com/Sysinternals/ProcDump-for-Linux/releases/download/$PACKAGE_VER/$BREW_PACKAGE_NAME.tar.gz\"|" $PROJECT_BINARY_DIR/procdump.rb
 
 
 fi
