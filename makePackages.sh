@@ -39,6 +39,7 @@ PACKAGE_TYPE=$6
 
 DEB_PACKAGE_NAME="${PACKAGE_NAME}_${PACKAGE_VER}_amd64"
 RPM_PACKAGE_NAME="${PACKAGE_NAME}-${PACKAGE_VER}-${PACKAGE_REL}"
+BREW_PACKAGE_NAME="${PACKAGE_NAME}-mac-${PACKAGE_VER}"
 
 if [ "$PACKAGE_TYPE" = "deb" ]; then
     DPKGDEB=`which dpkg-deb`
@@ -97,4 +98,18 @@ if [ "$PACKAGE_TYPE" = "rpm" ]; then
     fi
 fi
 
+if [ "$PACKAGE_TYPE" = "brew" ]; then
+
+    # create brew package
+    tar "cfz" ${BREW_PACKAGE_NAME}.tar.gz procdump
+
+    # Update formula file
+    shasum -a 256 ${BREW_PACKAGE_NAME}.tar.gz | awk '{print $1}' > hash.txt
+    NEW_SHA256=$(cat hash.txt)
+    sed -i '' "s|^    sha256 \".*\"|    sha256 \"$NEW_SHA256\"|" procdump.rb
+    sed -i '' "s|^    version \".*\"|    version \"$PACKAGE_VER\"|" procdump.rb
+    sed -i '' "s|^    url \".*\"|    url \"https://github.com/Sysinternals/ProcDump-for-Linux/releases/download/$PACKAGE_VER/$BREW_PACKAGE_NAME.tar.gz\"|" procdump.rb
+
+
+fi
 exit $RET

@@ -91,8 +91,10 @@ set(sym_SOURCE_DIR ${CMAKE_SOURCE_DIR}/sym)
 # Configure files
 #
 configure_file(${procdump_INC}/ProcDumpVersion.h.in ${PROJECT_BINARY_DIR}/ProcDumpVersion.h)
-configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
-configure_file(dist/SPECS.in/spec.in SPECS.spec)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
+  configure_file(dist/SPECS.in/spec.in SPECS.spec)
+endif()
 
 #
 # Compiler
@@ -102,7 +104,7 @@ set(CMAKE_CXX_COMPILER "clang++")
 #
 # Make procdump profiler
 #
-if(NOT APPLE)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   message(STATUS "Building for Linux")
   # Figure out which architecture we are building for
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
@@ -156,7 +158,7 @@ endif()
 #
 # Make ProcDump
 #
-if(NOT APPLE)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   message(STATUS "Building for Linux")
   add_executable(procdump
                 ${procdump_SRC}/CoreDumpWriter.cpp
@@ -210,12 +212,10 @@ target_include_directories(procdump PUBLIC
                            ${sym_SOURCE_DIR}
                            ${procdump_ebpf_SOURCE_DIR}
                           )
-if(NOT APPLE)
-  message(STATUS "Building for Linux")
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   add_dependencies(procdump libbpf procdump_ebpf)
   target_link_libraries(procdump ${libbpf_SOURCE_DIR}/src/libbpf.a elf z pthread)
 else()
-  #add_dependencies(procdump libbpf procdump_ebpf)
   target_link_libraries(procdump z pthread)
 endif()
 
@@ -246,20 +246,27 @@ target_link_libraries(ProcDumpTestApplication pthread)
 #
 # Make package(s)
 #
-add_custom_target(deb
-    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "deb"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
-)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_custom_target(deb
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "deb"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
 
-add_custom_target(rpm
-    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "rpm"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
-)
+  add_custom_target(rpm
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "rpm"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
+else()
+  add_custom_target(brew
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "brew"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
+endif()
 
 #
 # Make ProcDump eBPF program
 #
-if(NOT APPLE)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   # Fetch libbpf
   include(ExternalProject)
 
