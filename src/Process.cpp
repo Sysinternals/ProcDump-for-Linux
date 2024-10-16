@@ -373,9 +373,12 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
         Trace("GetProcessStat: failed to get token from proc/[pid]/stat - starttime.");
         return false;
     }
-
     proc->starttime = strtoull(token, NULL, 10);
+#else
+    proc->starttime = taskInfo.pbsd.pbi_start_tvsec;
+#endif
 
+#ifdef __linux__
     // (23) vsize
     token = strtok_r(NULL, " ", &savePtr);
     if(token == NULL){
@@ -1098,15 +1101,16 @@ int GetCpuUsage(pid_t pid)
     mach_timebase_info_data_t timebaseInfo;
     kern_return_t kr = mach_timebase_info(&timebaseInfo);
 
-    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, 0);
+/*    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, 0);
     pids = (pid_t*) malloc(num_pids*sizeof(pid_t));
     num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, num_pids*sizeof(pid_t));
     for (int i = 0; i < num_pids / sizeof(pid_t); i++) 
     {
         if(pids[i] == pid)
         {
+*/        
             struct proc_taskallinfo taskInfo;
-            int ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, &taskInfo, sizeof(taskInfo));
+            ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, &taskInfo, sizeof(taskInfo));
             if (ret <= 0) 
             {
                 Trace("[GetCpuUsage] Failed to get process information for pid: %d", pid);
@@ -1118,12 +1122,43 @@ int GetCpuUsage(pid_t pid)
                 unsigned long totalTime = ((taskInfo.ptinfo.pti_total_user * timebaseInfo.numer / timebaseInfo.denom)  + (taskInfo.ptinfo.pti_total_system * timebaseInfo.numer / timebaseInfo.denom)) / 1000000000;
                 unsigned long elapsedTime = ((time(NULL) - boottime.tv_sec)) - (taskInfo.pbsd.pbi_start_tvsec - boottime.tv_sec);
                 cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
-                break;
             }           
-        }   
+        /*}   
     }
 
-    free(pids);
+    free(pids);*/
     return cpuUsage;
 }
+
+//--------------------------------------------------------------------
+//
+// GetRunningPids - Returns the running PIDS on the system.
+//
+//--------------------------------------------------------------------
+int GetRunningPids(pid_t** pids)
+{
+    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, NULL, 0);
+    *pids = (pid_t*) malloc(num_pids*sizeof(pid_t));
+    num_pids = proc_listpids(PROC_ALL_PIDS, 0, *pids, num_pids*sizeof(pid_t));
+
+    return num_pids;
+}
+
+
+//--------------------------------------------------------------------
+//
+// GetProcessStartTime - Returns the process start time.
+//
+//--------------------------------------------------------------------
+uint64_t GetProcessStartTime(pid_t pid)
+{
+    struct proc_taskallinfo taskInfo;
+    if(GetTaskInfo(&taskInfo, pid) == false)
+    {
+        return 0;
+    }
+
+    return taskInfo.pbsd.pbi_start_tvsec;
+}
+
 #endif

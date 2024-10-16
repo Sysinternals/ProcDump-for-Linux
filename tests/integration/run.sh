@@ -21,12 +21,14 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 
-if [ ! -e /usr/bin/stress-ng ]; then
+if [ ! -e /usr/bin/stress-ng ] && [ ! -e /opt/homebrew/bin/stress-ng ]; then
    echo "Please install stress-ng before running this script!"
    exit 1
 fi
 
-if [ ! -e /usr/bin/dotnet ]; then
+OS=$(uname -s)
+
+if [ ! -e /usr/bin/dotnet ] && [ "$OS" != "Darwin" ]; then
    echo "Please install .NET before running this script!"
    exit 1
 fi
@@ -47,7 +49,17 @@ function runTest {
 	fi
 }
 
-for file in $DIR/scenarios/*.sh
+
+scenarioDir=""
+if [ "$OS" = "Darwin" ]; then
+    scenarioDir=$DIR/scenarios_mac
+else    
+    scenarioDir=$DIR/scenarios
+fi
+
+echo "Running tests in $scenarioDir"
+
+for file in $scenarioDir/*.sh;
 do
     if [ ! -z "$1" ]; then
          if [[ "$file" =~ "$1" ]]; then

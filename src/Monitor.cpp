@@ -321,15 +321,24 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // Iterate over all running processes
+#ifdef __linux__            
             struct dirent ** nameList;
             int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+#else
+            pid_t *nameList;
+            int numEntries = GetRunningPids(&nameList);
+#endif            
             for (int i = 0; i < numEntries; i++)
             {
                 pid_t procPid;
+#ifdef __linux__
                 if(!ConvertToInt(nameList[i]->d_name, &procPid))
                 {
                     continue;
                 }
+#else
+                procPid = nameList[i];
+#endif
 
                 if(self->bProcessGroup)
                 {
@@ -398,10 +407,12 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // clean up namelist
+#ifdef __linux__            
             for (int i = 0; i < numEntries; i++)
             {
                 free(nameList[i]);
             }
+#endif            
             if(numEntries!=-1)
             {
                 free(nameList);

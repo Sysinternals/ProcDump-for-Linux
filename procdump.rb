@@ -5,10 +5,11 @@ class Procdump < Formula
     url "updated during make brew"  
     sha256 "8a1bac6857453ad2f63829016ee0c5a44770ddb0e158195d0cb1d756749881a6"  
     version "1.0.0"
-    depends_on macos: ">= :sierra"  # gcore availability
+    depends_on macos: :sierra  # gcore availability
     license "MIT"
 
     def install
       bin.install "procdump"
+      man1.install "procdump.1.gz"
     end
   end

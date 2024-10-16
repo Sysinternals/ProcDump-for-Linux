@@ -53,11 +53,19 @@ add_custom_target(procDumpManPageCompress ALL
                   DEPENDS ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
                   )
 
-add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
-                   COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
-                   COMMENT "Compressing ProcDump man page"
-                   DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
-                  )
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMENT "Compressing ProcDump man page"
+                    DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
+                    )
+else()
+  add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump_mac.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMENT "Compressing ProcDump man page"
+                    DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
+                    )
+endif()                  
 
 #
 # Change log

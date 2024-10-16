@@ -102,7 +102,7 @@ if [ "$PACKAGE_TYPE" = "brew" ]; then
 
     cp $CMAKE_SOURCE_DIR/procdump.rb $PROJECT_BINARY_DIR
     # create brew package
-    tar "cfz" $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.tar.gz $PROJECT_BINARY_DIR/procdump
+    tar "cfz" $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.tar.gz procdump procdump.1.gz
 
     # Update formula file
     shasum -a 256 $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.tar.gz | awk '{print $1}' > $PROJECT_BINARY_DIR/hash.txt

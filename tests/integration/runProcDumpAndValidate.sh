@@ -1,7 +1,9 @@
 #!/bin/bash
 function runProcDumpAndValidate {
 	DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-	PROCDUMPPATH=$(readlink -m "$DIR/../../procdump");
+	PROCDUMPPATH="$DIR/../../procdump";
+
+	OS=$(uname -s)
 
 	# In cases where the previous scenario is still writing a dump we simply want to kill it
 	pkill -9 gdb > /dev/null
@@ -31,8 +33,14 @@ function runProcDumpAndValidate {
 		sleep 5s
 		echo [`date +"%T.%3N"`] Done waiting for stress-ng to start
 
-		childrenpid=$(pidof -o $pid $(which stress-ng))
-			echo "ChildrenPID: $childrenpid"
+		childrenpid=""
+		if [ "$OS" = "Darwin" ]; then
+			childrenpid=$(pgrep stress-ng | grep -v "^$pid$")
+		else    
+			childrenpid=$(pidof -o $pid $(which stress-ng))
+		fi
+
+		echo "ChildrenPID: $childrenpid"
 
 		childpid=$(echo $childrenpid | cut -d " " -f1)
 		echo "ChildPID: $childpid"

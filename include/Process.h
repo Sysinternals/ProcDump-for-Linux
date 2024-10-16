@@ -295,5 +295,6 @@ pid_t LookupProcessPidByName(const char* name);
 int GetMaximumPID();
 int FilterForPid(const struct dirent *entry);
 int GetCpuUsage(pid_t pid);
+int GetRunningPids(pid_t** pids);
 
 #endif // PROCFSLIB_PROCESS_H
