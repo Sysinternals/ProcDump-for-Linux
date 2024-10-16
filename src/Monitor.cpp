@@ -219,15 +219,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     // allocate list of configs for process monitoring
     int numMonitoredProcesses = 0;
 
-    // create binary map to track processes we have already tracked and closed
-    int maxPid = GetMaximumPID();
-    if(maxPid < 0)
-    {
-        Log(error, INTERNAL_ERROR);
-        Trace("Unable to get MAX_PID value\n");
-        return;
-    }
-    monitoredProcessMap.reserve(maxPid);
+    monitoredProcessMap.reserve(5000);      // assume 5000 processes
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
     // Note: We only create ONE per instance of procdump rather than per monitor.
