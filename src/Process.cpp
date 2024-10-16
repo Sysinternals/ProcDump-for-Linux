@@ -113,7 +113,6 @@ bool GetNumFileDescriptors(pid_t pid, struct ProcessStat* proc)
     } 
 
     proc->num_filedescriptors = ret/sizeof(struct proc_fdinfo);
-    Trace("File descriptors: %d", proc->num_filedescriptors);
 
     free(fdInfo);
 #endif
@@ -354,7 +353,6 @@ bool GetProcessStat(pid_t pid, struct ProcessStat *proc) {
 
 #ifdef __APPLE__
     proc->num_threads = taskInfo.ptinfo.pti_threadnum;
-    Trace("Number of threads: %d", proc->num_threads);
 #endif
 
 #ifdef __linux__

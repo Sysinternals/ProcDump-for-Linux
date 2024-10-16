@@ -1133,7 +1133,6 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             {
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
-                    Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
                     if(config->bRestrackGenerateDump == true)
                     {
                         // Only generate core dump if user did not specify the "nodump" restrack option

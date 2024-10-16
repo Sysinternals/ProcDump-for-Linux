@@ -74,7 +74,11 @@ function runProcDumpAndValidate {
 
 		# Launch target process
 		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
-		TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
+		if [ "$OS" = "Darwin" ]; then
+			TESTPROGPATH=$DIR/../../$TESTPROGNAME;
+		else    
+			TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
+		fi		
 		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
