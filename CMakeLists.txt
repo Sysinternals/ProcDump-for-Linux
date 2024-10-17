@@ -166,6 +166,11 @@ endif()
 #
 # Make ProcDump
 #
+if(APPLE)
+    # Create universal binary
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+endif()
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   message(STATUS "Building for Linux")
   add_executable(procdump

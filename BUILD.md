@@ -27,7 +27,7 @@ make
 ### Ubuntu
 ```
 sudo apt update
-sudo apt -y install gcc cmake make clang clang-12 gdb zlib-devel libelf-dev build-essential libbpf-dev linux-tools-common linux-tools-$(uname -r)
+sudo apt -y install gcc cmake make clang clang-12 gdb zlib1g-dev libelf-dev build-essential libbpf-dev linux-tools-common linux-tools-$(uname -r)
 ```
 
 ### Rocky Linux

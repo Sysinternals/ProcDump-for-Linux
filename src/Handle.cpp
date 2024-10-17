@@ -70,7 +70,7 @@ int WaitForSingleObject(struct Handle *Handle, int Milliseconds)
         else
         {
 #ifdef __linux__            
-            sem_timedwait(&(Handle->semaphore), &ts);
+            sem_timedwait(Handle->semaphore, &ts);
 #elif __APPLE__
             struct timespec now, sleep_time;    
             while(1)

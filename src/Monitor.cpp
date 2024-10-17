@@ -1324,7 +1324,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
-#ifdef __linuxx__
+#ifdef __linux__
     std::vector<pthread_t> leakReportThreads;
 #endif
 

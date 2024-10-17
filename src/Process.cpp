@@ -11,12 +11,14 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <sys/sysctl.h>
 
 #ifdef __APPLE__
 #include <libproc.h>
 #include <mach/mach_time.h>
+#include <sys/sysctl.h>
 #endif
+
+extern long HZ;
 
 //--------------------------------------------------------------------
 //
@@ -1065,18 +1067,20 @@ int FilterForPid(const struct dirent *entry)
 //
 //--------------------------------------------------------------------
 #ifdef __linux__
-int GetCpuUsage(ProcessStat* procStat)
+int GetCpuUsage(pid_t pid)
 {
     int cpuUsage = 0;
     struct sysinfo sysInfo;
-    unsinged long totalTime;
+    unsigned long totalTime;
     unsigned long elapsedTime;
+    struct ProcessStat procStat = {0};    
 
     sysinfo(&sysInfo);
+    GetProcessStat(pid, &procStat);    
 
     // Calc CPU
-    totalTime = (unsigned long)((procStat->utime + procStat->stime) / HZ);
-    elapsedTime = (unsigned long)(sysInfo.uptime - (long)(procStat->starttime / HZ));
+    totalTime = (unsigned long)((procStat.utime + procStat.stime) / HZ);   
+    elapsedTime = (unsigned long)(sysInfo.uptime - (long)(procStat.starttime / HZ)); 
     cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
 
     return cpuUsage;
