@@ -67,3 +67,15 @@ stages:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)/logs/procdumpprofiler.log'
           ArtifactName: 'procdumpprofiler.log'
           publishLocation: 'Container'
+
+    - job: "ProcDump_Build_Mac_Run_Unit_Tests"
+      pool:
+        vmImage: "macOS-latest"
+      steps:
+
+      - template: templates/build.yaml
+
+      - script: |
+          cd procdump_build/tests/integration
+          sudo ./run.sh
+        displayName: 'Run unit tests'
