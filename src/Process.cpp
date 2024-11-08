@@ -1103,32 +1103,21 @@ int GetCpuUsage(pid_t pid)
     mach_timebase_info_data_t timebaseInfo;
     kern_return_t kr = mach_timebase_info(&timebaseInfo);
 
-/*    int num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, 0);
-    pids = (pid_t*) malloc(num_pids*sizeof(pid_t));
-    num_pids = proc_listpids(PROC_ALL_PIDS, 0, pids, num_pids*sizeof(pid_t));
-    for (int i = 0; i < num_pids / sizeof(pid_t); i++) 
+    struct proc_taskallinfo taskInfo;
+    ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, &taskInfo, sizeof(taskInfo));
+    if (ret <= 0) 
     {
-        if(pids[i] == pid)
-        {
-*/        
-            struct proc_taskallinfo taskInfo;
-            ret = proc_pidinfo(pid, PROC_PIDTASKALLINFO, 0, &taskInfo, sizeof(taskInfo));
-            if (ret <= 0) 
-            {
-                Trace("[GetCpuUsage] Failed to get process information for pid: %d", pid);
-                free(pids);
-                return -1;
-            } 
-            else
-            {
-                unsigned long totalTime = ((taskInfo.ptinfo.pti_total_user * timebaseInfo.numer / timebaseInfo.denom)  + (taskInfo.ptinfo.pti_total_system * timebaseInfo.numer / timebaseInfo.denom)) / 1000000000;
-                unsigned long elapsedTime = ((time(NULL) - boottime.tv_sec)) - (taskInfo.pbsd.pbi_start_tvsec - boottime.tv_sec);
-                cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
-            }           
-        /*}   
-    }
+        Trace("[GetCpuUsage] Failed to get process information for pid: %d", pid);
+        free(pids);
+        return -1;
+    } 
+    else
+    {
+        unsigned long totalTime = ((taskInfo.ptinfo.pti_total_user * timebaseInfo.numer / timebaseInfo.denom)  + (taskInfo.ptinfo.pti_total_system * timebaseInfo.numer / timebaseInfo.denom)) / 1000000000;
+        unsigned long elapsedTime = ((time(NULL) - boottime.tv_sec)) - (taskInfo.pbsd.pbi_start_tvsec - boottime.tv_sec);
+        cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
+    }           
 
-    free(pids);*/
     return cpuUsage;
 }
 
