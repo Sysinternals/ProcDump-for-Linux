@@ -73,6 +73,10 @@ stages:
         vmImage: "macOS-latest"
       steps:
 
+      - script: |
+          sw_vers
+        displayName: 'Diagnostics'
+
       - template: templates/build.yaml
 
       - script: |
