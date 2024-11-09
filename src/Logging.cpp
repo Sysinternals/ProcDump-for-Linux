@@ -37,8 +37,8 @@ void LogFormatter(enum LogLevel logLevel, enum DiagnosticsLogTarget target, cons
         return;
     }
 
-    sprintf(trace, "[%s - %s]: ", timeBuff, LogLevelStrings[logLevel]);
-    vsprintf(trace+traceLen, message, args);
+    snprintf(trace, traceLen+argsLen, "[%s - %s]: ", timeBuff, LogLevelStrings[logLevel]);
+    vsnprintf(trace+traceLen, traceLen+argsLen, message, args);
 
     // If a log entry is not 'debug' it simply goes to stdout.
     // If you want an entry to only go to the syslog, use 'debug'

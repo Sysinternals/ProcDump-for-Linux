@@ -19,7 +19,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdint.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#elif __APPLE_
+#endif
 
 #define DATE_LENGTH 26
 #define MAX_LINES 15

@@ -10,7 +10,10 @@
 #ifndef PROCFSLIB_PROCESS_H
 #define PROCFSLIB_PROCESS_H
 
+#ifdef __linux__
 #include <linux/version.h>
+#endif
+
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
@@ -291,5 +294,7 @@ bool LookupProcessByName(const char* procName);
 pid_t LookupProcessPidByName(const char* name);
 int GetMaximumPID();
 int FilterForPid(const struct dirent *entry);
+int GetCpuUsage(pid_t pid);
+int GetRunningPids(pid_t** pids);
 
 #endif // PROCFSLIB_PROCESS_H

@@ -39,6 +39,7 @@ PACKAGE_TYPE=$6
 
 DEB_PACKAGE_NAME="${PACKAGE_NAME}_${PACKAGE_VER}_amd64"
 RPM_PACKAGE_NAME="${PACKAGE_NAME}-${PACKAGE_VER}-${PACKAGE_REL}"
+BREW_PACKAGE_NAME="${PACKAGE_NAME}-mac-${PACKAGE_VER}"
 
 if [ "$PACKAGE_TYPE" = "deb" ]; then
     DPKGDEB=`which dpkg-deb`
@@ -97,4 +98,9 @@ if [ "$PACKAGE_TYPE" = "rpm" ]; then
     fi
 fi
 
+if [ "$PACKAGE_TYPE" = "brew" ]; then
+
+    # create brew package
+    zip $PROJECT_BINARY_DIR/${BREW_PACKAGE_NAME}.zip procdump procdump.1.gz
+fi
 exit $RET

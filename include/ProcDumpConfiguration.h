@@ -11,7 +11,9 @@
 #define PROCDUMPCONFIGURATION_H
 
 #include <stdbool.h>
+#ifdef __linux__
 #include <sys/sysinfo.h>
+#endif
 #include <zconf.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,8 +34,10 @@
 #include <fcntl.h>
 #include <signal.h>
 
+#ifdef __linux__
 #include "Restrack.h"
 #include "procdump_ebpf_common.h"
+#endif
 
 #include <unordered_map>
 
@@ -75,7 +79,9 @@ struct ProcDumpConfiguration
     bool bProcessGroup;         // -pgid
 
     char *ProcessName;
+#ifdef __linux__    
     struct sysinfo SystemInfo;
+#endif
 
     // Runtime Values
     int NumberOfDumpsCollecting; // Number of dumps we're collecting
@@ -131,8 +137,10 @@ struct ProcDumpConfiguration
     // Keeps track of the memory allocations when -restrack is specified.
     // Access must be protected by memAllocMapMutex.
     //
+#ifdef __linux__
     std::unordered_map<uintptr_t, ResourceInformation*> memAllocMap;
     pthread_mutex_t memAllocMapMutex;
+#endif
 
     // multithreading
     // set max number of concurrent dumps on init (default to 1)

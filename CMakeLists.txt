@@ -53,11 +53,19 @@ add_custom_target(procDumpManPageCompress ALL
                   DEPENDS ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
                   )
 
-add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
-                   COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
-                   COMMENT "Compressing ProcDump man page"
-                   DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
-                  )
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMENT "Compressing ProcDump man page"
+                    DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
+                    )
+else()
+  add_custom_command(OUTPUT ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMAND gzip -9n -f -c "${CMAKE_SOURCE_DIR}/procdump_mac.1" > ${PROJECT_BINARY_DIR}/${PROCDUMP_COMPRESS_MAN}
+                    COMMENT "Compressing ProcDump man page"
+                    DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
+                    )
+endif()                  
 
 #
 # Change log
@@ -91,8 +99,10 @@ set(sym_SOURCE_DIR ${CMAKE_SOURCE_DIR}/sym)
 # Configure files
 #
 configure_file(${procdump_INC}/ProcDumpVersion.h.in ${PROJECT_BINARY_DIR}/ProcDumpVersion.h)
-configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
-configure_file(dist/SPECS.in/spec.in SPECS.spec)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  configure_file(dist/DEBIAN.in/control.in DEBIANcontrol)
+  configure_file(dist/SPECS.in/spec.in SPECS.spec)
+endif()
 
 #
 # Compiler
@@ -102,80 +112,111 @@ set(CMAKE_CXX_COMPILER "clang++")
 #
 # Make procdump profiler
 #
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  message(STATUS "Building for Linux")
+  # Figure out which architecture we are building for
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
+    set(CLRHOSTDEF -DHOST_AMD64 -DHOST_64BIT)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL x86 OR CMAKE_SYSTEM_PROCESSOR STREQUAL i686)
+    set(CLRHOSTDEF -DHOST_X86)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv6 OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv6l)
+    set(CLRHOSTDEF -DHOST_ARM -DHOST_ARMV6)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL arm OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv7-a)
+    set(CLRHOSTDEF -DHOST_ARM)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL arm64)
+    set(CLRHOSTDEF -DHOST_ARM64 -DHOST_64BIT)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL loongarch64)
+    set(CLRHOSTDEF -DHOST_LOONGARCH64 -DHOST_64BIT)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL riscv64)
+    set(CLRHOSTDEF -DHOST_RISCV64 -DHOST_64BIT)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL s390x)
+    set(CLRHOSTDEF -DHOST_S390X -DHOST_64BIT -DBIGENDIAN)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64)
+    set(CLRHOSTDEF -DHOST_MIPS64 -DHOST_64BIT=1)
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL ppc64le)
+    set(CLRHOSTDEF -DHOST_POWERPC64 -DHOST_64BIT)
+  else()
+    message(FATAL_ERROR "'${CMAKE_SYSTEM_PROCESSOR}' is an unsupported architecture.")
+  endif()
 
-# Figure out which architecture we are building for
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
-  set(CLRHOSTDEF -DHOST_AMD64 -DHOST_64BIT)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL x86 OR CMAKE_SYSTEM_PROCESSOR STREQUAL i686)
-  set(CLRHOSTDEF -DHOST_X86)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv6 OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv6l)
-  set(CLRHOSTDEF -DHOST_ARM -DHOST_ARMV6)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL arm OR CMAKE_SYSTEM_PROCESSOR STREQUAL armv7-a)
-  set(CLRHOSTDEF -DHOST_ARM)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL arm64)
-  set(CLRHOSTDEF -DHOST_ARM64 -DHOST_64BIT)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL loongarch64)
-  set(CLRHOSTDEF -DHOST_LOONGARCH64 -DHOST_64BIT)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL riscv64)
-  set(CLRHOSTDEF -DHOST_RISCV64 -DHOST_64BIT)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL s390x)
-  set(CLRHOSTDEF -DHOST_S390X -DHOST_64BIT -DBIGENDIAN)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64)
-  set(CLRHOSTDEF -DHOST_MIPS64 -DHOST_64BIT=1)
-elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL ppc64le)
-  set(CLRHOSTDEF -DHOST_POWERPC64 -DHOST_64BIT)
-else()
-  message(FATAL_ERROR "'${CMAKE_SYSTEM_PROCESSOR}' is an unsupported architecture.")
+  add_library(ProcDumpProfiler SHARED
+              ${profiler_SRC}/ClassFactory.cpp
+              ${profiler_SRC}/ProcDumpProfiler.cpp
+              ${profiler_SRC}/dllmain.cpp
+              ${profiler_SRC}/corprof_i.cpp
+              ${profiler_SRC}/easylogging++.cc
+              )
+
+  target_compile_options(ProcDumpProfiler PRIVATE -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -Wno-pragma-pack -Wno-pointer-arith -Wno-conversion-null -Wno-write-strings -Wno-format-security -fPIC -fms-extensions ${CLRHOSTDEF} -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11)
+  set_target_properties(ProcDumpProfiler PROPERTIES PREFIX "")
+
+  target_include_directories(ProcDumpProfiler PUBLIC
+                            "${profiler_INC}"
+                            "${procdump_INC}"
+                            /usr/include
+                            )
+
+  add_custom_command(OUTPUT ProcDumpProfiler.o
+                    COMMAND "${LD}" -r -b binary -o "${PROJECT_BINARY_DIR}/ProcDumpProfiler.o" ProcDumpProfiler.so
+                    COMMENT "Packing ProcDumpProfiler.so into ProcDumpProfiler.o"
+                    DEPENDS ProcDumpProfiler
+                    )
 endif()
-
-add_library(ProcDumpProfiler SHARED
-            ${profiler_SRC}/ClassFactory.cpp
-            ${profiler_SRC}/ProcDumpProfiler.cpp
-            ${profiler_SRC}/dllmain.cpp
-            ${profiler_SRC}/corprof_i.cpp
-            ${profiler_SRC}/easylogging++.cc
-            )
-
-target_compile_options(ProcDumpProfiler PRIVATE -DELPP_NO_DEFAULT_LOG_FILE -DELPP_THREAD_SAFE -g -pthread -Wno-pragma-pack -Wno-pointer-arith -Wno-conversion-null -Wno-write-strings -Wno-format-security -fPIC -fms-extensions ${CLRHOSTDEF} -DPAL_STDCPP_COMPAT -DPLATFORM_UNIX -std=c++11)
-set_target_properties(ProcDumpProfiler PROPERTIES PREFIX "")
-
-target_include_directories(ProcDumpProfiler PUBLIC
-                           "${profiler_INC}"
-                           "${procdump_INC}"
-                           /usr/include
-                          )
-
-add_custom_command(OUTPUT ProcDumpProfiler.o
-                   COMMAND "${LD}" -r -b binary -o "${PROJECT_BINARY_DIR}/ProcDumpProfiler.o" ProcDumpProfiler.so
-                   COMMENT "Packing ProcDumpProfiler.so into ProcDumpProfiler.o"
-                   DEPENDS ProcDumpProfiler
-                  )
 
 #
 # Make ProcDump
 #
-add_executable(procdump
-               ${procdump_SRC}/CoreDumpWriter.cpp
-               ${procdump_SRC}/DotnetHelpers.cpp
-               ${procdump_SRC}/Events.cpp
-               ${procdump_SRC}/GenHelpers.cpp
-               ${procdump_SRC}/Handle.cpp
-               ${procdump_SRC}/Logging.cpp
-               ${procdump_SRC}/Monitor.cpp
-               ${procdump_SRC}/Procdump.cpp
-               ${procdump_SRC}/ProcDumpConfiguration.cpp
-               ${procdump_SRC}/Process.cpp
-               ${procdump_SRC}/ProfilerHelpers.cpp
-               ${procdump_SRC}/Restrack.cpp
-               ${sym_SOURCE_DIR}/bcc_proc.cpp
-               ${sym_SOURCE_DIR}/bcc_syms.cc
-               ${sym_SOURCE_DIR}/bcc_elf.cpp
-               ${sym_SOURCE_DIR}/bcc_perf_map.cpp
-               ${sym_SOURCE_DIR}/bcc_zip.cpp
-               ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
-              )
+if(APPLE)
+    # Create universal binary
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+endif()
 
-target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11 -O2)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  message(STATUS "Building for Linux")
+  add_executable(procdump
+                ${procdump_SRC}/CoreDumpWriter.cpp
+                ${procdump_SRC}/DotnetHelpers.cpp
+                ${procdump_SRC}/Events.cpp
+                ${procdump_SRC}/GenHelpers.cpp
+                ${procdump_SRC}/Handle.cpp
+                ${procdump_SRC}/Logging.cpp
+                ${procdump_SRC}/Monitor.cpp
+                ${procdump_SRC}/Procdump.cpp
+                ${procdump_SRC}/ProcDumpConfiguration.cpp
+                ${procdump_SRC}/Process.cpp
+                ${procdump_SRC}/ProfilerHelpers.cpp
+                ${procdump_SRC}/Restrack.cpp
+                ${sym_SOURCE_DIR}/bcc_proc.cpp
+                ${sym_SOURCE_DIR}/bcc_syms.cc
+                ${sym_SOURCE_DIR}/bcc_elf.cpp
+                ${sym_SOURCE_DIR}/bcc_perf_map.cpp
+                ${sym_SOURCE_DIR}/bcc_zip.cpp
+                ${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
+                )
+else()
+  add_executable(procdump
+                ${procdump_SRC}/CoreDumpWriter.cpp
+                #${procdump_SRC}/DotnetHelpers.cpp
+                ${procdump_SRC}/Events.cpp
+                ${procdump_SRC}/GenHelpers.cpp
+                ${procdump_SRC}/Handle.cpp
+                ${procdump_SRC}/Logging.cpp
+                ${procdump_SRC}/Monitor.cpp
+                ${procdump_SRC}/Procdump.cpp
+                ${procdump_SRC}/ProcDumpConfiguration.cpp
+                ${procdump_SRC}/Process.cpp
+                #${procdump_SRC}/ProfilerHelpers.cpp
+                #${procdump_SRC}/Restrack.cpp
+                #${sym_SOURCE_DIR}/bcc_proc.cpp
+                #${sym_SOURCE_DIR}/bcc_syms.cc
+                #${sym_SOURCE_DIR}/bcc_elf.cpp
+                #${sym_SOURCE_DIR}/bcc_perf_map.cpp
+                #${sym_SOURCE_DIR}/bcc_zip.cpp
+                #${PROJECT_BINARY_DIR}/ProcDumpProfiler.o
+                )
+endif()
+
+target_compile_options(procdump PRIVATE -g -pthread -fstack-protector-all -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -Werror -D_GNU_SOURCE -std=c++11)
 
 target_include_directories(procdump PUBLIC
                            ${procdump_INC}
@@ -184,9 +225,12 @@ target_include_directories(procdump PUBLIC
                            ${sym_SOURCE_DIR}
                            ${procdump_ebpf_SOURCE_DIR}
                           )
-
-add_dependencies(procdump libbpf procdump_ebpf)
-target_link_libraries(procdump ${libbpf_SOURCE_DIR}/src/libbpf.a elf z pthread)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_dependencies(procdump libbpf procdump_ebpf)
+  target_link_libraries(procdump ${libbpf_SOURCE_DIR}/src/libbpf.a elf z pthread)
+else()
+  target_link_libraries(procdump z pthread)
+endif()
 
 #
 # Copy integration test directory
@@ -215,72 +259,80 @@ target_link_libraries(ProcDumpTestApplication pthread)
 #
 # Make package(s)
 #
-add_custom_target(deb
-    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "deb"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
-)
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_custom_target(deb
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "deb"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
 
-add_custom_target(rpm
-    COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "rpm"
-    DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
-)
+  add_custom_target(rpm
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "rpm"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
+else()
+  add_custom_target(brew
+                  COMMAND "${CMAKE_SOURCE_DIR}/makePackages.sh" "${CMAKE_SOURCE_DIR}" "${PROJECT_BINARY_DIR}" "${PACKAGE_NAME}" "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}" "0" "brew"
+                  DEPENDS "${CMAKE_SOURCE_DIR}/dist" "${PROJECT_BINARY_DIR}/procdump"
+                  )
+endif()
 
 #
 # Make ProcDump eBPF program
 #
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  # Fetch libbpf
+  include(ExternalProject)
 
-# Fetch libbpf
-include(ExternalProject)
+  ExternalProject_Add(libbpf
+      GIT_REPOSITORY https://github.com/libbpf/libbpf.git
+      GIT_TAG v1.2.2
+      PREFIX ./libbpf
+      CONFIGURE_COMMAND ""
+      BUILD_COMMAND cd ../libbpf/src && bash -c "CFLAGS=\"-g -O2 -Werror -Wall -fPIC\" make"
+      INSTALL_COMMAND ""
+      )
 
-ExternalProject_Add(libbpf
-    GIT_REPOSITORY https://github.com/libbpf/libbpf.git
-    GIT_TAG v1.2.2
-    PREFIX ./libbpf
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND cd ../libbpf/src && bash -c "CFLAGS=\"-g -O2 -Werror -Wall -fPIC\" make"
-    INSTALL_COMMAND ""
-    )
+  # set binaries and options for clang and llc
+  set(CLANG "clang")
+  set(LLC "llc")
+  set(CLANG_OPTIONS -Wno-unused-value
+                    -Wno-pointer-sign
+                    -Wno-compare-distinct-pointer-types
+                    -Wno-gnu-variable-sized-type-not-at-end
+                    -Wno-address-of-packed-member
+                    -Wno-tautological-compare
+                    -Wno-unknown-warning-option
+                    -g
+                    )
+  set(CLANG_DEFINES -D __KERNEL__
+                    -D __BPF_TRACING__
+                    -D __TARGET_ARCH_x86
+                    -D __linux__
+                    )
+  if (DEBUG_K)
+      message("Using DEBUG_K Option...")
+      list(APPEND CLANG_DEFINES -DDEBUG_K)
+  endif()
 
-# set binaries and options for clang and llc
-set(CLANG "clang")
-set(LLC "llc")
-set(CLANG_OPTIONS -Wno-unused-value
-                  -Wno-pointer-sign
-                  -Wno-compare-distinct-pointer-types
-                  -Wno-gnu-variable-sized-type-not-at-end
-                  -Wno-address-of-packed-member
-                  -Wno-tautological-compare
-                  -Wno-unknown-warning-option
-                  -g
+  set(CLANG_INCLUDES
+                    -I "/usr/include"
+                    -I "/usr/include/x86_64-linux-gnu"
+                    -I "${CMAKE_SOURCE_DIR}"
+                    -I "${CMAKE_BINARY_DIR}"
+                    -I "${libbpf_SOURCE_DIR}/src"
+                    )
+
+  add_custom_target(procdump_ebpf
+                    DEPENDS procdump_ebpf.o
                   )
-set(CLANG_DEFINES -D __KERNEL__
-                  -D __BPF_TRACING__
-                  -D __TARGET_ARCH_x86
-                  -D __linux__
-                  )
-if (DEBUG_K)
-    message("Using DEBUG_K Option...")
-    list(APPEND CLANG_DEFINES -DDEBUG_K)
+
+  add_dependencies(procdump_ebpf libbpf)
+
+  add_custom_command(OUTPUT procdump_ebpf.o
+                    COMMAND "${CLANG}" -nostdinc -isystem `gcc -print-file-name=include` ${CLANG_INCLUDES} ${CLANG_DEFINES} -O2 ${CLANG_OPTIONS} -target bpf -fno-stack-protector -c "${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c" -o "procdump_ebpf.o" && bpftool gen object procdump.ebpf.o procdump_ebpf.o && bpftool gen skeleton "procdump.ebpf.o" name "procdump_ebpf" > "procdump_ebpf.skel.h"
+                    COMMENT "Building EBPF object procdump_ebpf.o"
+                    DEPENDS ${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c
+                    )
+
+  set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES procdump.ebpf.o)
 endif()
-
-set(CLANG_INCLUDES
-                   -I "/usr/include"
-                   -I "/usr/include/x86_64-linux-gnu"
-                   -I "${CMAKE_SOURCE_DIR}"
-                   -I "${CMAKE_BINARY_DIR}"
-                   -I "${libbpf_SOURCE_DIR}/src"
-                   )
-
-add_custom_target(procdump_ebpf
-                  DEPENDS procdump_ebpf.o
-                 )
-
-add_dependencies(procdump_ebpf libbpf)
-
-add_custom_command(OUTPUT procdump_ebpf.o
-                   COMMAND "${CLANG}" -nostdinc -isystem `gcc -print-file-name=include` ${CLANG_INCLUDES} ${CLANG_DEFINES} -O2 ${CLANG_OPTIONS} -target bpf -fno-stack-protector -c "${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c" -o "procdump_ebpf.o" && bpftool gen object procdump.ebpf.o procdump_ebpf.o && bpftool gen skeleton "procdump.ebpf.o" name "procdump_ebpf" > "procdump_ebpf.skel.h"
-                   COMMENT "Building EBPF object procdump_ebpf.o"
-                   DEPENDS ${procdump_ebpf_SOURCE_DIR}/procdump_ebpf.c
-                  )
-
-set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES procdump.ebpf.o)
