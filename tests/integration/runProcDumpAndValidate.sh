@@ -30,7 +30,7 @@ function runProcDumpAndValidate {
 		echo "PID: $pid"
 
 	    # Give test app opportunity to start and get into scenario state
-		sleep 5s
+		sleep 5
 		echo [`date +"%T.%3N"`] Done waiting for stress-ng to start
 
 		childrenpid=""
@@ -51,7 +51,7 @@ function runProcDumpAndValidate {
 		$PROCDUMPPATH -log stdout $PREFIX $childpid $POSTFIX $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
-		sleep 30s
+		sleep 30
 		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
@@ -70,7 +70,7 @@ function runProcDumpAndValidate {
 		echo "ProcDump PID: $pidPD"
 
 		# Wait for procdump to initialize
-		sleep 10s
+		sleep 10
 
 		# Launch target process
 		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
@@ -84,7 +84,7 @@ function runProcDumpAndValidate {
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
-		sleep 30s
+		sleep 30
 	    if ps -p $pidPD > /dev/null
 	    then
 			echo [`date +"%T.%3N"`] Killing ProcDump: $pidPD
