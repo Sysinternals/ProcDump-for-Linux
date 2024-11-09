@@ -20,13 +20,13 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-
-if [ ! -e /usr/bin/stress-ng ] && [ ! -e /opt/homebrew/bin/stress-ng ]; then
-   echo "Please install stress-ng before running this script!"
-   exit 1
-fi
-
 OS=$(uname -s)
+if [ "$OS" != "Darwin" ]; then
+    if [ ! -e /usr/bin/stress-ng ]; then
+    echo "Please install stress-ng before running this script!"
+    exit 1
+    fi
+fi
 
 if [ ! -e /usr/bin/dotnet ] && [ "$OS" != "Darwin" ]; then
    echo "Please install .NET before running this script!"
