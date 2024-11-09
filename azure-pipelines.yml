@@ -75,6 +75,7 @@ stages:
 
       - script: |
           sw_vers
+          sleep
         displayName: 'Diagnostics'
 
       - template: templates/build.yaml
