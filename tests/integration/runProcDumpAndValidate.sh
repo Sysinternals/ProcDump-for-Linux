@@ -1,7 +1,9 @@
 #!/bin/bash
 function runProcDumpAndValidate {
 	DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-	PROCDUMPPATH=$(readlink -m "$DIR/../../procdump");
+	PROCDUMPPATH="$DIR/../../procdump";
+
+	OS=$(uname -s)
 
 	# In cases where the previous scenario is still writing a dump we simply want to kill it
 	pkill -9 gdb > /dev/null
@@ -28,11 +30,17 @@ function runProcDumpAndValidate {
 		echo "PID: $pid"
 
 	    # Give test app opportunity to start and get into scenario state
-		sleep 5s
+		sleep 5
 		echo [`date +"%T.%3N"`] Done waiting for stress-ng to start
 
-		childrenpid=$(pidof -o $pid $(which stress-ng))
-			echo "ChildrenPID: $childrenpid"
+		childrenpid=""
+		if [ "$OS" = "Darwin" ]; then
+			childrenpid=$(pgrep stress-ng | grep -v "^$pid$")
+		else    
+			childrenpid=$(pidof -o $pid $(which stress-ng))
+		fi
+
+		echo "ChildrenPID: $childrenpid"
 
 		childpid=$(echo $childrenpid | cut -d " " -f1)
 		echo "ChildPID: $childpid"
@@ -43,7 +51,7 @@ function runProcDumpAndValidate {
 		$PROCDUMPPATH -log stdout $PREFIX $childpid $POSTFIX $dumpParam&
 		pidPD=$!
 		echo "ProcDump PID: $pidPD"
-		sleep 30s
+		sleep 30
 		echo [`date +"%T.%3N"`] Killing ProcDump
 	    if ps -p $pidPD > /dev/null
 	    then
@@ -62,17 +70,21 @@ function runProcDumpAndValidate {
 		echo "ProcDump PID: $pidPD"
 
 		# Wait for procdump to initialize
-		sleep 10s
+		sleep 10
 
 		# Launch target process
 		echo [`date +"%T.%3N"`] Starting $TESTPROGNAME
-		TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
+		if [ "$OS" = "Darwin" ]; then
+			TESTPROGPATH=$DIR/../../$TESTPROGNAME;
+		else    
+			TESTPROGPATH=$(readlink -m "$DIR/../../$TESTPROGNAME");
+		fi		
 		($TESTPROGPATH "$TESTPROGMODE") &
 		pid=$!
 		echo "Test App: $TESTPROGPATH $TESTPROGMODE"
 		echo "PID: $pid"
 
-		sleep 30s
+		sleep 30
 	    if ps -p $pidPD > /dev/null
 	    then
 			echo [`date +"%T.%3N"`] Killing ProcDump: $pidPD

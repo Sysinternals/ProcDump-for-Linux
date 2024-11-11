@@ -63,9 +63,40 @@ int WaitForSingleObject(struct Handle *Handle, int Milliseconds)
         break;
 
     case SEMAPHORE:
-        rc = (Milliseconds == INFINITE_WAIT) ?
-            sem_wait(&(Handle->semaphore)) :
-            sem_timedwait(&(Handle->semaphore), &ts);
+        if(Milliseconds == INFINITE_WAIT)
+        {
+            sem_wait(Handle->semaphore);
+        }
+        else
+        {
+#ifdef __linux__            
+            sem_timedwait(Handle->semaphore, &ts);
+#elif __APPLE__
+            struct timespec now, sleep_time;    
+            while(1)
+            {
+                if (sem_trywait(Handle->semaphore) == 0) 
+                {
+                    return 0; // Successfully acquired the semaphore
+                }                
+
+                clock_gettime(CLOCK_REALTIME, &now);
+
+                // Check if the timeout has expired
+                if ((now.tv_sec > ts.tv_sec) ||
+                    (now.tv_sec == ts.tv_sec && now.tv_nsec >= ts.tv_nsec)) 
+                {
+                    break;
+                }
+
+                // Calculate the time to sleep
+                sleep_time.tv_sec = 0;
+                sleep_time.tv_nsec = 1000000; // 1 millisecond
+                nanosleep(&sleep_time, NULL);
+            }
+#endif
+        }
+
         break;
 
     default:

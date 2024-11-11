@@ -7,13 +7,19 @@
 //
 //--------------------------------------------------------------------
 #define _Bool bool
+#ifdef __linux__
 #include "procdump_ebpf.skel.h"
+#endif
 
 #include "Includes.h"
 
 #include <vector>
 #include <string>
 #include <memory>
+
+#ifdef __APPLE__
+#include <libproc.h>
+#endif
 
 static pthread_t sig_thread_id;
 
@@ -103,7 +109,9 @@ void* SignalThread(void *input)
                         if(it->second->Threads[i].trigger == Signal)
                         {
                             pthread_mutex_lock(&it->second->ptrace_mutex);
+#ifdef __linux__      
                             ptrace(PTRACE_DETACH, it->second->ProcessId, 0, 0);
+#endif                            
                             pthread_mutex_unlock(&it->second->ptrace_mutex);
 
                             if ((rc = pthread_cancel(it->second->Threads[i].thread)) != 0) {
@@ -211,16 +219,7 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
     // allocate list of configs for process monitoring
     int numMonitoredProcesses = 0;
 
-    // create binary map to track processes we have already tracked and closed
-    int maxPid = GetMaximumPID();
-    if(maxPid < 0)
-    {
-        Log(error, INTERNAL_ERROR);
-        Trace("Unable to get MAX_PID value\n");
-        return;
-    }
-
-    monitoredProcessMap.reserve(maxPid);
+    monitoredProcessMap.reserve(5000);      // assume 5000 processes
 
     // Create a signal handler thread where we handle shutdown as a result of SIGINT.
     // Note: We only create ONE per instance of procdump rather than per monitor.
@@ -314,15 +313,24 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // Iterate over all running processes
+#ifdef __linux__            
             struct dirent ** nameList;
             int numEntries = scandir("/proc/", &nameList, FilterForPid, alphasort);
+#else
+            pid_t *nameList;
+            int numEntries = GetRunningPids(&nameList);
+#endif            
             for (int i = 0; i < numEntries; i++)
             {
                 pid_t procPid;
+#ifdef __linux__
                 if(!ConvertToInt(nameList[i]->d_name, &procPid))
                 {
                     continue;
                 }
+#else
+                procPid = nameList[i];
+#endif
 
                 if(self->bProcessGroup)
                 {
@@ -391,10 +399,12 @@ void MonitorProcesses(struct ProcDumpConfiguration *self)
             }
 
             // clean up namelist
+#ifdef __linux__            
             for (int i = 0; i < numEntries; i++)
             {
                 free(nameList[i]);
             }
+#endif            
             if(numEntries!=-1)
             {
                 free(nameList);
@@ -766,6 +776,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
     //
     // If we have a restrack thread, cancel it and wait for it to exit
     //
+#ifdef __linux__    
     if(CancelRestrackThread(self) != 0)
     {
         if ((rc = pthread_join(restrackThread, NULL)) != 0)
@@ -774,6 +785,7 @@ int WaitForAllMonitorsToTerminate(struct ProcDumpConfiguration *self)
             exit(-1);
         }
     }
+#endif
 
     return rc;
 }
@@ -938,9 +950,13 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
         {
             if (GetProcessStat(config->ProcessId, &proc))
             {
+#ifdef __linux__                
                 // Calc Commit
                 memUsage = (proc.rss * pageSize_kb) >> 10;    // get Resident Set Size
                 memUsage += (proc.nswap * pageSize_kb) >> 10; // get Swap size
+#elif __APPLE__
+                memUsage = proc.rss / (1024.0 * 1024.0);       // get Resident Set Size
+#endif
 
                 // Commit Trigger
                 if ((config->bMemoryTriggerBelowValue && (memUsage < config->MemoryThreshold[config->MemoryCurrentThreshold])) ||
@@ -961,6 +977,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                     //
                     // Check to see if restrack is specified, if so, save current resource usage to file.
                     //
+#ifdef __linux__                    
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -973,6 +990,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
                             leakReportThreads.push_back(id);
                         }
                     }
+#endif                    
 
 
                     config->MemoryCurrentThreshold++;
@@ -985,7 +1003,7 @@ void *CommitMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
             }
             else
             {
-                Log(error, "An error occurred while parsing procfs\n");
+                Log(error, "An error occurred while fetching memory info\n");
                 exit(-1);
             }
         }
@@ -1041,6 +1059,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                     //
                     // Check to see if restrack is specified, if so, save current resource usage to file.
                     //
+#ifdef __linux__                    
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -1053,6 +1072,7 @@ void* ThreadCountMonitoringThread(void *thread_args /* struct ProcDumpConfigurat
                             leakReportThreads.push_back(id);
                         }
                     }
+#endif                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -1105,7 +1125,6 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
             {
                 if (proc.num_filedescriptors >= config->FileDescriptorThreshold)
                 {
-                    Log(info, "Trigger: File descriptors:%ld on process ID: %d", proc.num_filedescriptors, config->ProcessId);
                     if(config->bRestrackGenerateDump == true)
                     {
                         // Only generate core dump if user did not specify the "nodump" restrack option
@@ -1119,6 +1138,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                     //
                     // Check to see if restrack is specified, if so, save current resource usage to file.
                     //
+#ifdef __linux__                    
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -1131,6 +1151,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
                             leakReportThreads.push_back(id);
                         }
                     }
+#endif                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -1150,7 +1171,6 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
     // Wait for the leak reporting threads to finish
     //
     WaitThreads(leakReportThreads);
-
     Trace("FileDescriptorCountMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
 }
@@ -1168,6 +1188,7 @@ void* FileDescriptorCountMonitoringThread(void *thread_args /* struct ProcDumpCo
 void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("SignalMonitoringThread: Enter [id=%d]", gettid());
+#ifdef __linux__
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     int wstatus;
     int signum=-1;
@@ -1283,7 +1304,7 @@ void* SignalMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
     // Wait for the leak reporting threads to finish
     //
     WaitThreads(leakReportThreads);
-
+#endif
     Trace("SignalMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
 }
@@ -1300,11 +1321,12 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 
     unsigned long totalTime = 0;
     unsigned long elapsedTime = 0;
-    struct sysinfo sysInfo;
     int cpuUsage;
     auto_free struct CoreDumpWriter *writer = NULL;
     auto_free char* dumpFileName = NULL;
+#ifdef __linux__
     std::vector<pthread_t> leakReportThreads;
+#endif
 
     writer = NewCoreDumpWriter(CPU, config);
 
@@ -1315,14 +1337,10 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     {
         while ((rc = WaitForQuit(config, config->PollingInterval)) == WAIT_TIMEOUT)
         {
-            sysinfo(&sysInfo);
-
             if (GetProcessStat(config->ProcessId, &proc))
             {
-                // Calc CPU
-                totalTime = (unsigned long)((proc.utime + proc.stime) / HZ);
-                elapsedTime = (unsigned long)(sysInfo.uptime - (long)(proc.starttime / HZ));
-                cpuUsage = (int)(100 * ((double)totalTime / elapsedTime));
+                cpuUsage = GetCpuUsage(config->ProcessId);
+                Trace("CpuMonitoringThread: CPU usage:%d%% on process ID: %d", cpuUsage, config->ProcessId);
 
                 // CPU Trigger
                 if ((config->bCpuTriggerBelowValue && (cpuUsage < config->CpuThreshold)) ||
@@ -1342,6 +1360,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     //
                     // Check to see if restrack is specified, if so, save current resource usage to file.
                     //
+#ifdef __linux__                    
                     if(config->bRestrackEnabled == true)
                     {
                         pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -1354,6 +1373,7 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
                             leakReportThreads.push_back(id);
                         }
                     }
+#endif                    
 
                     if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT)
                     {
@@ -1372,9 +1392,11 @@ void *CpuMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
     //
     // Wait for the leak reporting threads to finish
     //
+#ifdef __linux__    
     WaitThreads(leakReportThreads);
+#endif
 
-    Trace("CpuTCpuMonitoringThread: Exit [id=%d]", gettid());
+    Trace("CpuMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
 }
 
@@ -1415,6 +1437,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
             //
             // Check to see if restrack is specified, if so, save current resource usage to file.
             //
+#ifdef __linux__            
             if(config->bRestrackEnabled == true)
             {
                 pthread_t id = WriteRestrackSnapshot(config, writer->Type);
@@ -1427,6 +1450,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
                     leakReportThreads.push_back(id);
                 }
             }
+#endif            
 
             if ((rc = WaitForQuit(config, config->ThresholdSeconds * 1000)) != WAIT_TIMEOUT) {
                 break;
@@ -1457,6 +1481,7 @@ void *TimerThread(void *thread_args /* struct ProcDumpConfiguration* */)
 void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("DotNetMonitoringThread: Enter [id=%d]", gettid());
+#ifdef __linux__    
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* fullDumpPath = NULL;
     auto_cancel_thread pthread_t waitForProfilerCompletion = -1;
@@ -1551,7 +1576,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 
         pthread_join(waitForProfilerCompletion, NULL);
     }
-
+#endif
     Trace("DotNetMonitoringThread: Exit [id=%d]", gettid());
     return NULL;
 }
@@ -1564,6 +1589,7 @@ void *DotNetMonitoringThread(void *thread_args /* struct ProcDumpConfiguration* 
 void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("RestrackThread: Enter [id=%d]", gettid());
+#ifdef __linux__    
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     auto_free char* fullDumpPath = NULL;
     struct procdump_ebpf* skel = NULL;
@@ -1611,6 +1637,7 @@ void *RestrackThread(void *thread_args /* struct ProcDumpConfiguration* */)
         }
     }
 
+#endif
     Trace("RestrackThread: Exit [id=%d]", gettid());
     return NULL;
 }
@@ -1627,6 +1654,7 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
 {
     Trace("GetClientData: Entering GetClientData");
     char* clientData = NULL;
+#ifdef __linux__    
     auto_free char* exceptionFilter = NULL;
     auto_free char* thresholds = NULL;
 
@@ -1680,6 +1708,7 @@ char* GetClientData(struct ProcDumpConfiguration *self, char* fullDumpPath)
         return NULL;
     }
 
+#endif
     Trace("GetClientData: Exiting GetClientData");
     return clientData;
 }
@@ -1713,8 +1742,8 @@ char* GetClientDataHelper(enum TriggerType triggerType, char* path, const char* 
         return NULL;
     }
 
-    sprintf(clientData, "%d;%s;%d;", triggerType, path, getpid());
-    vsprintf(clientData+clientDataPrefixSize, format, args);
+    snprintf(clientData, clientDataSize, "%d;%s;%d;", triggerType, path, getpid());
+    vsnprintf(clientData+clientDataPrefixSize, clientDataSize, format, args);
 
     va_end(args);
     return clientData;
@@ -1797,6 +1826,7 @@ char* GetThresholds(struct ProcDumpConfiguration *self)
 void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguration* */)
 {
     Trace("WaitForProfilerCompletion: Enter [id=%d]", gettid());
+#ifdef __linux__    
     struct ProcDumpConfiguration *config = (struct ProcDumpConfiguration *)thread_args;
     unsigned int t, s2;
     struct sockaddr_un local, remote;
@@ -2018,7 +2048,7 @@ void *WaitForProfilerCompletion(void *thread_args /* struct ProcDumpConfiguratio
     config->socketPath = NULL;
 
     ExitProcessMonitor(config, processMonitor);
-
+#endif
     Trace("WaitForProfilerCompletion: Exiting WaitForProfilerCompletion Thread [id=%d]", gettid());
     return NULL;
 }

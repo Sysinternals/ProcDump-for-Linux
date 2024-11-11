@@ -1,0 +1,34 @@
+.\" Manpage for procdump.
+.TH man 8 "2/5/2024" "1.0" "procdump manpage"
+.SH NAME
+procdump \- generate coredumps based off performance triggers.
+.SH SYNOPSIS
+procdump [-n Count]
+         [-s Seconds]
+         [-c|-cl CPU_Usage]
+         [-m|-ml Commit_Usage1[,Commit_Usage2...]]
+         [-tc Thread_Threshold]
+         [-fc FileDescriptor_Threshold]
+         [-pf Polling_Frequency]
+         [-o]
+         [-log syslog|stdout]
+         {
+           {{[-w] Process_Name} [Dump_File | Dump_Folder]}
+         }
+
+Options:
+   -n      Number of dumps to write before exiting.
+   -s      Consecutive seconds before dump is written (default is 10).
+   -c      CPU threshold above which to create a dump of the process.
+   -cl     CPU threshold below which to create a dump of the process.
+   -m      Memory commit threshold(s) (MB) above which to create dumps.
+   -ml     Memory commit threshold(s) (MB) below which to create dumps.
+   -tc     Thread count threshold above which to create a dump of the process.
+   -fc     File descriptor count threshold above which to create a dump of the process.
+   -pf     Polling frequency.
+   -o      Overwrite existing dump file.
+   -log    Writes extended ProcDump tracing to the specified output stream (syslog or stdout).
+   -w      Wait for the specified process to launch if it's not running.
+
+.SH DESCRIPTION
+ProcDump provides a convenient way for Linux and Mac developers to create core dumps of their application based on performance triggers. ProcDump is part of Sysinternals.

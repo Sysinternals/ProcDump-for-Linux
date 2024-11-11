@@ -7,7 +7,9 @@
 //
 //--------------------------------------------------------------------
 #include "Includes.h"
+#ifdef __linux__
 #include <syscall.h>
+#endif
 
 //--------------------------------------------------------------------
 //
@@ -499,7 +501,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
                 return NULL;
             }
 
-            sprintf(t, "/tmp/%s%d-%d", prefix, pid, targetPid);
+            snprintf(t, len+1, "/tmp/%s%d-%d", prefix, pid, targetPid);
         }
         else
         {
@@ -510,7 +512,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
                 return NULL;
             }
 
-            sprintf(t, "/tmp/%s%d", prefix, pid);
+            snprintf(t, len+1, "/tmp/%s%d", prefix, pid);
         }
     }
     else
@@ -524,7 +526,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
                 return NULL;
             }
 
-            sprintf(t, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
+            snprintf(t, len+1, "%s/%s%d-%d", prefixTmpFolder, prefix, pid, targetPid);
         }
         else
         {
@@ -535,7 +537,7 @@ char* GetSocketPath(char* prefix, pid_t pid, pid_t targetPid)
                 return NULL;
             }
 
-            sprintf(t, "%s/%s%d", prefixTmpFolder, prefix, pid);
+            snprintf(t, len+1, "%s/%s%d", prefixTmpFolder, prefix, pid);
         }
     }
 

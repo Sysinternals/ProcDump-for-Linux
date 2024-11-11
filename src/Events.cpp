@@ -78,7 +78,7 @@ void InitNamedEvent(struct Event *Event, bool IsManualReset, bool InitialState, 
     Event->nWaiters = 0;
 
     if (Name == NULL) {
-        sprintf(Event->Name, "Unnamed Event %d", ++unamedEventId);
+        snprintf(Event->Name, sizeof(Event->Name), "Unnamed Event %d", ++unamedEventId);
     } else if (strlen(Name) >= MAX_EVENT_NAME) {
         strncpy(Event->Name, Name, MAX_EVENT_NAME);
         Event->Name[MAX_EVENT_NAME - 1] = '\0'; // null terminate
