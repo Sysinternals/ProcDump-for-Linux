@@ -4,7 +4,7 @@ Release:	@PROJECT_VERSION_TWEAK@%{?dist}
 Summary:	Sysinternals process dump utility
 
 License:	MIT
-URL:		https://github.com/Sysinternals/ProcDump-for-Linux
+URL:		https://github.com/Microsoft/ProcDump-for-Linux
 
 %description
 Sysinternals process dump utility

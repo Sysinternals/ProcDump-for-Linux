@@ -65,7 +65,7 @@ else()
                     COMMENT "Compressing ProcDump man page"
                     DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
                     )
-endif()                  
+endif()
 
 #
 # Change log
