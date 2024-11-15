@@ -28,7 +28,7 @@ cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0048 NEW)
 
 #
-# set the project name - version is MAJOR.MINOR.PATCH.RELEASE - releases start at 1
+# set the project name - version is MAJOR.MINOR.PATCH.RELEASE - Releases start at 1
 #
 if (DEFINED ENV{VERSION})
   project(ProcDumpForLinux VERSION $ENV{VERSION})
@@ -65,7 +65,7 @@ else()
                     COMMENT "Compressing ProcDump man page"
                     DEPENDS "${CMAKE_SOURCE_DIR}/procdump.1"
                     )
-endif()                  
+endif()
 
 #
 # Change log
