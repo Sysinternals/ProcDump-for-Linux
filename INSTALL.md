@@ -161,3 +161,16 @@ sudo rpm -Uvh https://packages.microsoft.com/config/sles/15/packages-microsoft-p
 ```sh
 sudo zypper install procdump
 ```
+
+## macOS
+To install ProcDump for Mac, you'll need to install [Homebrew](https://brew.sh) if you haven't already.
+
+1. Add the Sysinternals tap:
+   ```bash
+   brew tap Microsoft/sysinternalstap
+   ```
+   
+1. Install ProcDump:
+   ```bash
+   brew install procdump
+   ```
