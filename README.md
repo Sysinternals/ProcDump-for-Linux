@@ -1,17 +1,18 @@
 # ProcDump [![Build Status](https://dev.azure.com/sysinternals/Tools/_apis/build/status/Sysinternals.ProcDump-for-Linux?branchName=master)](https://dev.azure.com/sysinternals/Tools/_build/latest?definitionId=341&branchName=master)
-ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers. ProcDump for Linux is part of [Sysinternals](https://sysinternals.com).
+ProcDump is a Linux and Mac reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux and Mac developers to create core dumps of their application based on performance triggers. ProcDump for Linux and Mac is part of [Sysinternals](https://sysinternals.com).
 
 ![ProcDump in use](procdump.gif "Procdump in use")
 
 # Installation & Usage
 
 ## Requirements
-* Minimum OS:
+* Minimum Linux OS:
   * Red Hat Enterprise Linux / CentOS 7
   * Fedora 29
   * Ubuntu 16.04 LTS
-* `gdb` >= 7.6.1
-
+  * `gdb` >= 7.6.1
+* Minimum Mac OS: Sierra
+ 
 ## Install ProcDump
 Please see installation instructions [here](INSTALL.md).
 
@@ -20,6 +21,7 @@ Please see build instructions [here](BUILD.md).
 
 ## Usage
 **BREAKING CHANGE** With the release of ProcDump 1.3 the switches are now aligned with the Windows ProcDump version.
+Please note that the [Mac](https://github.com/microsoft/ProcDump-for-Mac) version currently has a limited set of triggers.
 ```
 Capture Usage:
    procdump [-n Count]
@@ -81,6 +83,8 @@ Allocation:
 Deallocation:
 * free
 * munmap
+
+The Mac version does not currently implement resource tracking.
 
 ### Examples
 > The following examples all target a process with pid == 1234
@@ -185,7 +189,7 @@ sudo procdump -w my_application
 ```
 
 ## Current Limitations
-* Currently will only run on Linux Kernels version 3.5+
+* Currently will only run on Linux Kernels version 3.5+ or macOS Sierra. 
 * Does not have full feature parity with Windows version of ProcDump, specifically, stay alive functionality, and custom performance counters
 
 # Feedback
