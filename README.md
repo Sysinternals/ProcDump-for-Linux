@@ -189,7 +189,7 @@ sudo procdump -w my_application
 ```
 
 ## Current Limitations
-* Currently will only run on Linux Kernels version 3.5+ or macOS Sierra. 
+* Currently will only run on Linux Kernels version 3.5+ or macOS Sierra+. 
 * Does not have full feature parity with Windows version of ProcDump, specifically, stay alive functionality, and custom performance counters
 
 # Feedback
